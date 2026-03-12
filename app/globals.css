@@ -1,8 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core palette — deep obsidian with gold */
+  --background: #030810;
+  --foreground: #c4cdd8;
+  --sidebar-bg: #060d1a;
+  --card-bg: #0a1525;
+  --border-color: rgba(200, 168, 74, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  /* Accents */
+  --accent-gold: #c8a84a;
+  --accent-gold-light: #e8c97d;
+  --accent-gold-dim: rgba(200, 168, 74, 0.15);
+  --accent-steel: #5b8db8;
+  --accent-emerald: #3eb87a;
+  --accent-amber: #c8822a;
+  --accent-crimson: #b84a4a;
+  --accent-lavender: #8a78c8;
+
+  /* Text hierarchy */
+  --text-primary: #dce4ee;
+  --text-secondary: #7a8fa8;
+  --text-muted: #3a4e62;
+  --text-dim: #1e2e3e;
 }
 
 @theme inline {
@@ -12,15 +33,214 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), 'Segoe UI', Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── Scrollbar ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(200, 168, 74, 0.2);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(200, 168, 74, 0.4);
+}
+
+/* ── Glow effects ─────────────────────────────────── */
+.glow-cyan {
+  box-shadow: 0 4px 24px rgba(200, 168, 74, 0.12), 0 1px 4px rgba(200, 168, 74, 0.06);
+}
+.glow-green {
+  box-shadow: 0 4px 24px rgba(62, 184, 122, 0.12);
+}
+.glow-amber {
+  box-shadow: 0 4px 24px rgba(200, 130, 42, 0.12);
+}
+.glow-red {
+  box-shadow: 0 4px 24px rgba(184, 74, 74, 0.18);
+}
+
+/* ── Animations ───────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+.pulse-dot {
+  animation: pulse-dot 3s ease-in-out infinite;
+}
+
+@keyframes live-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.live-indicator {
+  animation: live-blink 2.5s ease-in-out infinite;
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.count-up {
+  animation: count-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+.flow-line {
+  animation: dash-flow 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ── Background ───────────────────────────────────── */
+.grid-bg {
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200, 168, 74, 0.04) 0%, transparent 60%),
+    linear-gradient(rgba(200, 168, 74, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 168, 74, 0.015) 1px, transparent 1px);
+  background-size: 100% 100%, 60px 60px, 60px 60px;
+}
+
+/* ── Glass card — premium dark surface ────────────── */
+.glass-card {
+  background: linear-gradient(135deg, rgba(10, 21, 37, 0.95) 0%, rgba(8, 16, 30, 0.98) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(200, 168, 74, 0.1);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+              0 8px 32px rgba(0, 0, 0, 0.4),
+              0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Gold divider line ────────────────────────────── */
+.gold-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200, 168, 74, 0.4), transparent);
+}
+
+/* ── Sidebar nav link ─────────────────────────────── */
+.sidebar-link {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  height: 60%;
+  width: 2px;
+  background: linear-gradient(180deg, var(--accent-gold-light), var(--accent-gold));
+  border-radius: 0 2px 2px 0;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sidebar-link:hover::before,
+.sidebar-link.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+
+/* ── Status badges ────────────────────────────────── */
+.status-online {
+  background: rgba(62, 184, 122, 0.08);
+  border: 1px solid rgba(62, 184, 122, 0.22);
+  color: #5ecb94;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.status-warning {
+  background: rgba(200, 130, 42, 0.08);
+  border: 1px solid rgba(200, 130, 42, 0.22);
+  color: #d4943a;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.status-critical {
+  background: rgba(184, 74, 74, 0.08);
+  border: 1px solid rgba(184, 74, 74, 0.22);
+  color: #c06060;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* ── Data table ───────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  background: rgba(6, 13, 26, 0.8);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(200, 168, 74, 0.1);
+}
+.data-table td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+}
+.data-table tr:hover td {
+  background: rgba(200, 168, 74, 0.025);
+}
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Recharts overrides ───────────────────────────── */
+.recharts-cartesian-axis-tick-value {
+  fill: var(--text-muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
+}
+.recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+.recharts-tooltip-wrapper * {
+  font-family: var(--font-geist-sans), sans-serif !important;
+}
+
+/* ── Utility classes ──────────────────────────────── */
+.text-gold { color: var(--accent-gold); }
+.text-gold-light { color: var(--accent-gold-light); }
+.border-gold { border-color: rgba(200, 168, 74, 0.18); }
+
+/* ── Page transition ──────────────────────────────── */
+main {
+  animation: count-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
