@@ -6,8 +6,10 @@ import { useState, useEffect } from 'react';
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const update = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -100,9 +102,9 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
             className="font-mono font-bold"
             style={{ color: '#c8a84a', fontSize: '0.82rem', letterSpacing: '0.08em' }}
           >
-            {time}
+            {mounted ? time : '00:00:00'}
           </div>
-          <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
+          <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{mounted ? date : ''}</div>
         </div>
 
         {/* Thin divider */}

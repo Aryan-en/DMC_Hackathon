@@ -1,0 +1,147 @@
+{
+  "timestamp": "D:\\DMC_Hackathon",
+  "mea_relations": [
+    {
+      "country": "China",
+      "relation_type": "RIVAL",
+      "status": "Active",
+      "trade_volume": 136.5,
+      "trade_volume_currency": "USD",
+      "agreements": [
+        "Bilateral Trade Agreement 2023"
+      ],
+      "key_issues": [
+        "Border Disputes",
+        "Trade Imbalance"
+      ],
+      "sentiment": "negative",
+      "confidence_score": 0.88,
+      "source": "MEA"
+    },
+    {
+      "country": "United States",
+      "relation_type": "ALLY",
+      "status": "Active",
+      "trade_volume": 74.2,
+      "trade_volume_currency": "USD",
+      "agreements": [
+        "Defense Cooperation",
+        "Strategic Partnership"
+      ],
+      "key_issues": [
+        "H1B Visas",
+        "Tech Trade"
+      ],
+      "sentiment": "positive",
+      "confidence_score": 0.91,
+      "source": "MEA"
+    },
+    {
+      "country": "Pakistan",
+      "relation_type": "RIVAL",
+      "status": "Active",
+      "trade_volume": 2.5,
+      "trade_volume_currency": "USD",
+      "agreements": [],
+      "key_issues": [
+        "Kashmir",
+        "Terrorism",
+        "Cross-border Incidents"
+      ],
+      "sentiment": "negative",
+      "confidence_score": 0.94,
+      "source": "MEA"
+    }
+  ],
+  "worldbank_indicators": [
+    {
+      "country_code": "IND",
+      "indicators_fetched": 2,
+      "indicators": [
+        {
+          "country_code": "IND",
+          "indicator_code": "NY.GDP.MKTP.CD",
+          "indicator_name": "GDP (current US$)",
+          "value": 3909891533858.08,
+          "year": "2024",
+          "unit": "USD"
+        },
+        {
+          "country_code": "IND",
+          "indicator_code": "FP.CPI.TOTL.ZG",
+          "indicator_name": "Inflation (CPI annual %)",
+          "value": 4.95303550973656,
+          "year": "2024",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "country_code": "PAK",
+      "indicators_fetched": 2,
+      "indicators": [
+        {
+          "country_code": "PAK",
+          "indicator_code": "NY.GDP.MKTP.CD",
+          "indicator_name": "GDP (current US$)",
+          "value": 371570000121.266,
+          "year": "2024",
+          "unit": "USD"
+        },
+        {
+          "country_code": "PAK",
+          "indicator_code": "FP.CPI.TOTL.ZG",
+          "indicator_name": "Inflation (CPI annual %)",
+          "value": 12.6325318530452,
+          "year": "2024",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "country_code": "CHN",
+      "indicators_fetched": 2,
+      "indicators": [
+        {
+          "country_code": "CHN",
+          "indicator_code": "NY.GDP.MKTP.CD",
+          "indicator_name": "GDP (current US$)",
+          "value": 18743803170827.2,
+          "year": "2024",
+          "unit": "USD"
+        },
+        {
+          "country_code": "CHN",
+          "indicator_code": "FP.CPI.TOTL.ZG",
+          "indicator_name": "Inflation (CPI annual %)",
+          "value": 0.218128938439177,
+          "year": "2024",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "country_code": "USA",
+      "indicators_fetched": 2,
+      "indicators": [
+        {
+          "country_code": "USA",
+          "indicator_code": "NY.GDP.MKTP.CD",
+          "indicator_name": "GDP (current US$)",
+          "value": 28750956130731.2,
+          "year": "2024",
+          "unit": "USD"
+        },
+        {
+          "country_code": "USA",
+          "indicator_code": "FP.CPI.TOTL.ZG",
+          "indicator_name": "Inflation (CPI annual %)",
+          "value": 2.94952520485207,
+          "year": "2024",
+          "unit": "%"
+        }
+      ]
+    }
+  ],
+  "summary": {}
+}

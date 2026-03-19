@@ -1,0 +1,39 @@
+# ONTORA Backend - WINDOWS PYTHON 3.13 QUICK FIX
+# Use this to avoid pandas compilation errors
+# pip install -r requirements-windows-py313.txt --only-binary :all: --no-build-isolation
+
+# Web Framework & Async (NO NATIVE COMPILATION)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+
+# Database & ORM
+sqlalchemy==2.0.48
+asyncpg>=0.30.0
+neo4j>=5.20.0
+redis>=5.0.0
+
+# Data Processing - Using pre-built wheels only
+# Note: numpy pinned to <2.3.0 for opencv-python and other package compatibility
+numpy>=2.0,<2.3.0
+pandas>=2.2.0
+
+# HTTP & Web
+requests>=2.32.0
+httpx>=0.26.0
+beautifulsoup4>=4.12.2
+
+# Messaging
+kafka-python>=2.0.2
+
+# Utilities & Security
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.1.1
+
+# Monitoring
+prometheus-client>=0.20.0
+python-json-logger>=2.0.7

@@ -1,0 +1,61 @@
+# Docker build optimization - exclude unnecessary files
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Development
+.vscode
+.idea
+*.pyc
+__pycache__
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.env.local
+.env.*.local
+venv/
+env/
+.venv
+
+# Node/Frontend
+node_modules/
+build/
+dist/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Testing
+.coverage
+htmlcov/
+
+# IDEs
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.*.local
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Misc
+__pycache__/
+*.pot
+*.mo
+.cache/

@@ -1,0 +1,13 @@
+# ONTORA Backend - WINDOWS LOCAL DEVELOPMENT
+# Use this for Windows: pip install -r requirements-windows.txt
+# Excludes psycopg2-binary which has build issues on Windows
+
+-r requirements.txt
+
+# Windows doesn't need psycopg2-binary if using asyncpg for async operations
+# But if you need synchronous postgres access, install via:
+# pip install psycopg2 (requires PostgreSQL installed locally)
+# OR
+# pip install "psycopg2-binary>=2.9.9; platform_system != 'Windows'"
+
+# NOTE: Uses neo4j 5.20.0+ for Python 3.13 compatibility

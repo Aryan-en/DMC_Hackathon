@@ -1,0 +1,12 @@
+# ONTORA Backend - PRODUCTION REQUIREMENTS FOR DOCKER
+# Use in Docker builds: COPY requirements-docker.txt and run pip install
+
+# Core dependencies
+-r requirements.txt
+
+# Production-only dependencies
+# psycopg2-binary is included for production/Docker (where build works fine)
+psycopg2-binary==2.9.9
+
+# Additional production requirements
+gunicorn==21.2.0

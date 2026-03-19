@@ -1,0 +1,2069 @@
+================================================================================
+ONTORA - GLOBAL INTELLIGENCE & ONTOLOGY ANALYSIS PLATFORM
+Integration Plan: Data Sources & Component Architecture
+================================================================================
+Document Version: 1.0
+Classification: UNCLASSIFIED
+Generated: March 19, 2026
+================================================================================
+
+TABLE OF CONTENTS
+================================================================================
+1. Executive Summary
+2. Project Architecture Overview
+3. Data Sources Integration Strategy
+4. Component-by-Component Implementation Plan
+5. Backend Infrastructure Requirements
+6. API Endpoints Design
+7. Data Flow Pipelines
+8. Security & Governance Framework
+9. Implementation Timeline
+10. Technical Stack Recommendations
+
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+ONTORA is a production-grade intelligence command dashboard with 8 core modules
+that will process real-time data from two primary sources:
+
+DATA SOURCES:
+  • MEA (Ministry of External Affairs): https://www.mea.gov.in/foreign-relations.htm
+  • IndiAPIs: World Bank economic, demographic, and development indicators
+  
+MODULES TO INTEGRATE:
+  1. Strategic Overview (Home Dashboard)
+  2. Intelligence Hub (AI/NLP Processing)
+  3. Knowledge Graph Explorer
+  4. Geospatial Intelligence
+  5. Predictions Engine
+  6. Data Streams Monitor
+  7. Data Lake Operations
+  8. Security & Governance
+
+INTEGRATION OUTCOME:
+  - Real-time data ingestion from MEA & World Bank APIs
+  - Knowledge graph construction from diplomatic & economic data
+  - AI-powered threat analysis and prediction
+  - Multi-tier data lake (Bronze/Silver/Gold)
+  - Kafka-based streaming architecture
+  - Neo4j semantic knowledge representation
+
+
+================================================================================
+2. PROJECT ARCHITECTURE OVERVIEW
+================================================================================
+
+CURRENT STACK:
+  Frontend:  Next.js 16.1.6 + React 19.2 + TypeScript 5 + Tailwind CSS 4
+  Charts:    Recharts 3.8 for visualization
+  Icons:     Lucide React 0.577
+
+REQUIRED ADDITIONS (Backend):
+  
+  DATA INGESTION LAYER:
+    - Python FastAPI (high-performance async API)
+    - APScheduler (scheduled data fetches)
+    - BeautifulSoup4 (MEA website scraping)
+    - Requests (API calls to World Bank/IndiAPIs)
+    
+  MESSAGE QUEUE:
+    - Apache Kafka (event streaming)
+    - Kafka Python client (confluent-kafka or kafka-python)
+    
+  DATA STORAGE:
+    - Neo4j 5.x (Knowledge Graph - entities, relationships)
+    - PostgreSQL 15 (Relational data + PostGIS for geospatial)
+    - TimescaleDB (Time-series data for trends)
+    - MinIO or S3 (Delta Lake - Bronze/Silver/Gold layers)
+    
+  ML/AI LAYER:
+    - LLaMA-2 or LLaMA-3 (via Ollama or Replicate API)
+    - spaCy 3.x (NER, NLP pipelines)
+    - PyG (PyTorch Geometric for graph ML)
+    - Scikit-learn (ML models for predictions)
+    
+  ORCHESTRATION:
+    - Apache Airflow (DAG scheduling and monitoring)
+    - Docker + Docker Compose (containerization)
+    
+  QUEUE MONITORING:
+    - Redis (caching, state management)
+    - Prometheus + Grafana (metrics)
+
+
+ARCHITECTURE DIAGRAM (Text):
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                      DATA SOURCES                               │
+    │  ┌──────────────┐              ┌──────────────┐                │
+    │  │ MEA Website  │              │ World Bank   │                │
+    │  │ & APIs       │              │ APIs         │                │
+    │  └──────┬───────┘              └──────┬───────┘                │
+    └─────────┼────────────────────────────┼────────────────────────┘
+              │                            │
+              ▼                            ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                    DATA INGESTION LAYER                         │
+    │  ┌──────────────────────────────────────────────────────────┐  │
+    │  │          FastAPI + APScheduler + Scrapers               │  │
+    │  │  - MEA Diplomatic Relations scraper                     │  │
+    │  │  - World Bank Economic Indicators fetcher               │  │
+    │  │  - Data validation & normalization                      │  │
+    │  └──────────────────┬───────────────────────────────────────┘  │
+    └─────────────────────┼──────────────────────────────────────────┘
+                          │
+              ┌───────────┴──────────────┐
+              │                          │
+              ▼                          ▼
+    ┌──────────────────┐      ┌──────────────────┐
+    │   Kafka Broker   │      │   RabbitMQ        │
+    │  (Message Queue) │      │  (Alternative)    │
+    └────────┬─────────┘      └────────┬──────────┘
+             │                         │
+    ┌────────┴─────┬──────────────────┬──────────┐
+    │              │                  │          │
+    ▼              ▼                  ▼          ▼
+ [NLP]         [Graph]           [Analytics] [Geospatial]
+ spaCy         Pipeline           Pipeline    Pipeline
+    │              │                  │          │
+    └────────┬─────┴──────────────────┴──────────┘
+             │
+             ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │               DATA STORAGE & PROCESSING LAYER                   │
+    │  ┌─────────┐  ┌──────────┐  ┌────────────┐  ┌──────────────┐  │
+    │  │  Neo4j  │  │PostgreSQL│  │ TimescaleDB│  │  Delta Lake  │  │
+    │  │ (Graph) │  │(Relational)  │(Time-Series)  │(Data Warehouse)│
+    │  └─────────┘  └──────────┘  └────────────┘  └──────────────┘  │
+    └───────────────────────────┬──────────────────────────────────────┘
+                                │
+    ┌───────────────────────────┴──────────────────────────────────┐
+    │                    ML/PREDICTION LAYER                       │
+    │  ┌────────────┐  ┌──────────┐  ┌────────────┐              │
+    │  │  LLaMA-3   │  │   PyG    │  │ Scikit-ML  │              │
+    │  │ (LLM/NLP)  │  │(Graph ML)│  │(Predictions)              │
+    │  └────────────┘  └──────────┘  └────────────┘              │
+    └───────────────────────────┬──────────────────────────────────┘
+                                │
+                                ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                    FRONTEND (Next.js/React)                     │
+    │  ┌──────────────────────────────────────────────────────────┐  │
+    │  │  Strategic Overview | Intelligence Hub | Knowledge Graph│  │
+    │  │  Geospatial | Predictions | Data Streams | Data Lake   │  │
+    │  │  Security & Governance                                  │  │
+    │  └──────────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+3. DATA SOURCES INTEGRATION STRATEGY
+================================================================================
+
+3.1 MEA (MINISTRY OF EXTERNAL AFFAIRS)
+────────────────────────────────────────────────────────────────────────────
+
+SOURCE: https://www.mea.gov.in/foreign-relations.htm
+
+DATA EXTRACTION APPROACH:
+  Method: Web scraping (BeautifulSoup4) + Manual API integration
+  
+  KEY DATA POINTS TO EXTRACT:
+    • Bilateral relations with each country
+    • Diplomatic statements & press releases
+    • Trade & economic statistics
+    • Cultural exchanges
+    • Defense & security partnerships
+    • treaties & agreements
+    
+  SCRAPING TARGETS:
+    • /foreign-relations.htm - Country relations index
+    • /foregin-relations/[country]/ - Bilateral relation pages
+    • /sites/default/files/statements/ - Press releases
+    
+  DATA SCHEMA (Proposed):
+    {
+      "country": "string (e.g., 'China', 'United States')",
+      "relation_type": "enum['bilateral', 'multilateral', 'disputed']",
+      "status": "enum['stable', 'tense', 'active_dispute', 'conflict']",
+      "trade_volume": "float (USD millions)",
+      "agreements": ["list of agreements"],
+      "last_summit": "ISO date",
+      "key_issues": ["list of current issues"],
+      "sentiment": "enum['positive', 'neutral', 'negative']",
+      "confidence_score": "float (0-1)",
+      "last_updated": "ISO timestamp",
+      "source": "MEA"
+    }
+
+IMPLEMENTATION DETAILS:
+  • Create /backend/ingestors/mea_scraper.py
+  • Run scheduled scrape weekly (APScheduler)
+  • Normalize country names to ISO 3166 codes
+  • Store raw data in Bronze layer (Delta Lake)
+  • Process & enrich in Silver layer
+  
+SAMPLE CODE STRUCTURE:
+  
+  from bs4 import BeautifulSoup
+  import requests
+  from datetime import datetime
+  
+  def fetch_mea_country_data(country_code):
+      url = f"https://www.mea.gov.in/foreign-relations.htm"
+      response = requests.get(url)
+      soup = BeautifulSoup(response.content, 'html.parser')
+      
+      # Extract country relations data
+      relations = {
+          "country": country_code,
+          "bilateral_data": extract_bilateral_info(soup),
+          "trade_volume": extract_trade_stats(soup),
+          "agreements": extract_agreements(soup),
+          "sentiment": analyze_sentiment(soup),
+          "timestamp": datetime.utcnow().isoformat()
+      }
+      
+      return relations
+
+
+3.2 WORLD BANK INDICATORS (via IndiAPIs)
+────────────────────────────────────────────────────────────────────────────
+
+SOURCE: https://data.worldbank.org (IndiAPIs wrapper)
+
+APPROACH: Direct REST API calls to World Bank API
+
+KEY INDICATORS TO COLLECT (India + Comparative):
+  
+  ECONOMIC:
+    • GDP (NY.GDP.MKTP.CD)
+    • GDP Growth Rate (NY.GDP.MKTP.KD.ZS)
+    • Inflation, Consumer Prices (FP.CPI.TOTL.ZG)
+    • Foreign Direct Investment (BX.KLT.DINV.CD.WD)
+    • Trade Volume (NE.EXP.GNFS.CD + NE.IMP.GNFS.CD)
+    
+  DEMOGRAPHIC:
+    • Population (SP.POP.TOTL)
+    • Urban Population (SP.URB.TOTL)
+    • Life Expectancy (SP.DYN.LE00.IN)
+    • Literacy Rate (SE.ADT.LITR.ZS)
+    
+  DEVELOPMENT:
+    • Healthcare Access (SH.XPD.CHEX.GD.ZS)
+    • School Enrollment (SE.ENR.PRIM.FM.ZS)
+    • Unemployment (SL.UEM.TOTL.ZS)
+    
+  DATA SCHEMA (Proposed):
+    {
+      "country": "string",
+      "indicator_code": "string (e.g., 'NY.GDP.MKTP.CD')",
+      "indicator_name": "string",
+      "value": "float",
+      "year": "int",
+      "unit": "string",
+      "source": "World Bank",
+      "last_updated": "ISO timestamp"
+    }
+
+IMPLEMENTATION DETAILS:
+  • Use direct World Bank API (https://api.worldbank.org/v2/)
+  • Create /backend/ingestors/worldbank_fetcher.py
+  • Fetch data monthly (first day of month)
+  • Support historical data retrieval (10-year lookback)
+  • Cache results in PostgreSQL
+  
+SAMPLE CODE STRUCTURE:
+  
+  import requests
+  from datetime import datetime
+  
+  WORLD_BANK_API = "https://api.worldbank.org/v2"
+  
+  def fetch_worldbank_indicator(country_code, indicator_code):
+      url = f"{WORLD_BANK_API}/country/{country_code}/indicator/{indicator_code}?format=json&per_page=100"
+      response = requests.get(url)
+      data = response.json()
+      
+      indicators = []
+      for record in data[1]:
+          indicators.append({
+              "country": country_code,
+              "indicator_code": indicator_code,
+              "indicator_name": data[0][0]['indicator']['value'],
+              "value": float(record['value']) if record['value'] else None,
+              "year": int(record['date']),
+              "timestamp": datetime.utcnow().isoformat()
+          })
+      
+      return indicators
+
+
+================================================================================
+4. COMPONENT-BY-COMPONENT IMPLEMENTATION PLAN
+================================================================================
+
+4.1 STRATEGIC OVERVIEW (/ - Home Dashboard)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Command center displaying real-time system health, global risk metrics,
+  and operational status.
+
+DATA REQUIREMENTS:
+  • Regional risk scores (8 regions)
+  • Global entity count (1.47M tracked)
+  • Active threat threads (48)
+  • Daily data ingested (2.9TB processed)
+  • Prediction accuracy (91.3%)
+  
+BACKEND SERVICES NEEDED:
+  1. RiskScoringService
+  2. EntityCounterService
+  3. ThreatDetectionService
+  4. IngestionMetricsService
+  5. PredictionAccuracyService
+
+API ENDPOINTS:
+  GET /api/metrics/regional-risk
+    └─ Returns: { regions: [{name, risk: 0-100, color}] }
+    └─ Data Source: Neo4j + ML predictions
+    └─ Update Frequency: Every 5 minutes
+    
+  GET /api/metrics/global-entities
+    └─ Returns: { total: int, breakdown: {nations, orgs, individuals, events} }
+    └─ Data Source: Neo4j node count
+    └─ Update Frequency: Hourly
+    
+  GET /api/metrics/threat-threads
+    └─ Returns: { critical: int, high: int, monitor: int }
+    └─ Data Source: PostgreSQL threat table
+    └─ Update Frequency: Real-time (Kafka stream)
+    
+  GET /api/metrics/daily-ingestion
+    └─ Returns: { total_gb: float, realtime_processed: float }
+    └─ Data Source: Kafka metrics + Delta Lake
+    └─ Update Frequency: Every 15 minutes
+    
+  GET /api/metrics/prediction-accuracy
+    └─ Returns: { accuracy: percentage, confidence: 0-1, model_version: string }
+    └─ Data Source: ML Pipeline evaluation metrics
+    └─ Update Frequency: Daily
+
+DATA FLOW:
+  MEA Scraper → Kafka → NLP Pipeline → Neo4j/PostgreSQL
+  World Bank API → PostgreSQL → Risk Scoring ML → API → Dashboard
+  
+INTEGRATION CHECKLIST:
+  [ ] Setup Neo4j connection layer
+  [ ] Create PostgreSQL schema for metrics
+  [ ] Build FastAPI endpoint handlers
+  [ ] Implement WebSocket for real-time updates
+  [ ] Create React hooks for data binding
+  [ ] Add error boundaries & retry logic
+
+
+4.2 INTELLIGENCE HUB (/intelligence)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Monitor NLP/AI pipeline processing rates, model performance, and entity
+  extraction quality metrics.
+
+DATA REQUIREMENTS:
+  • Entity extraction metrics (entities per doc, confidence)
+  • Language distribution (8 languages)
+  • Sentiment distribution
+  • Keyword trends (8-12 trending keywords)
+  • Radar chart: domain risk scores
+  
+MLmodel PIPELINE INTEGRATION:
+  • Input: MEA press releases + economic news documents
+  • Processing: spaCy NER + LLaMA-3 classification
+  • Output: Entity triplets + relationships
+  
+API ENDPOINTS:
+  GET /api/intelligence/entity-extraction
+    └─ Returns: {entities: [{entity, type, confidence, mentions}] }
+    └─ Data Source: Last 24h extractions
+    └─ Update Frequency: Real-time
+    
+  GET /api/intelligence/language-distribution
+    └─ Returns: {languages: [{lang, doc_count, percentage}] }
+    └─ Data Source: Document metadata
+    └─ Update Frequency: Hourly
+    
+  GET /api/intelligence/sentiment-radar
+    └─ Returns: {domains: [{subject, score, max}] }
+    └─ Data Source: Sentiment analysis results
+    └─ Update Frequency: Hourly
+    
+  GET /api/intelligence/trending-keywords
+    └─ Returns: {keywords: [{keyword, velocity, delta, type}] }
+    └─ Data Source: NLP keyword extraction
+    └─ Update Frequency: Every 6 hours
+    
+  POST /api/intelligence/document-process
+    └─ Input: {text: string, language: string}
+    └─ Returns: {entities, relationships, sentiment, classification}
+    └─ Latency Target: <5 seconds
+
+PIPELINE ARCHITECTURE:
+  
+  Raw Documents (MEA + News)
+          ↓
+  [Language Detection]
+          ↓
+  [spaCy NER Pipeline]
+  ├─ Entity Recognition
+  ├─ POS Tagging
+  └─ Dependency Parsing
+          ↓
+  [LLaMA-3 Classification]
+  ├─ Entity Type Refinement
+  ├─ Relationship Extraction
+  └─ Sentiment Analysis
+          ↓
+  [Validation & Storage]
+  ├─ Neo4j (Triplets)
+  ├─ PostgreSQL (Metrics)
+  └─ Kafka (Real-time stream)
+
+INTEGRATION CHECKLIST:
+  [ ] Set up spaCy models (multilingual)
+  [ ] Deploy LLaMA-3 inference server (Ollama)
+  [ ] Create document processing API
+  [ ] Build Kafka consumer for metrics
+  [ ] Create PyTorch model for confidence scoring
+  [ ] Implement batch processing pipeline
+  [ ] Add monitoring/alerting
+
+
+4.3 KNOWLEDGE GRAPH EXPLORER (/knowledge-graph)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Visual ontology browser showing entity relationships, graph metrics,
+  and semantic connections.
+
+DATA REQUIREMENTS:
+  • Node types & counts (6 types, 3.8M nodes)
+  • Edge relationships (8 major relation types)
+  • Ontology paths (3+ causal chains)
+  • Graph health metrics
+  
+NEO4J SCHEMA (Proposed):
+  
+  Nodes:
+    • Country (name, iso_code, continent, region)
+    • Organization (name, type, country, founded)
+    • Event (name, date, location, type, severity)
+    • Person (name, title, country, role)
+    • Policy (name, policy_area, adoption_date, status)
+    • Concept (name, category, parent_concept)
+  
+  Relationships:
+    • CONTROLS (strength: 0-100)
+    • GOVERNS (type: e.g., 'defense', 'trade')
+    • INFLUENCES (strength: 0-100)
+    • IMPACTS (type: 'positive', 'negative')
+    • CORRELATES (strength: 0-100)
+    • RESTRICTS (domain: e.g., 'trade', 'security')
+    • REGULATES (domain, strength)
+    • SHAPES (domain, strength)
+
+API ENDPOINTS:
+  GET /api/knowledge-graph/nodes
+    └─ Returns: {node_types: [{type, count, color}] }
+    └─ Data Source: Neo4j count query
+    └─ Update Frequency: Hourly
+    
+  GET /api/knowledge-graph/relationships
+    └─ Returns: {relationships: [{source, target, relation, strength}] }
+    └─ Data Source: Neo4j pattern matching
+    └─ Update Frequency: Hourly
+    
+  GET /api/knowledge-graph/paths/:source/:target
+    └─ Returns: {paths: [{nodes, edges, length, strength}] }
+    └─ Data Source: Neo4j shortest path + causal paths
+    └─ Depth Limit: 3 hops
+    
+  GET /api/knowledge-graph/subgraph/:entity
+    └─ Returns: {ego_graph: {nodes, edges} }
+    └─ Data Source: Neo4j 1-hop neighborhood
+    └─ Update Frequency: Real-time
+    
+  POST /api/knowledge-graph/validate
+    └─ Input: {triplet: [subject, predicate, object]}
+    └─ Returns: {valid: boolean, conflicts, confidence}
+    └─ Validation: SHACL constraints
+
+KNOWLEDGE GRAPH CONSTRUCTION:
+  
+  Step 1: Entity Linking (spaCy + Wikidata)
+  ├─ Link extracted entities to canonical entities
+  ├─ Verify with Wikidata/DBpedia
+  └─ Assign entity IDs
+  
+  Step 2: Relationship Extraction (LLaMA-3)
+  ├─ Extract relationships from text
+  ├─ Classify relationship type
+  └─ Compute confidence score
+  
+  Step 3: Graph Insertion (Neo4j)
+  ├─ Merge nodes (idempotent)
+  ├─ Create edges with properties
+  └─ Update timestamps
+  
+  Step 4: Validation (SHACL)
+  ├─ Check data quality constraints
+  ├─ Identify conflicts/duplicates
+  └─ Flag for manual review
+  
+  Step 5: Enrichment
+  ├─ Compute graph centrality metrics
+  ├─ Identify communities
+  └─ Extract causal chains
+
+INTEGRATION CHECKLIST:
+  [ ] Design Neo4j schema & constraints
+  [ ] Implement entity linking service
+  [ ] Build relationship extraction model
+  [ ] Create Neo4j bulk import pipeline
+  [ ] Implement SHACL validation
+  [ ] Build graph visualization API
+  [ ] Add community detection
+  [ ] Create path-finding algorithms
+  [ ] Implement caching for hot subgraphs
+
+
+4.4 GEOSPATIAL INTELLIGENCE (/geospatial)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Coordinate mapping, hotspot visualization, and regional risk assessment
+  using PostGIS geospatial queries.
+
+DATA REQUIREMENTS:
+  • Hotspots (10-15 locations with coordinates, severity)
+  • Climate indicators (5 regions)
+  • SVG world map with markers
+  • Heatmaps by risk level
+  
+POSTGIS SCHEMA (Proposed):
+  
+  Tables:
+    hotspots (id, name, geom: Point, type, severity, confidence)
+    regions (id, name, geom: Polygon, risk_score, climate_category)
+    incidents (id, name, geom: Point, date, type, impact)
+    climate_zones (id, region, geom: Polygon, temp_delta, drought_level)
+
+API ENDPOINTS:
+  GET /api/geospatial/hotspots
+    └─ Returns: {hotspots: [{name, lat, lng, type, severity, value}] }
+    └─ Data Source: PostGIS hotspots table
+    └─ Update Frequency: Every 6 hours
+    
+  GET /api/geospatial/hotspots/:region/radius=:km
+    └─ Returns: {hotspots: [{...}] }
+    └─ Data Source: ST_DWithin PostGIS query
+    └─ Dynamic radius search
+    
+  GET /api/geospatial/climate-indicators
+    └─ Returns: {regions: [{region, temp, drought, flood, crop_risk}] }
+    └─ Data Source: Climate data + World Bank weather APIs
+    └─ Update Frequency: Daily
+    
+  GET /api/geospatial/raster-tile/:z/:x/:y
+    └─ Returns: mapbox vector tiles showing hotspot density
+    └─ Data Source: PostGIS tile generation
+    └─ Zoom levels: 0-18
+    
+  POST /api/geospatial/risk-analysis
+    └─ Input: {geometry: GeoJSON}
+    └─ Returns: {risk_score, incidents_count, threat_type_distribution}
+    └─ Analysis: Spatial join with incidents
+
+DATA SOURCES FOR GEOSPATIAL:
+  • Country centroids: Natural Earth
+  • Conflict zones: UCDP/PRIO Armed Conflict Database
+  • Climate data: World Bank Climate Change Portal
+  • Economic zones: Manual curation from MEA data
+  
+VISUALIZATION APPROACH:
+  • Mapbox GL JS or Leaflet for interactive maps
+  • Heatmap layer for risk density
+  • GeoJSON for region boundaries
+  • Vector tiles for performance at scale
+
+INTEGRATION CHECKLIST:
+  [ ] Setup PostGIS extension in PostgreSQL
+  [ ] Import Natural Earth geographic data
+  [ ] Create incident/hotspot tables
+  [ ] Build spatial indexing (GIST)
+  [ ] Implement tile server (TileServer GL)
+  [ ] Create risk scoring spatial queries
+  [ ] Add climate data ingestion
+  [ ] Build coordinate reverse geocoding
+  [ ] Implement buffer/intersect analysis
+
+
+4.5 PREDICTIONS ENGINE (/predictions)
+─────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  ML-based conflict risk forecasting using historical data,
+  geopolitical factors, and economic indicators.
+
+DATA REQUIREMENTS:
+  • 7-day conflict predictions per region (6 regions)
+  • Inflation/economic forecasts
+  • Confidence intervals & drift indicators
+  • Model performance metrics
+  
+ML MODEL ARCHITECTURE:
+  
+  Input Features:
+    ├─ Historical conflict frequency
+    ├─ Trade relations (from MEA)
+    ├─ Economic indicators (from World Bank)
+    ├─ Diplomatic relations status
+    ├─ Climate stress indicators
+    ├─ Population dynamics
+    ├─ Resource competition levels
+    └─ Recent news sentiment
+  
+  Models:
+    ├─ PyG (PyTorch Geometric) Graph Neural Network
+    │  └─ Operates on knowledge graph structure
+    │     Input: Region node + graph context
+    │     Output: Conflict probability
+    │
+    ├─ LSTM Time-Series Model
+    │  └─ Forecasts economic indicators
+    │     Input: 10-year historical data
+    │     Output: 30/90-day forecasts
+    │
+    └─ Ensemble (Gradient Boosting)
+       └─ Combines GNN + LSTM + Traditional ML
+          Output: Consensus prediction + confidence
+
+API ENDPOINTS:
+  GET /api/predictions/conflict-risk/:region/:days=7
+    └─ Returns: {region, forecast: [{date, probability, confidence, trend}] }
+    └─ Data Source: ML models
+    └─ Update Frequency: Daily
+    
+  GET /api/predictions/economic/:indicator/:days=30
+    └─ Returns: {indicator, forecast: [{date, value, upper_bound, lower_bound}] }
+    └─ Data Source: LSTM models
+    └─ Update Frequency: Weekly
+    
+  GET /api/predictions/model-performance
+    └─ Returns: {accuracy, precision, recall, f1_score, auc_roc}
+    └─ Data Source: Validation set evaluation
+    └─ Update Frequency: Weekly
+    
+  GET /api/predictions/model-drift
+    └─ Returns: {drift_detected: boolean, drift_score: 0-1, alert_level}
+    └─ Data Source: Statistical drift detection
+    └─ Update Frequency: Daily
+    
+  POST /api/predictions/scenario
+    └─ Input: {scenario: {trade_shock: float, conflict_onset: bool, ...}}
+    └─ Returns: {outcomes: {regions: [{region, predicted_impact}]} }
+    └─ Monte Carlo simulation
+
+FEATURE ENGINEERING:
+  
+  From MEA Data:
+    • Bilateral relation quality index (0-100)
+    • Recent diplomatic incidents (count, severity)
+    • Agreement violations (count, recency)
+    • Trade volume changes (YoY %)
+    • Sentiment on key issues
+  
+  From World Bank Data:
+    • GDP growth rate
+    • Inflation rate
+    • Unemployment rate
+    • FDI flows
+    • Trade as % of GDP
+  
+  Derived Features:
+    • Economic dependency ratio
+    • Resource scarcity index
+    • Maritime chokepoint risk
+    • Population density variance
+    • Governance stability score
+
+INTEGRATION CHECKLIST:
+  [ ] Collect 20+ years historical conflict data (ACLED)
+  [ ] Engineer feature extraction pipeline
+  [ ] Build PyG GNN model training pipeline
+  [ ] Train LSTM models on economic indicators
+  [ ] Implement ensemble voting mechanism
+  [ ] Build backtesting framework
+  [ ] Create model monitoring dashboard
+  [ ] Implement retraining schedule (monthly)
+  [ ] Add drift detection algorithms
+  [ ] Create scenario simulation engine
+
+
+4.6 DATA STREAMS MONITOR (/data-streams)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Real-time monitoring of Kafka topics, consumer lag, throughput metrics,
+  and data pipeline health.
+
+DATA REQUIREMENTS:
+  • Kafka topic metrics (8+ topics, lag, throughput, health)
+  • Pipeline stage tracking (5-6 pipeline stages)
+  • Consumer group status
+  • Latency SLAs
+  
+KAFKA TOPICS SCHEMA:
+  
+  Topics (with retention & partitioning):
+    
+    Raw Ingestion:
+      news.articles.global
+        ├─ Partition: 48 (high volume)
+        ├─ Retention: 7 days
+        ├─ Schema: {title, body, source, pub_date, language, url}
+        └─ Source: MEA website, news APIs
+      
+      social.sentiment.twitter
+        ├─ Partition: 32
+        ├─ Retention: 3 days
+        ├─ Schema: {text, author, timestamp, engagement_metrics}
+        └─ Source: Twitter/X API
+      
+      markets.realtime.feeds
+        ├─ Partition: 16
+        ├─ Retention: 24 hours
+        ├─ Schema: {symbol, price, volume, bid_ask}
+        └─ Source: Bloomberg/Reuters APIs
+      
+      satellite.imagery.events
+        ├─ Partition: 12
+        ├─ Retention: 30 days
+        ├─ Schema: {location, timestamp, image_url, event_type}
+        └─ Source: NOAA/Sentinel satellites
+      
+      geopolitical.events.stream
+        ├─ Partition: 24
+        ├─ Retention: 30 days
+        ├─ Schema: {event, location, participants, impact}
+        └─ Source: Manual + MEA scraper
+      
+      climate.sensor.readings
+        ├─ Partition: 8
+        ├─ Retention: 90 days
+        ├─ Schema: {location, temperature, humidity, wind, precipitation}
+        └─ Source: IoT sensors + Weather APIs
+      
+      economic.indicators.batch
+        ├─ Partition: 6
+        ├─ Retention: 1 year
+        ├─ Schema: {country, indicator, value, date}
+        └─ Source: World Bank (daily batches)
+      
+      cyber.threat.feeds
+        ├─ Partition: 16
+        ├─ Retention: 90 days
+        ├─ Schema: {threat_type, severity, affected_systems, ttl}
+        └─ Source: Security feeds + IDS
+
+PIPELINE STAGES:
+  
+  1. News Ingestion → NLP → Graph
+     Sources: news.articles.global
+     Stages: Kafka → Flink → spaCy NER → Neo4j
+     Throughput: 42K docs/hour
+     Latency: 1.8 seconds avg
+  
+  2. Social Media → Sentiment Analysis
+     Sources: social.sentiment.twitter
+     Stages: Kafka → Spark Streaming → BERT sentiment → TimescaleDB
+     Throughput: 84K posts/hour
+     Latency: 2.4 seconds avg
+  
+  3. Satellite Feed → PostGIS
+     Sources: satellite.imagery.events
+     Stages: Kafka → Flink → GeoPandas → PostGIS
+     Throughput: 1.2K images/hour
+     Latency: 8.2 seconds avg
+  
+  4. Market Data → Prediction
+     Sources: markets.realtime.feeds
+     Stages: WebSocket → Kafka → Flink → Prophet → PostgreSQL
+     Throughput: 8.4K ticks/second
+     Latency: 300ms avg
+  
+  5. Batch ETL → Delta Lake
+     Sources: economic.indicators.batch
+     Stages: S3 Trigger → Spark → Delta Lake → Snowflake
+     Throughput: 847GB/hour
+     Latency: 24 minutes avg
+  
+  6. Graph ML → Predictions
+     Sources: Neo4j exports
+     Stages: Neo4j → PyG → PyTorch → Predictions DB
+     Throughput: 1.8K graphs/hour
+     Latency: 18.4 seconds avg (may be degraded)
+
+API ENDPOINTS:
+  GET /api/streams/topics
+    └─ Returns: {topics: [{topic, partitions, lag, throughput, status}] }
+    └─ Data Source: Kafka AdminClient
+    └─ Update Frequency: Real-time (10-second polling)
+    
+  GET /api/streams/consumer-lag/:topic/:consumer_group
+    └─ Returns: {lag: int, lag_trend: "increasing|stable|decreasing"}
+    └─ Data Source: Kafka consumer offset tracking
+    └─ Alert Threshold: >1000 offset lag
+    
+  GET /api/streams/throughput/:topic
+    └─ Returns: {rate: "msgs/s", trend: %, 24h_volume: int}
+    └─ Data Source: Kafka metrics
+    └─ Update Frequency: Real-time
+    
+  GET /api/streams/pipelines
+    └─ Returns: {pipelines: [{name, stages, status, throughput, latency}] }
+    └─ Data Source: Flink/Spark metrics
+    └─ Update Frequency: 30-second polling
+    
+  POST /api/streams/circuit-breaker/:topic
+    └─ Input: {action: 'pause'|'resume'}
+    └─ Output: {status: string, affected_pipelines: []}
+    └─ For emergency throttling
+
+KAFKA DEPLOYMENT:
+  • Broker Count: 3+ (production cluster)
+  • Replication Factor: 3
+  • Min In-Sync Replicas: 2
+  • Compression: snappy
+  • Retention: Per topic (see above)
+
+INTEGRATION CHECKLIST:
+  [ ] Setup Kafka cluster (Docker Compose or Kubernetes)
+  [ ] Define Kafka schemas using Avro/Protobuf
+  [ ] Implement schema registry
+  [ ] Build data producer integrations
+  [ ] Set up Kafka Connect for connectors
+  [ ] Deploy Flink clusters for streaming
+  [ ] Implement consumer lag monitoring
+  [ ] Create alerting rules (Prometheus)
+  [ ] Build Kafka UI dashboard
+  [ ] Implement circuit breaker patterns
+
+
+4.7 DATA LAKE OPERATIONS (/data-lake)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Monitor Delta Lake medallion architecture, data quality, and storage metrics.
+
+DATA REQUIREMENTS:
+  • 6-7 datasets tracked with sizes, record counts, update times
+  • Daily ingestion trend (7-day history)
+  • Query trend (hourly distribution)
+  • Data lineage & transformation tracking
+  
+DELTA LAKE MEDALLION ARCHITECTURE:
+  
+  BRONZE LAYER (Raw Data - Not Processed):
+    • Retention: 90 days
+    • Format: Parquet (original structure)
+    • Datasets:
+      - geopolitical.events.raw (124M records, 680GB)
+      - satellite.imagery.index (2.1M records, 847GB)
+      - news.global.raw (458M records, 1.2TB)
+    • Frequency: Hourly
+    • Schema: Minimal (preserve source structure)
+  
+  SILVER LAYER (Cleaned & Deduplicated):
+    • Retention: 1 year
+    • Format: Delta Lake (ACID transactions)
+    • Datasets:
+      - news.global.processed (847M records, 2.4TB)
+      - social.sentiment.timeseries (4.2B records, 8.7TB)
+      - geopolitical.events.processed (248M records, 1.1TB)
+    • Frequency: Continuous (streaming)
+    • Schema: Standardized, with metadata
+    • Quality Checks: Null counts, duplicates, format validation
+  
+  GOLD LAYER (Business-Ready Analytics):
+    • Retention: Unlimited (archival)
+    • Format: Delta Lake with partitioning
+    • Datasets:
+      - economic.indicators.curated (18M records, 94GB)
+      - kg.entity.embeddings (3.8M records, 124GB)
+      - regional.conflict.risk.scores (8 regions × 7 days)
+    • Frequency: Daily batch + real-time streaming
+    • Schema: Optimized for analytics (star schema)
+    • Aggregations: Pre-computed, materialized views
+  
+DELTA LAKE SCHEMA EVOLUTION:
+  
+  Bronze → Silver:
+    1. Deduplication (by source_id + timestamp)
+    2. Schema inference & standardization
+    3. Type casting & validation
+    4. Null handling & imputation
+    5. Format conversion (Parquet → Delta)
+  
+  Silver → Gold:
+    1. Aggregation & enrichment
+    2. Join with master data (country codes, etc.)
+    3. Feature engineering
+    4. SCD Type 2 (Slowly Changing Dimensions)
+    5. Materialized view computation
+
+API ENDPOINTS:
+  GET /api/data-lake/summary
+    └─ Returns: {total_size_gb: float, record_count: int, datasets: count}
+    └─ Data Source: Delta Lake table stats
+    └─ Update Frequency: Hourly
+    
+  GET /api/data-lake/datasets
+    └─ Returns: {datasets: [{name, format, records, size_gb, updated, tier}] }
+    └─ Data Source: Delta transaction logs
+    └─ Update Frequency: Real-time
+    
+  GET /api/data-lake/ingestion-history
+    └─ Returns: {history: [{date, bronze_gb, silver_gb, gold_gb}] }
+    └─ Data Source: Spark job metrics
+    └─ Period: Last 7 days
+    
+  GET /api/data-lake/query-trends
+    └─ Returns: {trends: [{hour, query_count}] }
+    └─ Data Source: Query logs (24-hour rolling)
+    └─ Update Frequency: Hourly
+    
+  GET /api/data-lake/lineage/:dataset
+    └─ Returns: {sources: [...], transforms: [...], consumers: [...]}
+    └─ Data Source: Query parsing & metadata
+    └─ DAG visualization
+    
+  GET /api/data-lake/quality/:dataset
+    └─ Returns: {quality_score, issues: [{type, count, severity}]}
+    └─ Data Source: Data profiling queries
+    └─ Update Frequency: Daily
+
+DATA QUALITY RULES:
+  
+  Bronze Layer:
+    • No nulls in primary key fields
+    • Timestamp is between 1970 and current time
+    • Record structure matches schema
+  
+  Silver Layer:
+    • No duplicate records
+    • Data types are correct
+    • Value ranges are valid (e.g., probability 0-1)
+    • Foreign keys resolve to valid records
+    • Timestamps are monotonically increasing (per stream)
+  
+  Gold Layer:
+    • Aggregations match source data
+    • Row counts match fact tables
+    • Null counts below threshold
+    • Outliers flagged and documented
+
+INTEGRATION CHECKLIST:
+  [ ] Setup Delta Lake with Apache Spark
+  [ ] Design medallion architecture
+  [ ] Implement bronze layer ingestors
+  [ ] Build silver layer transformation jobs
+  [ ] Create gold layer aggregations
+  [ ] Implement data quality framework (Great Expectations)
+  [ ] Build lineage tracking system
+  [ ] Create automated data profiling
+  [ ] Setup Delta Lake compaction scheduling
+  [ ] Implement query optimization (Z-ordering)
+
+
+4.8 SECURITY & GOVERNANCE (/security)
+────────────────────────────────────────────────────────────────────────────
+
+PURPOSE:
+  Monitor zero-trust architecture, access control, audit logs, and
+  data classification compliance.
+
+DATA REQUIREMENTS:
+  • Audit logs (access, exports, config changes)
+  • Policy violations trend (7-day history)
+  • User clearance levels
+  • Data lineage with classification
+  
+SECURITY DATA MODEL:
+  
+  Access Control:
+    • Users belong to Groups (roles)
+    • Groups have Permissions on Resources
+    • Permissions: READ, WRITE, EXPORT, DELETE, ADMIN
+    • Classifications: UNCLASS, FOUO, SECRET, TOP SECRET, TS/SCI
+    • Users have clearance_level matching classification
+    • ABAC (Attribute-Based Access Control):
+      - User attributes: country, dept, clearance
+      - Resource attributes: classification, domain, tier
+      - Policy: User.clearance >= Resource.classification
+  
+  Audit Log Schema:
+    {
+      timestamp: ISO datetime,
+      user_id: string,
+      action: enum[QUERY, READ, WRITE, EXPORT, DELETE, CONFIG_CHANGE],
+      resource: string (table/dataset/api),
+      classification: enum[UNCLASS, FOUO, SECRET, TS],
+      status: enum[ALLOW, DENY],
+      ip_address: string,
+      user_agent: string,
+      details: {request_params, response_size, execution_time}
+    }
+  
+  Data Lineage:
+    {
+      dataset_id: string,
+      source: [dataset_ids],
+      transforms: [{name, type, sql/code}],
+      consumers: [{application, frequency, access_level}],
+      classification: enum,
+      owner: user_id,
+      last_accessed: timestamp
+    }
+
+API ENDPOINTS:
+  GET /api/security/audit-log
+    └─ Params: {from_date, to_date, user_id, action, status}
+    └─ Returns: {logs: [{...}], total_count: int}
+    └─ Data Source: PostgreSQL audit table
+    └─ Query Limit: 10K records
+    
+  GET /api/security/violations-trend
+    └─ Returns: {trend: [{day, violation_count, warning_count}]}
+    └─ Data Source: Audit log analysis
+    └─ Period: Last 7 days
+    
+  GET /api/security/user-clearance
+    └─ Returns: {user_id, clearance_level, groups, resources_accessible}
+    └─ Data Source: User-Group-Permission joins
+    └─ Update Frequency: Cache every 5 minutes
+    
+  GET /api/security/data-lineage/:dataset
+    └─ Returns: {sources: [...], transforms: [...], consumers: [...]}
+    └─ Data Source: Query metadata + manual annotations
+    └─ DAG visualization
+    
+  POST /api/security/export-request
+    └─ Input: {dataset, format, classification_assurance}
+    └─ Returns: {request_id, review_status, expiration_time}
+    └─ Workflow: Requires approval if data is SECRET+
+    
+  POST /api/security/access-check
+    └─ Input: {user_id, resource, action}
+    └─ Returns: {allowed: boolean, reason: string}
+    └─ Real-time access control decision
+
+CLASSIFICATION LEVELS:
+  • UNCLASSIFIED - Public information (no restriction)
+  • FOUO (For Official Use Only) - Internal use only
+  • SECRET - Limited distribution, specific clearance required
+  • TOP SECRET - Highly restricted, SCI need-to-know
+  • TS/SCI - Top Secret with Sensitive Compartmented Information
+
+COMPLIANCE FRAMEWORKS:
+  • GDPR: Justify data retention, implement right-to-delete
+  • SOC2: Audit trail, access controls, encryption
+  • HIPAA: If health data involved, additional controls
+  • ISO 27001: Information security management system
+  
+INTEGRATION CHECKLIST:
+  [ ] Design RBAC/ABAC models
+  [ ] Implement audit logging middleware
+  [ ] Create access control enforcement layer
+  [ ] Build user-group-permission management API
+  [ ] Setup OAuth2/SAML authentication
+  [ ] Implement MFA (multi-factor auth)
+  [ ] Create classification tagging system
+  [ ] Build export approval workflow
+  [ ] Implement data encryption (at-rest & in-transit)
+  [ ] Setup SIEM integration (if available)
+  [ ] Create security monitoring dashboards
+  [ ] Document data governance policies
+
+
+================================================================================
+5. BACKEND INFRASTRUCTURE REQUIREMENTS
+================================================================================
+
+5.1 TECHNOLOGY STACK
+────────────────────────────────────────────────────────────────────────────
+
+PRODUCTION DEPLOYMENT:
+
+Application Framework:
+  • FastAPI 0.104+ (Python async API framework)
+  • Pydantic V2 (data validation)
+  • SQLAlchemy 2.0 (ORM)
+  
+Databases:
+  • PostgreSQL 15+ (relational + TimescaleDB extension)
+  • Neo4j 5.x Enterprise (knowledge graph)
+  • Redis 7.x (caching, session store)
+  
+Streaming:
+  • Apache Kafka 3.5+ (distributed streaming)
+  • Apache Flink 1.17+ (stream processing)
+  
+Data Lake:
+  • Delta Lake / Iceberg (ACID data lake)
+  • Apache Spark 3.4+ (distributed processing)
+  • S3/MinIO (object storage)
+  
+ML/AI:
+  • Ollama (LLaMA model serving)
+  • spaCy 3.7+ (NLP)
+  • PyTorch 2.0+ (deep learning)
+  • PyTorch Geometric (graph ML)
+  • scikit-learn (traditional ML)
+  
+Orchestration:
+  • Apache Airflow 2.7+ (DAG scheduling)
+  • APScheduler 3.10+ (lightweight scheduling)
+  • Kubernetes (optional, for scaling)
+  
+Monitoring:
+  • Prometheus 2.45+ (metrics collection)
+  • Grafana 10.x (dashboards)
+  • ELK Stack (logging: Elasticsearch, Logstash, Kibana)
+  • Jaeger (distributed tracing)
+
+5.2 DIRECTORY STRUCTURE
+────────────────────────────────────────────────────────────────────────────
+
+d:/DMC_Hackathon/
+├── app/                           # Next.js frontend
+│   ├── page.tsx                  # Home (Strategic Overview)
+│   ├── intelligence/page.tsx      # Intelligence Hub
+│   ├── knowledge-graph/page.tsx   # Knowledge Graph
+│   ├── geospatial/page.tsx        # Geospatial Intel
+│   ├── predictions/page.tsx       # Predictions Engine
+│   ├── data-streams/page.tsx      # Data Streams
+│   ├── data-lake/page.tsx         # Data Lake Ops
+│   ├── security/page.tsx          # Security & Governance
+│   └── layout.tsx                 # Root layout
+│
+├── components/                    # React components
+│   ├── TopBar.tsx
+│   ├── Sidebar.tsx
+│   ├── StatCard.tsx
+│   ├── Charts.tsx
+│   ├── AlertFeed.tsx
+│   └── hooks/                     # Custom React hooks
+│       ├── useMetrics.ts
+│       ├── useStreamData.ts
+│       └── useAuth.ts
+│
+├── backend/                       # Python FastAPI backend
+│   ├── main.py                   # FastAPI app entry point
+│   ├── config.py                 # Configuration management
+│   ├── requirements.txt           # Python dependencies
+│   │
+│   ├── api/                      # API routes
+│   │   ├── metrics.py            # GET /api/metrics/*
+│   │   ├── intelligence.py       # GET /api/intelligence/*
+│   │   ├── knowledge_graph.py    # GET /api/knowledge-graph/*
+│   │   ├── geospatial.py         # GET /api/geospatial/*
+│   │   ├── predictions.py        # GET /api/predictions/*
+│   │   ├── streams.py            # GET /api/streams/*
+│   │   ├── data_lake.py          # GET /api/data-lake/*
+│   │   └── security.py           # GET /api/security/*
+│   │
+│   ├── services/                 # Business logic
+│   │   ├── metrics_service.py
+│   │   ├── intelligence_service.py
+│   │   ├── kg_service.py         # Knowledge graph operations
+│   │   ├── geospatial_service.py
+│   │   ├── prediction_service.py
+│   │   ├── stream_service.py
+│   │   ├── data_lake_service.py
+│   │   └── security_service.py
+│   │
+│   ├── ingestors/                # Data ingestion
+│   │   ├── mea_scraper.py        # MEA website scraper
+│   │   ├── worldbank_fetcher.py  # World Bank API
+│   │   ├── news_ingester.py      # News aggregation
+│   │   ├── kafka_producer.py     # Kafka producers
+│   │   └── scheduler.py          # Task scheduling (APScheduler)
+│   │
+│   ├── models/                   # ML models
+│   │   ├── conflict_risk_gnn.py  # PyG conflict prediction
+│   │   ├── sentiment_classifier.py
+│   │   ├── entity_extractor.py   # spaCy pipelines
+│   │   └── economic_forecast.py  # LSTM models
+│   │
+│   ├── pipelines/                # Data processing pipelines
+│   │   ├── nlp_pipeline.py       # NLP processing
+│   │   ├── graph_pipeline.py     # Graph construction
+│   │   ├── feature_engineering.py
+│   │   └── validation.py         # Data quality
+│   │
+│   ├── db/                       # Database access layer
+│   │   ├── postgres.py           # PostgreSQL connection
+│   │   ├── neo4j.py              # Neo4j connection
+│   │   ├── redis.py              # Redis connection
+│   │   └── schemas.py            # SQLAlchemy models
+│   │
+│   ├── utils/                    # Utilities
+│   │   ├── logging.py
+│   │   ├── decorators.py         # Performance, caching
+│   │   ├── validators.py
+│   │   └── geo_utils.py
+│   │
+│   └── tests/                    # Unit tests
+│       ├── test_ingestors.py
+│       ├── test_services.py
+│       └── test_pipelines.py
+│
+├── data/                         # Data files
+│   ├── IndiAPIs/
+│   │   ├── DataExtract.py        # World Bank data fetcher
+│   │   ├── raw/                  # Raw data dumps
+│   │   └── processed/            # Processed data
+│   │
+│   └── MEA/
+│       ├── raw_html/             # Scraped HTML (cached)
+│       ├── processed/            # Parsed structured data
+│       └── updates.log           # Scrape log
+│
+├── infra/                        # Infrastructure as Code
+│   ├── docker/
+│   │   ├── Dockerfile.backend    # Backend image
+│   │   ├── Dockerfile.kafka      # Kafka image
+│   │   └── docker-compose.yml    # Local dev environment
+│   │
+│   ├── kubernetes/
+│   │   ├── deployment.yaml       # K8s deployment (optional)
+│   │   ├── services.yaml
+│   │   └── configmaps.yaml
+│   │
+│   ├── airflow/
+│   │   ├── dags/
+│   │   │   ├── data_ingestion.py
+│   │   │   ├── transformation.py
+│   │   │   └── ml_training.py
+│   │   └── plugins/
+│   │
+│   └── terraform/                # IaC (optional)
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+│
+├── docs/                         # Documentation
+│   ├── API.md                    # API specification
+│   ├── ARCHITECTURE.md           # System design
+│   ├── SETUP.md                  # Installation guide
+│   ├── DATA_SOURCES.md           # Data source configs
+│   └── SECURITY.md               # Security policies
+│
+├── INTEGRATION_PLAN.txt           # This file!
+├── package.json                   # Frontend dependencies
+├── tsconfig.json                  # TypeScript config
+├── next.config.ts                 # Next.js config
+├── Dockerfile                      # Backend Dockerfile
+├── docker-compose.yml              # Full stack compose
+└── .env.example                    # Environment variables template
+
+
+5.3 ENVIRONMENT CONFIGURATION
+────────────────────────────────────────────────────────────────────────────
+
+Create .env file with:
+
+# Backend API
+API_HOST=0.0.0.0
+API_PORT=8000
+DEBUG=False
+LOG_LEVEL=INFO
+
+# Databases
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=ontora_user
+POSTGRES_PASSWORD=<secure_password>
+POSTGRES_DB=ontora_prod
+
+NEO4J_HOST=localhost
+NEO4J_PORT=7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<secure_password>
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=<secure_password>
+
+# Kafka
+KAFKA_BROKERS=localhost:9092,localhost:9093,localhost:9094
+KAFKA_SECURITY_PROTOCOL=PLAINTEXT  # Use SASL_SSL in production
+
+# API Keys
+WORLD_BANK_API_KEY=<if_required>
+MEA_SCRAPER_USER_AGENT=Mozilla/5.0...
+
+# ML Models
+OLLAMA_HOST=http://localhost:11434
+SPACY_MODEL_SIZE=en_core_web_lg  # or md, sm
+HUGGINGFACE_CACHE=/models/.cache
+
+# Storage
+S3_ENDPOINT=http://localhost:9000  # MinIO for dev, AWS S3 for prod
+S3_ACCESS_KEY=<key>
+S3_SECRET_KEY=<secret>
+S3_BUCKET_PREFIX=ontora-datalake
+
+# Monitoring
+PROMETHEUS_PUSHGATEWAY=http://localhost:9091
+JAEGER_AGENT_HOST=localhost
+JAEGER_AGENT_PORT=6831
+
+# Security
+JWT_SECRET=<long_random_string>
+ENCRYPTION_KEY=<base64_encoded_key>
+ALLOWED_ORIGINS=http://localhost:3000,https://ontora.example.com
+
+# Deployment
+ENVIRONMENT=development  # development, staging, production
+VERSION=0.1.0
+
+
+================================================================================
+6. API ENDPOINTS DESIGN
+================================================================================
+
+BASE URL: http://localhost:8000/api/ (local)
+          https://ontora.example.com/api/ (production)
+
+All endpoints return JSON with standard structure:
+{
+  "status": "success" | "error",
+  "data": {...} | null,
+  "error": null | {code: string, message: string},
+  "meta": {timestamp: ISO string, request_id: UUID}
+}
+
+HEALTH & MONITORING
+────────────────────────────────────────────────────────────────────────────
+GET /api/health
+  ├─ Returns: {status: 'ok'|'degraded'|'critical', checks: {...}}
+  └─ Dependencies checked: Kafka, Postgres, Neo4j, Redis
+
+GET /api/metrics/system
+  ├─ Returns: {cpu_usage: %, memory_usage: %, disk_usage: %}
+  └─ Update Frequency: Real-time
+
+AUTHENTICATION & AUTHORIZATION
+────────────────────────────────────────────────────────────────────────────
+POST /api/auth/login
+  ├─ Input: {username: string, password: string, mfa_code?: string}
+  └─ Returns: {access_token: JWT, refresh_token: JWT, expires_in: seconds}
+
+POST /api/auth/refresh
+  ├─ Input: {refresh_token: JWT}
+  └─ Returns: {access_token: JWT}
+
+POST /api/auth/logout
+  ├─ Returns: {status: 'success'}
+
+GET /api/auth/me
+  ├─ Returns: {user_id, name, email, clearance_level, groups: []}
+  └─ Requires: Bearer token in Authorization header
+
+DETAILED ENDPOINT LISTING: [See Section 4 for module-specific endpoints]
+
+Each module has its own endpoint suite defined in section 4.1-4.8.
+
+
+================================================================================
+7. DATA FLOW PIPELINES
+================================================================================
+
+7.1 MEA DATA INGESTION PIPELINE
+────────────────────────────────────────────────────────────────────────────
+
+Trigger: Weekly schedule (Sunday 00:00 UTC)
+
+Step 1: Scrape MEA Website
+  └─ mea_scraper.py → BeautifulSoup
+     Target URLs:
+       • https://www.mea.gov.in/foreign-relations.htm (main page)
+       • https://www.mea.gov.in/foreign-relations/[country]/
+       • Parse HTML tables, extract country relations data
+       Output: Raw JSON documents
+       
+Step 2: Validate & Normalize
+  └─ Normalize country names to ISO 3166 codes
+     Validate data types, ranges
+     Extract structured fields (trade volume, agreements, etc.)
+     Output: Validated JSON
+     
+Step 3: Publish to Kafka
+  └─ Topic: mea.relations.raw
+     Key: country_code (for partitioning)
+     Value: {country, relation_type, status, ...}
+     Partitions: 12 (one per major region)
+     
+Step 4: Consume & Process (NLP)
+  └─ Consumer: NLP Pipeline Pod
+     Operations:
+       • Extract sentiment from diplomatic language
+       • Named entity recognition (countries, officials, events)
+       • Relationship extraction (agreements, disputes)
+       • Classification (hostile, stable, cooperative)
+     Output: Enriched triplets
+     
+Step 5: Store in Knowledge Graph
+  └─ Neo4j Write:
+     Create nodes: Country (if not exists)
+     Create relationships: BILATERAL_RELATION, HAS_AGREEMENT, etc.
+     Update properties: sentiment, last_updated, confidence
+     
+Step 6: Archive Raw Data
+  └─ Delta Lake Bronze Layer
+     Path: s3://ontora-datalake/bronze/mea/relations/[year]/[month]/[day]
+     Format: Parquet
+     Retention: 90 days
+
+Data Flow Diagram:
+  
+  Scheduler (APScheduler)
+       │
+       ▼
+  [mea_scraper.py]
+       │ Raw HTML
+       ▼
+  [validation & normalization]
+       │ Validated JSON
+       ▼
+  [Kafka: mea.relations.raw]
+       │
+  ┌────┴─────────────────────┐
+  │                           │
+  ▼                           ▼
+[NLP Pipeline]        [Bronze Delta Lake]
+  │                           │
+  │ Enriched                  │ Raw archive
+  │ triplets                  │
+  ▼                           ▼
+[Neo4j]              [s3://bronze/mea/...]
+
+
+7.2 WORLD BANK ECONOMIC INDICATORS PIPELINE
+────────────────────────────────────────────────────────────────────────────
+
+Trigger: Daily at 06:00 UTC (after World Bank updates)
+
+Step 1: Fetch Economic Indicators
+  └─ worldbank_fetcher.py → World Bank REST API
+     Indicators: GDP, inflation, unemployment, trade, FDI, etc.
+     Countries: World (all 216+), India focus
+     Historical: 10-year lookback
+     Output: JSON records
+     
+Step 2: Validate & Transform
+  └─ Type conversion (string → float)
+     Handle missing values (null)
+     Compute YoY changes, trends
+     Detect outliers/anomalies
+     
+Step 3: Store in PostgreSQL
+  └─ Table: economic_indicators
+     Structure:
+       {country_code, indicator_code, value, year, unit, timestamp}
+     Index: (country_code, indicator_code, year)
+     
+Step 4: Compute Features for ML
+  └─ Derived features:
+       • inflation_trend (3-year)
+       • gdp_growth_volatility
+       • trade_dependency_ratio
+       • economic_stress_index
+     Store in: features_computed table
+     
+Step 5: Publish to Kafka (for Real-Time Dashboards)
+  └─ Topic: economic.indicators.update
+     Key: country_code
+     Frequency: Daily batch (all records in one message)
+     
+Step 6: Archive to Data Lake
+  └─ Delta Lake Silver Layer
+     Path: s3://ontora-datalake/silver/economic/indicators/[year]/[month]/
+     Incremental: Append only (time-series)
+     
+Step 7: Feed to Prediction Models
+  └─ Economic forecast LSTM model
+     Input: Historical 10-year trends
+     Output: 30/90-day forecasts
+     Store: predictions table (via API endpoint)
+
+Data Flow Diagram:
+  
+  Daily Scheduler
+       │
+       ▼
+  [worldbank_fetcher.py]
+       │ JSON
+       ▼
+  [validation & transformation]
+       │ Cleaned data
+       ▼
+  PostgreSQL ◄─────────────────┐
+       │                       │
+       │                       │
+       ├─────► Feature Engineering
+       │       │
+       │       └─► PostgreSQL (features table)
+       │
+       └────► Kafka: economic.indicators.update
+              │
+              ├──► Real-time dashboards
+              │
+              └──► ML models (forecasting)
+              
+       └────► Delta Lake Silver
+              └─► Historical archive
+
+
+7.3 NLP PROCESSING PIPELINE (Real-Time)
+────────────────────────────────────────────────────────────────────────────
+
+Trigger: Streaming (Kafka topic consumption)
+
+Topics consumed: mea.relations.raw, news.articles.global, social.sentiment.twitter
+
+Step 1: Language Detection
+  └─ Input: Raw text
+     Method: fasttext langdetect
+     Output: language code (en, zh, ar, etc.)
+     
+Step 2: Entity Recognition (spaCy)
+  └─ Model: spacy.blank('en').add_pipe(...) for each language
+     Output: [{text, label, start, end}]
+     Labels: PERSON, ORG, GPE (country), EVENT, DATE, MONEY
+     
+Step 3: Dependency Parsing & Relationship Extraction
+  └─ spaCy: .sents, .token_dependencies
+     Pattern matching for relationships:
+       • "Country A signed agreement X with Country B"
+       • "Person P is minister of Country C"
+     Output: {subject, verb, object}
+     
+Step 4: LLM Classification (Optional - LLaMA-3)
+  └─ For complex cases, use LLM for:
+       • Entity type refinement
+       • Sentiment assessment
+       • Confidence scoring
+     Prompt: "Classify this entity: [text]"
+     Output: {class, confidence: 0-1}
+     
+Step 5: Validation & Conflict Detection
+  └─ Check against existing KG:
+       • Is this relationship new?
+       • Does it conflict with existing data?
+       • What is confidence/credibility?
+     
+Step 6: Publish Triplets to Kafka
+  └─ Topic: kg.triplets.extracted
+     Key: source_document_id
+     Value: [{subject, predicate, object, confidence, source_doc}]
+     
+Step 7: Store in Neo4j
+  └─ Merge logic (idempotent):
+     MERGE (s:Entity {id: subject_id})
+     MERGE (o:Entity {id: object_id})
+     MERGE (s)-[r:RELATIONSHIP {type: predicate}]->(o)
+     SET r.confidence = ..., r.sources = [...]
+     
+Step 8: Archive to Delta Lake Bronze
+  └─ Raw documents + metadata
+     Path: s3://ontora-datalake/bronze/nlp/documents/[date]/
+     Retention: 7 days
+
+Pseudo-code for NLP Pipeline:
+
+  async def process_document(doc: Document):
+      # Detect language
+      lang = detect_language(doc.text)
+      
+      # NLP processing
+      nlp = spacy.load(f"{lang}_core_web_lg")
+      doc_obj = nlp(doc.text)
+      
+      entities = [
+          {"text": ent.text, "label": ent.label_, "start": ent.start_char}
+          for ent in doc_obj.ents
+      ]
+      
+      # Relationship extraction
+      triplets = []
+      for sent in doc_obj.sents:
+          rels = extract_relations(sent)  # Custom function
+          triplets.extend(rels)
+      
+      # Validate
+      validated = validate_triplets(triplets, kg_client)
+      
+      # Publish & store
+      await kafka_producer.send("kg.triplets.extracted", validated)
+      await neo4j_client.write_triplets(validated)
+      
+      return {"entities": entities, "triplets": triplets}
+
+
+================================================================================
+8. SECURITY & GOVERNANCE FRAMEWORK
+================================================================================
+
+8.1 AUTHENTICATION
+────────────────────────────────────────────────────────────────────────────
+
+Method: OAuth2 + JWT + MFA
+
+Flow:
+  1. User submits credentials (username/password)
+  2. Backend validates against user database
+  3. Requires MFA (TOTP or hardware key)
+  4. Backend issues JWT tokens:
+     - Access token (15-minute expiry)
+     - Refresh token (30-day expiry)
+  5. Client stores tokens in httpOnly cookies
+  6. Each API call includes: Authorization: Bearer <token>
+  7. Backend validates JWT signature & claims
+
+
+8.2 AUTHORIZATION (RBAC + ABAC)
+────────────────────────────────────────────────────────────────────────────
+
+Role-Based Access Control (RBAC):
+  
+  Roles:
+    • Administrator: Full system access
+    • Analyst: Read all data, can create reports, cannot delete
+    • Operator: Monitor dashboards only, read-limited access
+    • Guest: Read-only public data
+  
+  Role → Permission Mapping:
+    • Administrator: [READ, WRITE, DELETE, ADMIN, EXPORT]
+    • Analyst: [READ, WRITE, EXPORT]
+    • Operator: [READ]
+    • Guest: [READ_PUBLIC]
+
+Attribute-Based Access Control (ABAC):
+  
+  Data is tagged with classification:
+    {classification: UNCLASS | FOUO | SECRET | TS | TS/SCI}
+  
+  Users have clearance:
+    {clearance_level: UNCLASS | FOUO | SECRET | TS | TS/SCI}
+  
+  Access Rule:
+    User.role permits action?
+    AND User.clearance >= Resource.classification?
+    AND User.department in Resource.authorized_departments?
+    → ALLOW / DENY
+
+
+8.3 DATA CLASSIFICATION
+────────────────────────────────────────────────────────────────────────────
+
+Classification Scheme:
+
+  UNCLASSIFIED (U//)
+    • Public information
+    • No access restrictions
+    • Can be freely shared
+  
+  FOR OFFICIAL USE ONLY (FOUO)
+    • Internal government use only
+    • Not for public distribution
+    • Some access logging required
+  
+  SECRET (S//)
+    • Restricted distribution
+    • Need-to-know basis
+    • Specific clearance required
+    • Access fully logged
+    • Cannot be exported without approval
+  
+  TOP SECRET (TS//)
+    • Highly restricted
+    • Specific need-to-know
+    • TS clearance required
+    • All access logged & monitored
+    • Audit trail mandatory
+  
+  TOP SECRET / SCI (TS//SCI)
+    • Compartmented information
+    • Strictest control
+    • Need-to-know + compartment approval
+    • Full monitoring, audit, approval for access
+
+Data Classification Decision Tree:
+  
+  Q: Is this publicly available info?
+  └─ YES → UNCLASSIFIED
+  └─ NO → Q2
+  
+  Q2: Could disclosure harm government interests?
+  └─ NO → FOUO
+  └─ YES → Q3
+  
+  Q3: Could disclosure cause "serious damage" to national security?
+  └─ NO → SECRET
+  └─ YES → Q4
+  
+  Q4: Does this contain compartmented/sensitive intelligence?
+  └─ NO → TOP SECRET
+  └─ YES → TOP SECRET / SCI
+
+
+8.4 DATA GOVERNANCE POLICIES
+────────────────────────────────────────────────────────────────────────────
+
+Data Owner Responsibilities:
+  • Classify data appropriately
+  • Define retention period
+  • Authorize users/departments
+  • Review access logs regularly
+  • Ensure data quality
+  
+Data Consumer Responsibilities:
+  • Use data only for authorized purpose
+  • Protect data according to classification
+  • Report unauthorized access
+  • Request deletion after use
+  
+Technical Controls:
+  • Encryption at rest (AES-256)
+  • Encryption in transit (TLS 1.3)
+  • Database-level access control (row/column level)
+  • Audit logging (every read/write/export)
+  • Data masking (PII, sensitive values)
+  • Anonymization (where applicable)
+  
+Compliance Monitoring:
+  • Quarterly compliance audits
+  • Annual security assessments
+  • Continuous monitoring (SIEM)
+  • Incident response playbooks
+
+
+================================================================================
+9. IMPLEMENTATION TIMELINE
+================================================================================
+
+PHASE 1: FOUNDATION (Weeks 1-4)
+════════════════════════════════════════════════════════════════════════════
+
+Goal: Setup backend infrastructure & basic data ingestion
+
+Tasks:
+  Week 1:
+    [ ] Setup FastAPI project structure
+    [ ] Setup PostgreSQL & Neo4j databases
+    [ ] Setup Kafka cluster (local 3-broker setup)
+    [ ] Create database schemas
+    [ ] Hello-world FastAPI endpoints
+  
+  Week 2:
+    [ ] Implement MEA scraper (BeautifulSoup)
+    [ ] Implement World Bank fetcher
+    [ ] Create Kafka producers for both sources
+    [ ] Test basic data flow to Kafka
+    [ ] Store raw data in PostgreSQL
+  
+  Week 3:
+    [ ] Implement spaCy NLP pipeline
+    [ ] Build entity extraction service
+    [ ] Create Kafka consumer → Neo4j pipeline
+    [ ] Test end-to-end MEA → KG flow
+  
+  Week 4:
+    [ ] Implement basic validation & error handling
+    [ ] Setup monitoring (Prometheus metrics)
+    [ ] Create first dashboard API endpoints (/api/metrics/*)
+    [ ] Connect React frontend to backend
+    [ ] Deploy locally with docker-compose
+  
+ Deliverables:
+    ✓ Working FastAPI backend
+    ✓ PostgreSQL + Neo4j running
+    ✓ Kafka ingestion working
+    ✓ Basic NLP pipeline
+    ✓ First 2-3 dashboard endpoints live
+
+
+PHASE 2: INTELLIGENCE LAYER (Weeks 5-8)
+════════════════════════════════════════════════════════════════════════════
+
+Goal: Build AI/intelligence capabilities
+
+Tasks:
+  Week 5:
+    [ ] Setup Ollama + LLaMA-3 inference
+    [ ] Build LLM classification endpoint
+    [ ] Refine sentiment analysis
+    [ ] Create entity linking service (Wikidata)
+    [ ] Implement relationship extraction
+
+  Week 6:
+    [ ] Build intelligence hub API endpoints
+    [ ] Implement entity extraction metrics tracking
+    [ ] Create language distribution reporting
+    [ ] Build trending keywords extraction
+    [ ] Connect intelligence dashboards
+  
+  Week 7:
+    [ ] Implement knowledge graph validation (SHACL)
+    [ ] Build conflict detection (triplet validation)
+    [ ] Create graph centrality metrics
+    [ ] Implement path-finding algorithms
+    [ ] API endpoints for KG explorer
+  
+  Week 8:
+    [ ] Build PyG conflict prediction model (skeleton)
+    [ ] Create ML training pipeline
+    [ ] Implement model serving API
+    [ ] Create prediction dashboard endpoints
+    [ ] Setup A/B testing framework
+  
+  Deliverables:
+    ✓ Intelligence Hub module functional
+    ✓ Knowledge Graph Explorer module live
+    ✓ LLaMA-3 integrated
+    ✓ Prediction models training
+    ✓ 5+ dashboard modules connected
+
+
+PHASE 3: STREAMING & ANALYTICS (Weeks 9-12)
+════════════════════════════════════════════════════════════════════════════
+
+Goal: Build streaming architecture & data lake
+
+Tasks:
+  Week 9:
+    [ ] Setup Apache Flink clusters
+    [ ] Implement streaming aggregations
+    [ ] Build Kafka lag monitoring
+    [ ] Create stream health dashboard
+    [ ] Setup real-time alerting
+  
+  Week 10:
+    [ ] Implement Delta Lake (Bronze/Silver/Gold layers)
+    [ ] Build data ingestion jobs (Spark)
+    [ ] Setup transformation pipelines
+    [ ] Implement data quality framework
+    [ ] Create data profiling jobs
+  
+  Week 11:
+    [ ] Build data lake API endpoints
+    [ ] Create lineage tracking
+    [ ] Setup query cost monitoring
+    [ ] Implement materialized views (Gold layer)
+    [ ] Connect data lake dashboards
+  
+  Week 12:
+    [ ] Setup geospatial data (PostGIS)
+    [ ] Build coordinate indexing
+    [ ] Create risk heatmaps
+    [ ] Implement region analysis APIs
+    [ ] Connect geospatial dashboard
+  
+  Deliverables:
+    ✓ Streaming pipeline operational
+    ✓ Data Lake running (Bronze/Silver layers)
+    ✓ Data Streams monitoring module live
+    ✓ Data Lake Operations module live
+    ✓ Geospatial Intelligence module live
+
+
+PHASE 4: GOVERNANCE & PRODUCTION (Weeks 13-16)
+════════════════════════════════════════════════════════════════════════════
+
+Goal: Security, compliance, & production hardening
+
+Tasks:
+  Week 13:
+    [ ] Implement OAuth2 authentication
+    [ ] Build RBAC authorization
+    [ ] Setup audit logging
+    [ ] Create user management API
+    [ ] Implement JWT token handling
+
+  Week 14:
+    [ ] Build security monitoring dashboard
+    [ ] Implement data classification tagging
+    [ ] Create export approval workflow
+    [ ] Setup encryption (at-rest & in-transit)
+    [ ] Implement anomaly detection
+
+  Week 15:
+    [ ] Security hardening (dependency scanning, etc.)
+    [ ] Performance optimization
+    [ ] Load testing & scaling
+    [ ] Comprehensive integration testing
+    [ ] Documentation completion
+  
+  Week 16:
+    [ ] Production deployment & validation
+    [ ] User training & onboarding
+    [ ] Handover to operations team
+    [ ] Monitoring & support setup
+    [ ] Go-live celebration! 🎉
+  
+  Deliverables:
+    ✓ Security & Governance module live
+    ✓ All 8 dashboard modules fully functional
+    ✓ Authentication & authorization working
+    ✓ Audit logging complete
+    ✓ Production-ready system
+
+
+CRITICAL PATH DEPENDENCIES
+────────────────────────────────────────────────────────────────────────────
+
+  Phase 1 (Foundation) must complete before Phase 2
+  Phase 1 + Phase 2 must complete before Phase 3 (parallel possible)
+  Phase 3 must complete before Phase 4
+  
+  Parallel work possible:
+    • Frontend enhancements while backend builds (weeks 5-12)
+    • ML model experimentation (weeks 5+)
+
+
+================================================================================
+10. TECHNICAL STACK RECOMMENDATIONS
+================================================================================
+
+10.1 FRONTEND TECHNOLOGY CHOICES
+────────────────────────────────────────────────────────────────────────────
+
+Current Stack (GOOD ✓):
+  • Next.js 16.1.6 - Server-side rendering, API routes
+  • React 19.2 - Component library
+  • TypeScript 5 - Type safety
+  • Tailwind CSS 4 - Styling
+  • Recharts 3.8 - Data visualization
+  
+Recommended Additions:
+  • TanStack Query - Server state management
+  • Zustand - Client state management
+  • Framer Motion - Animations
+  • Map library (Mapbox GL or Leaflet) - Geospatial
+  • AG Grid Community - Advanced data tables
+  • React Hook Form - Form handling
+
+
+10.2 BACKEND TECHNOLOGY CHOICES
+────────────────────────────────────────────────────────────────────────────
+
+STRONGLY RECOMMENDED:
+  ✓ FastAPI - Modern, async, auto-docs, high performance
+  ✓ PostgreSQL 15+ - Mature, reliable, PostGIS support
+  ✓ Neo4j 5 - Best-in-class graph database
+  ✓ Kafka 3.5+ - Industry standard streaming
+  ✓ Redis 7 - Caching, pub/sub, real-time
+  
+CHOOSE ONE FOR ML:
+  → PyTorch + spaCy (Recommended for NLP)
+  → TensorFlow (if team has expertise)
+  → Scikit-learn (for lighter models)
+  
+CHOOSE ONE FOR SERVING:
+  → Ollama (easiest for LLaMA deployment)
+  → vLLM (if need high throughput)
+  → Ray Serve (complex ensemble models)
+
+
+10.3 INFRASTRUCTURE CHOICES
+────────────────────────────────────────────────────────────────────────────
+
+LOCAL DEVELOPMENT:
+  ✓ Docker + Docker Compose (as provided in repo)
+  ✓ 3-broker Kafka cluster (local)
+  ✓ PostgreSQL + Neo4j containers
+  
+STAGING/PRODUCTION:
+
+  Option A: Cloud-Native (AWS/GCP/Azure)
+    • ECS/EKS for container orchestration
+    • RDS PostgreSQL (managed)
+    • Amazon Neptune or Azure Cosmos DB (Neo4j alternative)
+    • MSK (Managed Streaming for Kafka)
+    • S3 for data lake storage
+    → Cost: $5-15K/month (depends on scale)
+  
+  Option B: On-Premise / Private Cloud
+    • Kubernetes cluster (3+ nodes)
+    • PostgreSQL replication (primary + replicas)
+    • Neo4j cluster mode
+    • Kafka broker cluster (5+ brokers)
+    • Network storage (NFS/Ceph) or S3-compatible (MinIO)
+    → Cost: Infrastructure dependent
+  
+  Option C: Hybrid
+    • Kubernetes on-premise for core components
+    • Cloud storage (S3) for data lake
+    → Balances control & cost
+
+
+RECOMMENDED MONITORING STACK:
+  • Prometheus + Grafana (metrics)
+  • ELK Stack (logging)
+  • Jaeger (tracing)
+  • Sentry (error tracking)
+  → Docker images available, easy to integrate
+
+
+================================================================================
+SUMMARY & QUICK START
+================================================================================
+
+1. CLONE EXISTING REPO
+   git clone d:\DMC_Hackathon
+
+2. START WITH PHASE 1
+   • Setup FastAPI backend
+   • Create database schemas
+   • Implement MEA scraper
+   • Build World Bank fetcher
+   • Test Kafka integration
+
+3. FOLLOW TIMELINE
+   16 weeks → fully operational intelligence platform
+
+4. LEVERAGE DATA SOURCES
+   • MEA: Diplomatic relations, bilateral data, agreements
+   • World Bank: Economic indicators, demographic data
+
+5. BUILD INCREMENTALLY
+   • Week 4: First dashboard live
+   • Week 8: Intelligence hub operational
+   • Week 12: Full streaming platform
+   • Week 16: Production ready
+
+6. KEY SUCCESS FACTORS
+   ✓ Scalable architecture (Kafka, Delta Lake)
+   ✓ ML integration (spaCy, LLaMA-3, PyG)
+   ✓ Strong security (OAuth2, classification, audit)
+   ✓ Real-time capabilities (streaming, WebSocket)
+   ✓ Knowledge graph foundation (Neo4j)
+
+================================================================================
+END OF INTEGRATION PLAN
+================================================================================
