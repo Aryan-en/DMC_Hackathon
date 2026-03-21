@@ -3,6 +3,7 @@ PostgreSQL Database Connection and Schema Initialization
 """
 
 import logging
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
@@ -37,6 +38,9 @@ async def init_db():
             engine, class_=AsyncSession, expire_on_commit=False
         )
         
+        # Import models so SQLAlchemy metadata is populated before create_all.
+        from db import schemas  # noqa: F401
+
         # Create all tables
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -48,8 +52,11 @@ async def init_db():
         raise
 
 
-async def get_db_session() -> AsyncSession:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting database session"""
+    if AsyncSessionLocal is None:
+        raise RuntimeError("Database not initialized. Call init_db() during startup.")
+
     async with AsyncSessionLocal() as session:
         yield session
 

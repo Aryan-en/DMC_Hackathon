@@ -2064,6 +2064,234 @@ SUMMARY & QUICK START
    ✓ Real-time capabilities (streaming, WebSocket)
    ✓ Knowledge graph foundation (Neo4j)
 
+
+================================================================================
+11. CONTINUATION PLAN (MARCH 21, 2026)
+================================================================================
+
+11.1 CURRENT IMPLEMENTATION DELTA
+────────────────────────────────────────────────────────────────────────────
+
+What is already implemented in codebase (verified):
+  ✓ FastAPI app bootstrap in backend/main.py
+  ✓ Routers wired for: metrics, intelligence, knowledge-graph, geospatial
+  ✓ Health endpoints available (/health, /api/version)
+  ✓ MEA and World Bank ingestors scaffolded
+  ✓ Kafka producer scaffold exists
+  ✓ PostgreSQL + Neo4j initialization hooks exist
+
+What is partially implemented:
+  • API responses are mostly mock/static payloads for dashboard continuity
+  • Unified response envelope exists but is not consistently enforced
+  • Frontend dashboards are present, but live backend binding is incomplete
+
+What is not yet implemented (critical):
+  • Real database-backed queries for all API routes
+  • Streaming ingestion validation in running environment
+  • NLP triplet extraction pipeline to Neo4j in production flow
+  • Security endpoints (/api/security/*), predictions, streams, and data-lake routers
+  • End-to-end integration tests in CI
+
+
+11.2 NEXT EXECUTION WINDOW (7-DAY SPRINT)
+────────────────────────────────────────────────────────────────────────────
+
+Sprint Goal:
+  Complete Phase 1 exit criteria and establish production-safe baseline for
+  Phase 2 intelligence features.
+
+Day 1: Infrastructure Bring-Up & Verification
+  [ ] Start stack (docker-compose)
+  [ ] Verify Postgres, Neo4j, Kafka health checks
+  [ ] Run backend and validate /health and /api/version
+  [ ] Confirm topic availability (mea.relations.raw, economic.indicators.batch)
+
+Day 2: Ingestion to Persistence
+  [ ] Execute MEA ingestor against live source sample
+  [ ] Execute World Bank fetcher for 3-5 countries
+  [ ] Publish to Kafka and consume into PostgreSQL
+  [ ] Persist ingestion run metadata (start/end/errors/count)
+
+Day 3: Replace Mock API Data (Metrics + Intelligence)
+  [ ] backend/api/metrics.py: convert endpoints to SQL/Neo4j queries
+  [ ] backend/api/intelligence.py: replace static payloads from extracted docs
+  [ ] Add endpoint-level try/except with typed error codes
+  [ ] Add pagination/limit defaults for list endpoints
+
+Day 4: Replace Mock API Data (KG + Geospatial)
+  [ ] backend/api/knowledge_graph.py: real node/edge/path queries
+  [ ] backend/api/geospatial.py: PostGIS-ready query interfaces
+  [ ] Add request validation for path and query params
+  [ ] Add caching for graph neighborhood and hotspot queries
+
+Day 5: Frontend Integration (Read-Only)
+  [ ] Add frontend API client abstraction (shared fetch wrapper)
+  [ ] Bind Strategic Overview cards/charts to /api/metrics
+  [ ] Bind Intelligence widgets to /api/intelligence
+  [ ] Implement loading/empty/error states for all bound widgets
+
+Day 6: Reliability & Observability
+  [ ] Instrument request latency, error rate, and dependency checks
+  [ ] Add structured logs with request_id correlation
+  [ ] Add smoke tests for all live routes
+  [ ] Add data quality checks for ingested records
+
+Day 7: Integration Hardening + Demo Cut
+  [ ] Full dry run: ingestion -> processing -> APIs -> frontend
+  [ ] Resolve top defects and stabilize response contracts
+  [ ] Freeze demo dataset snapshot
+  [ ] Publish sprint report and Phase 2 entry checklist
+
+
+11.3 API CONTRACT NORMALIZATION (MANDATORY)
+────────────────────────────────────────────────────────────────────────────
+
+All endpoints must return:
+  {
+    "status": "success" | "error",
+    "data": {...} | null,
+    "error": null | {"code": "...", "message": "..."},
+    "meta": {
+      "timestamp": "ISO-8601",
+      "request_id": "UUID",
+      "source": "cache|db|stream",
+      "latency_ms": number
+    }
+  }
+
+Status code policy:
+  • 200: successful read/write
+  • 202: accepted async job
+  • 400: validation/input error
+  • 401/403: auth/clearance error
+  • 404: entity not found
+  • 409: conflict/duplicate write
+  • 429: rate limit
+  • 500: internal error
+  • 503: dependency unavailable (DB/Kafka/Neo4j)
+
+Contract actions:
+  [ ] Add shared response helper in backend/utils/
+  [ ] Add shared error-code registry
+  [ ] Add OpenAPI examples for each module endpoint
+
+
+11.4 FRONTEND-BACKEND INTEGRATION PATH
+────────────────────────────────────────────────────────────────────────────
+
+Implementation sequence:
+  1) Strategic Overview (app/page.tsx)
+     - /api/metrics/regional-risk
+     - /api/metrics/global-entities
+     - /api/metrics/threat-threads
+     - /api/metrics/daily-ingestion
+     - /api/metrics/prediction-accuracy
+
+  2) Intelligence Hub (app/intelligence/page.tsx)
+     - /api/intelligence/entity-extraction
+     - /api/intelligence/language-distribution
+     - /api/intelligence/trending-keywords
+
+  3) Knowledge Graph + Geospatial pages
+     - /api/knowledge-graph/*
+     - /api/geospatial/*
+
+Frontend acceptance requirements:
+  [ ] No hardcoded operational numbers in production mode
+  [ ] All network calls have timeout + retry (bounded)
+  [ ] UI surfaces backend failure mode without breaking layout
+  [ ] Polling intervals configurable via environment
+
+
+11.5 PHASE 1 EXIT CRITERIA (REVISED)
+────────────────────────────────────────────────────────────────────────────
+
+Phase 1 is complete only when all conditions are true:
+  [ ] At least 10 core API routes serve real data (not static mocks)
+  [ ] Ingestion from MEA + World Bank runs on schedule and stores successfully
+  [ ] Kafka publish/consume path validated with reproducible test evidence
+  [ ] PostgreSQL and Neo4j both contain queryable integration data
+  [ ] Frontend home dashboard consumes live backend data for all key cards
+  [ ] Error budget <2% for 24-hour local soak run
+  [ ] Smoke tests pass for startup and critical routes
+
+
+11.6 RISK REGISTER (ACTIVE)
+────────────────────────────────────────────────────────────────────────────
+
+R1: MEA HTML structure changes break scraper
+  Impact: High
+  Mitigation:
+    • Add selector fallbacks
+    • Add parser health test with fixtures
+    • Alert on extraction count anomalies
+
+R2: World Bank API latency/rate limits
+  Impact: Medium
+  Mitigation:
+    • Exponential backoff + local cache
+    • Batch requests by indicator
+    • Daily retry window with dead-letter queue
+
+R3: Mock-data drift from real schema
+  Impact: High
+  Mitigation:
+    • Enforce Pydantic response models
+    • Integration tests against actual DB queries
+    • Remove hardcoded payload paths before demo cut
+
+R4: Kafka local instability in multi-broker dev setup
+  Impact: Medium
+  Mitigation:
+    • Include single-broker fallback profile for local dev
+    • Health probes + restart policy in compose
+    • Topic auto-create disabled, explicit bootstrap step
+
+R5: Frontend coupling to endpoint shape changes
+  Impact: Medium
+  Mitigation:
+    • Shared typed client contracts
+    • Backward-compatible field migration policy
+    • Contract tests for payload schema
+
+
+11.7 IMMEDIATE COMMAND SEQUENCE (OPERATOR RUNBOOK)
+────────────────────────────────────────────────────────────────────────────
+
+Step 1: Bring up services
+  docker-compose up -d
+
+Step 2: Start backend
+  cd backend
+  uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+Step 3: Run ingestion smoke
+  python ingestors/mea_scraper.py
+  python ingestors/worldbank_fetcher.py
+
+Step 4: Validate API surface
+  GET /health
+  GET /api/version
+  GET /api/metrics/regional-risk
+  GET /api/intelligence/entity-extraction
+  GET /api/knowledge-graph/nodes
+  GET /api/geospatial/hotspots
+
+Step 5: Frontend bind validation
+  npm run dev
+  Validate dashboards render live values without static fallbacks
+
+
+================================================================================
+12. CHANGE LOG
+================================================================================
+
+v1.1 - March 21, 2026
+  • Added continuation plan aligned to current backend implementation
+  • Added 7-day sprint execution sequence
+  • Added revised Phase 1 exit criteria
+  • Added risk register and operator runbook
+
 ================================================================================
 END OF INTEGRATION PLAN
 ================================================================================

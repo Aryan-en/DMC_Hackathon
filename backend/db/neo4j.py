@@ -22,8 +22,7 @@ def init_driver():
         _driver = AsyncGraphDatabase.driver(
             settings.NEO4J_URL,
             auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
-            encrypted=True,
-            trust="TRUST_SYSTEM_CA_SIGNED_CERTIFICATES"
+            encrypted=False,
         )
         
         logger.info("Neo4j driver initialized")

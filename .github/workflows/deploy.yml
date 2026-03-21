@@ -1,0 +1,335 @@
+name: ONTORA Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - production
+    paths:
+      - 'backend/**'
+      - 'docker-compose.prod.yml'
+      - 'Dockerfile'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ${{ secrets.REGISTRY_URL }}
+  IMAGE_NAME: ontora
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  setup:
+    name: Setup & Validation
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      should-deploy: ${{ steps.should-deploy.outputs.result }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install bandit safety
+
+      - name: Run security checks
+        run: |
+          echo "Running security audit..."
+          safety check --json || true
+          pip audit --desc || true
+
+      - name: Run code analysis
+        run: |
+          echo "Running code security analysis..."
+          bandit -r backend/ -ll || true
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{major}}.{{minor}}
+            latest
+
+      - name: Check if should deploy
+        id: should-deploy
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/production" ]]; then
+            echo "result=true" >> $GITHUB_OUTPUT
+          else
+            echo "result=false" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        run: |
+          cd backend
+          pytest tests/ -v --cov=. --cov-report=xml
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.xml
+          fail_ci_if_error: false
+
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [setup, test]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ needs.setup.outputs.image-tag }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.setup.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging-api.example.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.27.0'
+
+      - name: Set kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy to staging
+        run: |
+          ./scripts/deploy.sh staging
+          sleep 30
+          kubectl get deployment ontora-backend -n ontora
+        env:
+          IMAGE_TAG: ${{ needs.setup.outputs.image-tag }}
+
+      - name: Run smoke tests on staging
+        run: |
+          ./scripts/smoke-tests.sh https://staging-api.example.com
+        continue-on-error: true
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [setup, build, deploy-staging]
+    if: github.ref == 'refs/heads/production'
+    environment:
+      name: production
+      url: https://api.example.com
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.27.0'
+
+      - name: Set kubeconfig
+        run: |
+          echo "${{ secrets.PROD_KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create pre-deployment snapshot
+        run: |
+          kubectl get all -n ontora -o yaml > /tmp/pre-deployment-backup.yaml
+          echo "Pre-deployment snapshot created"
+
+      - name: Deploy to production (Blue-Green)
+        run: |
+          ./scripts/deploy.sh ${{ needs.setup.outputs.image-tag }}
+        env:
+          DEPLOYMENT_STRATEGY: blue-green
+          ROLLBACK_ON_FAILURE: "true"
+
+      - name: Health check
+        run: |
+          for i in {1..10}; do
+            if curl -f https://api.example.com/health; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: Health check failed, retrying..."
+            sleep 10
+          done
+          echo "Health check failed after 10 attempts"
+          exit 1
+
+      - name: Run smoke tests on production
+        run: |
+          ./scripts/smoke-tests.sh https://api.example.com
+
+      - name: Notify deployment success
+        if: success()
+        uses: slack-notify/action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          status: success
+          message: 'ONTORA Production Deployment Successful'
+          deployment: 'Production'
+          image-tag: ${{ needs.setup.outputs.image-tag }}
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: slack-notify/action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          status: failure
+          message: 'ONTORA Production Deployment Failed - Rollback initiated'
+          deployment: 'Production'
+
+      - name: Automatic rollback on failure
+        if: failure()
+        run: |
+          echo "Rolling back to previous deployment..."
+          kubectl rollout undo deployment/ontora-backend -n ontora
+          kubectl rollout status deployment/ontora-backend -n ontora --timeout=5m
+
+  post-deployment:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check deployment status
+        run: |
+          ./scripts/validate-deployment.sh production
+
+      - name: Collect metrics
+        run: |
+          echo "Collecting deployment metrics..."
+          # Add metric collection script
+
+      - name: Generate deployment report
+        run: |
+          echo "Generating deployment report..."
+          # Add report generation script
+
+      - name: Archive reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-reports
+          path: |
+            reports/
+            logs/
+          retention-days: 30

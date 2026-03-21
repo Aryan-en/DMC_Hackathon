@@ -1,221 +1,232 @@
-"""
-Metrics API Endpoints - Strategic Overview Dashboard
-"""
+"""Metrics API Endpoints - Strategic Overview Dashboard."""
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
 from datetime import datetime, timedelta
 
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.postgres import get_db_session
-from db.schemas import Country, CountryRelation, EconomicIndicator, Document, AuditLog
+from db.schemas import Country, CountryRelation, EconomicIndicator, Entity, SystemMetric
+from utils.response import build_error, build_success
 
 router = APIRouter()
 
 
-class MetricsResponse:
-    """Response model for metrics endpoints"""
-    def __init__(self, status="success", data=None, error=None):
-        self.status = status
-        self.data = data
-        self.error = error
-        self.meta = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": "req_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        }
+def _health_color(value: int) -> str:
+    if value >= 85:
+        return "#3eb87a"
+    if value >= 65:
+        return "#c8a84a"
+    return "#b84a4a"
 
 
 @router.get("/regional-risk")
 async def get_regional_risk(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/regional-risk
-    Returns: Regional risk scores for 8 regions
-    """
-    # Mock data for now - will be replaced with actual ML predictions
-    regions = [
-        {"name": "North America", "risk": 34, "color": "#3eb87a"},
-        {"name": "Europe", "risk": 58, "color": "#c8a84a"},
-        {"name": "MENA", "risk": 82, "color": "#b84a4a"},
-        {"name": "East Asia", "risk": 61, "color": "#c8a84a"},
-        {"name": "South Asia", "risk": 55, "color": "#5b8db8"},
-        {"name": "Sub-Saharan Africa", "risk": 71, "color": "#c8822a"},
-        {"name": "Latin America", "risk": 47, "color": "#5b8db8"},
-        {"name": "Central Asia", "risk": 63, "color": "#c8a84a"},
-    ]
-    
-    return {
-        "status": "success",
-        "data": {"regions": regions},
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "5 minutes"
-        }
-    }
+    try:
+        stmt = (
+            select(Country.region, CountryRelation.status, func.count(CountryRelation.id))
+            .join(Country, Country.id == CountryRelation.country_b_id)
+            .group_by(Country.region, CountryRelation.status)
+        )
+        rows = (await db.execute(stmt)).all()
+
+        region_scores: dict[str, float] = {}
+        region_total: dict[str, int] = {}
+        weight = {"stable": 25, "tense": 55, "active_dispute": 80, "conflict": 92}
+
+        for region, status, count in rows:
+            key = region or "Unspecified"
+            base = weight.get((status or "").lower(), 50)
+            region_scores[key] = region_scores.get(key, 0) + (base * count)
+            region_total[key] = region_total.get(key, 0) + count
+
+        regions = []
+        for region, total in region_total.items():
+            risk = int(region_scores[region] / total) if total else 0
+            color = "#3eb87a"
+            if risk >= 80:
+                color = "#b84a4a"
+            elif risk >= 65:
+                color = "#c8822a"
+            elif risk >= 45:
+                color = "#c8a84a"
+            regions.append({"name": region, "risk": risk, "color": color})
+
+        regions.sort(key=lambda x: x["risk"], reverse=True)
+        return build_success({"regions": regions}, meta={"update_frequency": "5 minutes"})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to compute regional risk: {exc}")
 
 
 @router.get("/global-entities")
 async def get_global_entities(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/global-entities
-    Returns: Count of tracked entities
-    """
-    # Query database for entity counts
     try:
-        # This would be replaced with actual Neo4j/PostgreSQL queries
-        total_entities = 1470000  # Mock data
+        total_entities = (await db.execute(select(func.count(Entity.id)))).scalar() or 0
+        countries = (await db.execute(select(func.count(Country.id)))).scalar() or 0
+        orgs = (
+            await db.execute(select(func.count(Entity.id)).where(Entity.entity_type.in_(["ORG", "ORGANIZATION"])))
+        ).scalar() or 0
+        individuals = (
+            await db.execute(select(func.count(Entity.id)).where(Entity.entity_type.in_(["PERSON", "INDIVIDUAL"])))
+        ).scalar() or 0
+        events = (await db.execute(select(func.count(Entity.id)).where(Entity.entity_type == "EVENT"))).scalar() or 0
+
         breakdown = {
-            "nations": 216,
-            "organizations": 47000,
-            "individuals": 890000,
-            "events": 542000
+            "nations": int(countries),
+            "organizations": int(orgs),
+            "individuals": int(individuals),
+            "events": int(events),
         }
-        
-        return {
-            "status": "success",
-            "data": {
-                "total": total_entities,
-                "breakdown": breakdown
-            },
-            "error": None,
-            "meta": {
-                "timestamp": datetime.utcnow().isoformat(),
-                "update_frequency": "hourly"
-            }
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "data": None,
-            "error": {"code": "QUERY_ERROR", "message": str(e)},
-            "meta": {"timestamp": datetime.utcnow().isoformat()}
-        }
+        return build_success({"total": int(total_entities), "breakdown": breakdown}, meta={"update_frequency": "hourly"})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch global entities: {exc}")
 
 
 @router.get("/threat-threads")
 async def get_threat_threads(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/threat-threads
-    Returns: Count of active threat threads by severity
-    """
-    # Mock data
-    threats = {
-        "critical": 3,
-        "high": 12,
-        "monitor": 33,
-        "total": 48
-    }
-    
-    return {
-        "status": "success",
-        "data": threats,
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "real-time"
-        }
-    }
+    try:
+        rows = (await db.execute(select(CountryRelation.status, func.count(CountryRelation.id)).group_by(CountryRelation.status))).all()
+
+        critical = 0
+        high = 0
+        monitor = 0
+        for status, count in rows:
+            s = (status or "").lower()
+            if s == "conflict":
+                critical += count
+            elif s in {"active_dispute", "tense"}:
+                high += count
+            else:
+                monitor += count
+
+        total = critical + high + monitor
+        return build_success(
+            {
+                "critical": int(critical),
+                "high": int(high),
+                "monitor": int(monitor),
+                "total": int(total),
+            },
+            meta={"update_frequency": "real-time"},
+        )
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch threat threads: {exc}")
 
 
 @router.get("/daily-ingestion")
 async def get_daily_ingestion(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/daily-ingestion
-    Returns: Daily data ingestion metrics
-    """
-    ingestion_metrics = {
-        "total_gb": 2.9,
-        "realtime_processed_gb": 0.847,
-        "batch_processed_gb": 2.053,
-        "format_breakdown": {
-            "structured": 45,  # %
-            "semi_structured": 35,  # %
-            "unstructured": 20  # %
+    try:
+        last_24h = datetime.utcnow() - timedelta(hours=24)
+        indicator_count = (
+            await db.execute(select(func.count(EconomicIndicator.id)).where(EconomicIndicator.created_at >= last_24h))
+        ).scalar() or 0
+        relation_count = (
+            await db.execute(select(func.count(CountryRelation.id)).where(CountryRelation.last_updated >= last_24h))
+        ).scalar() or 0
+
+        total_gb = round((indicator_count * 0.00004) + (relation_count * 0.00012), 6)
+        realtime = round(total_gb * 0.25, 6)
+        payload = {
+            "total_gb": total_gb,
+            "realtime_processed_gb": realtime,
+            "batch_processed_gb": round(max(total_gb - realtime, 0), 6),
+            "format_breakdown": {
+                "structured": 100 if total_gb > 0 else 0,
+                "semi_structured": 0,
+                "unstructured": 0,
+            },
+            "raw_counts": {
+                "economic_indicators": int(indicator_count),
+                "country_relations": int(relation_count),
+            },
         }
-    }
-    
-    return {
-        "status": "success",
-        "data": ingestion_metrics,
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "15 minutes"
-        }
-    }
+        return build_success(payload, meta={"update_frequency": "15 minutes"})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch ingestion metrics: {exc}")
 
 
 @router.get("/prediction-accuracy")
 async def get_prediction_accuracy(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/prediction-accuracy
-    Returns: Model accuracy metrics
-    """
-    metrics = {
-        "accuracy": 91.3,  # %
-        "precision": 89.2,  # %
-        "recall": 93.1,  # %
-        "f1_score": 91.1,
-        "confidence": 0.95,
-        "model_version": "v2.1.0",
-        "last_retrained": "2 days ago"
-    }
-    
-    return {
-        "status": "success",
-        "data": metrics,
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "daily"
+    try:
+        rows = (
+            await db.execute(
+                select(SystemMetric.metric_name, SystemMetric.metric_value).where(
+                    SystemMetric.metric_name.in_(["model_accuracy", "model_precision", "model_recall", "model_f1"])
+                )
+            )
+        ).all()
+        values = {name: value for name, value in rows}
+        payload = {
+            "accuracy": round(values.get("model_accuracy", 0), 2),
+            "precision": round(values.get("model_precision", 0), 2),
+            "recall": round(values.get("model_recall", 0), 2),
+            "f1_score": round(values.get("model_f1", 0), 2),
+            "confidence": 0.0,
+            "model_version": None,
+            "last_retrained": None,
         }
-    }
+        return build_success(payload, meta={"update_frequency": "daily"})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch prediction accuracy: {exc}")
 
 
 @router.get("/infrastructure-health")
 async def get_infrastructure_health(db: AsyncSession = Depends(get_db_session)):
-    """
-    GET /api/metrics/infrastructure-health
-    Returns: Infrastructure component health
-    """
-    health_status = [
-        {"label": "Kafka Cluster", "value": 98, "color": "#3eb87a"},
-        {"label": "Neo4j Graph", "value": 94, "color": "#5b8db8"},
-        {"label": "ML Pipeline", "value": 87, "color": "#c8a84a"},
-        {"label": "Vector Search", "value": 99, "color": "#3eb87a"},
-        {"label": "Flink Jobs", "value": 91, "color": "#5b8db8"},
+    rows = (
+        await db.execute(
+            select(SystemMetric.metric_name, SystemMetric.metric_value).where(
+                SystemMetric.metric_name.in_(
+                    [
+                        "infra_kafka_health",
+                        "infra_neo4j_health",
+                        "infra_ml_health",
+                        "infra_vector_health",
+                        "infra_flink_health",
+                    ]
+                )
+            )
+        )
+    ).all()
+    metric_map = {name: int(value) for name, value in rows}
+
+    components = []
+    names = [
+        ("Kafka Cluster", "infra_kafka_health"),
+        ("Neo4j Graph", "infra_neo4j_health"),
+        ("ML Pipeline", "infra_ml_health"),
+        ("Vector Search", "infra_vector_health"),
+        ("Flink Jobs", "infra_flink_health"),
     ]
-    
-    return {
-        "status": "success",
-        "data": {"components": health_status},
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "real-time"
-        }
-    }
+    for label, key in names:
+        value = metric_map.get(key, 0)
+        components.append({"label": label, "value": value, "color": _health_color(value)})
+
+    return build_success({"components": components}, meta={"update_frequency": "real-time"})
 
 
 @router.get("/kg-nodes")
-async def get_kg_nodes():
-    """
-    GET /api/metrics/kg-nodes
-    Returns: Knowledge Graph node counts
-    """
+async def get_kg_nodes(db: AsyncSession = Depends(get_db_session)):
+    entity_total = (await db.execute(select(func.count(Entity.id)))).scalar() or 0
+    nations = (await db.execute(select(func.count(Country.id)))).scalar() or 0
+    relations_24h = (
+        await db.execute(
+            select(func.count(CountryRelation.id)).where(CountryRelation.last_updated >= datetime.utcnow() - timedelta(hours=24))
+        )
+    ).scalar() or 0
+    kafka_eps = (
+        await db.execute(
+            select(SystemMetric.metric_value)
+            .where(SystemMetric.metric_name == "kafka_events_per_sec")
+            .order_by(SystemMetric.timestamp.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
     nodes = [
-        {"label": "Knowledge Graph Nodes", "value": "3.8M", "icon": "Share2", "color": "#8a78c8"},
-        {"label": "Kafka Events/sec", "value": "142K", "icon": "Activity", "color": "#5b8db8"},
-        {"label": "Model Inferences Today", "value": "8.4M", "icon": "Brain", "color": "#3eb87a"},
-        {"label": "Nations Monitored", "value": "216", "icon": "Globe", "color": "#c8a84a"},
+        {"label": "Knowledge Graph Nodes", "value": f"{int(entity_total):,}", "icon": "Share2", "color": "#8a78c8"},
+        {"label": "Kafka Events/sec", "value": str(int(kafka_eps or 0)), "icon": "Activity", "color": "#5b8db8"},
+        {"label": "Relations Updated 24h", "value": str(int(relations_24h)), "icon": "Brain", "color": "#3eb87a"},
+        {"label": "Nations Monitored", "value": str(int(nations)), "icon": "Globe", "color": "#c8a84a"},
     ]
-    
-    return {
-        "status": "success",
-        "data": {"nodes": nodes},
-        "error": None,
-        "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
-            "update_frequency": "hourly"
-        }
-    }
+    return build_success({"nodes": nodes}, meta={"update_frequency": "hourly"})

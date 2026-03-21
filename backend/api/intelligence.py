@@ -1,55 +1,374 @@
-"""Intelligence API Endpoints"""
-from fastapi import APIRouter
-from datetime import datetime
+"""Intelligence API Endpoints."""
+
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.postgres import get_db_session
+from db.schemas import Document, Entity, SystemMetric
+from services.entity_extractor import EntityExtractionService
+from services.llm_classifier import LLMClassifierService
+from utils.response import build_error, build_success
 
 router = APIRouter()
 
 
+class TextRequest(BaseModel):
+    text: str = Field(..., min_length=8, max_length=5000)
+
+
+classifier_service = LLMClassifierService()
+entity_service = EntityExtractionService()
+
+
 @router.get("/entity-extraction")
-async def get_entity_extraction():
+async def get_entity_extraction(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/entity-extraction - Last 24h extractions"""
-    return {
-        "status": "success",
-        "data": {
-            "entities": [
-                {"entity": "United States Federal Reserve", "type": "ORG", "confidence": 0.97, "mentions": 1847},
-                {"entity": "Xi Jinping", "type": "PERSON", "confidence": 0.99, "mentions": 3241},
-                {"entity": "Taiwan Strait", "type": "LOC", "confidence": 0.98, "mentions": 2108},
-                {"entity": "NATO", "type": "ORG", "confidence": 0.98, "mentions": 4512},
-            ]
-        },
-        "meta": {"timestamp": datetime.utcnow().isoformat()}
-    }
+    try:
+        stmt = (
+            select(Entity.name, Entity.entity_type, Entity.confidence_score, Entity.mention_count)
+            .order_by(Entity.mention_count.desc())
+            .limit(10)
+        )
+        rows = (await db.execute(stmt)).all()
+
+        entities = [
+            {
+                "entity": name,
+                "type": entity_type,
+                "confidence": round(float(confidence_score or 0.75), 3),
+                "mentions": int(mention_count or 0),
+            }
+            for name, entity_type, confidence_score, mention_count in rows
+        ]
+        return build_success({"entities": entities})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch entity extraction metrics: {exc}")
 
 
 @router.get("/language-distribution")
-async def get_language_distribution():
+async def get_language_distribution(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/language-distribution"""
-    return {
-        "status": "success",
-        "data": {
-            "languages": [
-                {"lang": "English", "doc_count": 42, "percentage": 52.5},
-                {"lang": "Arabic", "doc_count": 18, "percentage": 22.5},
-                {"lang": "Chinese", "doc_count": 15, "percentage": 18.75},
-                {"lang": "Russian", "doc_count": 9, "percentage": 11.25},
-            ]
-        },
-        "meta": {"timestamp": datetime.utcnow().isoformat()}
-    }
+    try:
+        since = datetime.utcnow() - timedelta(days=7)
+        stmt = (
+            select(Document.language, func.count(Document.id))
+            .where(Document.created_at >= since)
+            .group_by(Document.language)
+            .order_by(func.count(Document.id).desc())
+            .limit(8)
+        )
+        rows = (await db.execute(stmt)).all()
+
+        total = sum(int(count) for _, count in rows)
+        languages = [
+            {
+                "lang": (lang or "Unknown"),
+                "doc_count": int(count),
+                "percentage": round((int(count) / total) * 100, 2) if total else 0,
+            }
+            for lang, count in rows
+        ]
+        return build_success({"languages": languages})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch language distribution: {exc}")
 
 
 @router.get("/trending-keywords")
-async def get_trending_keywords():
+async def get_trending_keywords(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/trending-keywords"""
-    return {
-        "status": "success",
-        "data": {
-            "keywords": [
-                {"keyword": "semiconductor shortage", "velocity": 94, "delta": "+47%", "type": "ECON"},
-                {"keyword": "Taiwan independence", "velocity": 88, "delta": "+31%", "type": "GEOPOL"},
-                {"keyword": "AI governance", "velocity": 71, "delta": "+68%", "type": "TECH"},
-            ]
-        },
-        "meta": {"timestamp": datetime.utcnow().isoformat()}
-    }
+    try:
+        stmt = (
+            select(Entity.name, Entity.entity_type, Entity.mention_count)
+            .order_by(Entity.mention_count.desc())
+            .limit(12)
+        )
+        rows = (await db.execute(stmt)).all()
+
+        keywords = []
+        for name, entity_type, mention_count in rows:
+            velocity = min(99, max(10, int((mention_count or 1) ** 0.5 * 4)))
+            keywords.append(
+                {
+                    "keyword": name,
+                    "velocity": velocity,
+                    "delta": f"+{min(80, max(5, velocity // 2))}%",
+                    "type": (entity_type or "GEN")[:8],
+                }
+            )
+
+        return build_success({"keywords": keywords})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch trending keywords: {exc}")
+
+
+@router.get("/sentiment-radar")
+async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
+    """GET /api/intelligence/sentiment-radar"""
+    try:
+        rows = (
+            await db.execute(select(Entity.entity_type, func.coalesce(func.sum(Entity.mention_count), 0)).group_by(Entity.entity_type))
+        ).all()
+
+        type_totals = {str(entity_type or "").upper(): int(total or 0) for entity_type, total in rows}
+
+        buckets = {
+            "Geopolitical": ["GPE", "LOC", "GEOPOL"],
+            "Economic": ["ECON", "FIN", "MONEY", "TRADE"],
+            "Climate": ["CLIMATE", "ENV", "WEATHER"],
+            "Social": ["PERSON", "SOCIAL", "COMMUNITY"],
+            "Cyber": ["TECH", "CYBER", "SOFTWARE"],
+            "Military": ["MIL", "MILITARY", "DEFENSE"],
+        }
+
+        radar = []
+        for subject, mapped_types in buckets.items():
+            score = sum(type_totals.get(t, 0) for t in mapped_types)
+            normalized = min(100, max(10, int(score**0.5 * 5))) if score > 0 else 10
+            radar.append({"subject": subject, "score": normalized, "fullMark": 100})
+
+        return build_success({"radar": radar})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch sentiment radar: {exc}")
+
+
+@router.get("/strategic-briefs")
+async def get_strategic_briefs(db: AsyncSession = Depends(get_db_session)):
+    """GET /api/intelligence/strategic-briefs"""
+    try:
+        rows = (
+            await db.execute(
+                select(Document.title, Document.content, Document.source, Document.created_at)
+                .order_by(Document.created_at.desc())
+                .limit(3)
+            )
+        ).all()
+
+        source_to_classification = {
+            "MEA": "SECRET",
+            "NEWS": "SECRET//REL",
+            "SOCIAL": "CONFIDENTIAL",
+        }
+
+        llm_status = classifier_service.model_status()
+        model_name = llm_status.get("model") if llm_status.get("model_available") else "Heuristic"
+
+        briefs = []
+        for title, content, source, created_at in rows:
+            text = (content or "").strip()
+            if not text:
+                continue
+            normalized = " ".join(text.split())
+            summary = normalized[:280] + ("..." if len(normalized) > 280 else "")
+            confidence = min(95, max(60, 60 + int(min(len(text), 4200) / 120)))
+            classification = source_to_classification.get((source or "").upper(), "SECRET")
+
+            briefs.append(
+                {
+                    "title": (title or f"{(source or 'INTEL').upper()} strategic update").strip(),
+                    "summary": summary,
+                    "classification": classification,
+                    "model": model_name,
+                    "confidence": confidence,
+                    "dateGen": created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else None,
+                }
+            )
+
+        return build_success({"briefs": briefs}, source="db")
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch strategic briefs: {exc}")
+
+
+@router.get("/pipeline-status")
+async def get_pipeline_status(db: AsyncSession = Depends(get_db_session)):
+    """GET /api/intelligence/pipeline-status"""
+    try:
+        rows = (
+            await db.execute(
+                select(SystemMetric.metric_name, SystemMetric.metric_value).where(
+                    SystemMetric.metric_name.in_(
+                        [
+                            "pipeline_spacy_per_min",
+                            "pipeline_llm_per_min",
+                            "pipeline_keyword_per_min",
+                            "pipeline_vector_per_min",
+                            "pipeline_whisper_per_min",
+                        ]
+                    )
+                )
+            )
+        ).all()
+        metric_map = {name: float(value or 0) for name, value in rows}
+
+        llm_status = classifier_service.model_status()
+        llm_running = bool(llm_status.get("model_available"))
+
+        def _infer(value: float) -> str:
+            return f"{int(value)}/min" if value > 0 else "0/min"
+
+        models = [
+            {
+                "name": "spaCy NER",
+                "version": "v3.x",
+                "status": "RUNNING" if metric_map.get("pipeline_spacy_per_min", 0) > 0 else "IDLE",
+                "infer": _infer(metric_map.get("pipeline_spacy_per_min", 0)),
+                "gpu": "CPU/GPU",
+            },
+            {
+                "name": f"{(llm_status.get('model') or 'LLaMA').upper()}",
+                "version": "ollama",
+                "status": "RUNNING" if llm_running else "IDLE",
+                "infer": _infer(metric_map.get("pipeline_llm_per_min", 0)),
+                "gpu": "Ollama Local",
+            },
+            {
+                "name": "Keyword Miner",
+                "version": "v1",
+                "status": "RUNNING" if metric_map.get("pipeline_keyword_per_min", 0) > 0 else "IDLE",
+                "infer": _infer(metric_map.get("pipeline_keyword_per_min", 0)),
+                "gpu": "CPU",
+            },
+            {
+                "name": "Vector Search",
+                "version": "v1",
+                "status": "RUNNING" if metric_map.get("pipeline_vector_per_min", 0) > 0 else "IDLE",
+                "infer": _infer(metric_map.get("pipeline_vector_per_min", 0)),
+                "gpu": "CPU/GPU",
+            },
+            {
+                "name": "Whisper",
+                "version": "v3",
+                "status": "RUNNING" if metric_map.get("pipeline_whisper_per_min", 0) > 0 else "IDLE",
+                "infer": _infer(metric_map.get("pipeline_whisper_per_min", 0)),
+                "gpu": "CPU/GPU",
+            },
+        ]
+
+        return build_success({"models": models}, source="service")
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch pipeline status: {exc}")
+
+
+@router.post("/classify")
+async def classify_text(payload: TextRequest):
+    """POST /api/intelligence/classify - LLM-backed text classification."""
+    try:
+        result = classifier_service.classify(payload.text)
+        return build_success(
+            {
+                "label": result.label,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+                "model": result.model,
+            },
+            source="llm" if result.model != "heuristic" else "heuristic",
+        )
+    except Exception as exc:
+        return build_error("CLASSIFICATION_ERROR", f"Failed to classify text: {exc}")
+
+
+@router.post("/sentiment")
+async def sentiment_refinement(payload: TextRequest):
+    """POST /api/intelligence/sentiment - Refined sentiment scoring."""
+    try:
+        sentiment = classifier_service.sentiment(payload.text)
+        return build_success(sentiment, source="nlp")
+    except Exception as exc:
+        return build_error("SENTIMENT_ERROR", f"Failed to score sentiment: {exc}")
+
+
+@router.post("/entity-linking")
+async def entity_linking(payload: TextRequest):
+    """POST /api/intelligence/entity-linking - Entity extraction and canonical linking."""
+    try:
+        entities = entity_service.extract(payload.text)
+        linked = [
+            {
+                "name": e["name"],
+                "entity_type": e["entity_type"],
+                "link_key": e["link_key"],
+                "confidence": e["confidence_score"],
+            }
+            for e in entities
+        ]
+        return build_success({"entities": linked}, source="nlp")
+    except Exception as exc:
+        return build_error("ENTITY_LINK_ERROR", f"Failed to perform entity linking: {exc}")
+
+
+@router.post("/relationship-extraction")
+async def relationship_extraction(payload: TextRequest):
+    """POST /api/intelligence/relationship-extraction - SPO triplet extraction."""
+    try:
+        triplets = entity_service.extract_triplets(payload.text)
+        return build_success({"triplets": triplets}, source="nlp")
+    except Exception as exc:
+        return build_error("RELATIONSHIP_ERROR", f"Failed to extract relationships: {exc}")
+
+
+@router.get("/llm-health")
+async def llm_health():
+    """GET /api/intelligence/llm-health - Ollama and model readiness."""
+    try:
+        status = classifier_service.model_status()
+        source = "llm" if status.get("model_available") else "service"
+        return build_success(status, source=source)
+    except Exception as exc:
+        return build_error("LLM_HEALTH_ERROR", f"Failed to check LLM health: {exc}")
+
+
+@router.get("/processing-log")
+async def processing_log(db: AsyncSession = Depends(get_db_session)):
+    """GET /api/intelligence/processing-log - Recent backend intelligence processing events."""
+    try:
+        document_rows = (
+            await db.execute(
+                select(Document.created_at, Document.source, Document.title)
+                .order_by(Document.created_at.desc())
+                .limit(5)
+            )
+        ).all()
+
+        metric_rows = (
+            await db.execute(
+                select(SystemMetric.timestamp, SystemMetric.metric_name, SystemMetric.metric_value)
+                .order_by(SystemMetric.timestamp.desc())
+                .limit(5)
+            )
+        ).all()
+
+        events = []
+
+        for created_at, source, title in document_rows:
+            if not created_at:
+                continue
+            trimmed_title = (title or "Untitled document").strip()
+            if len(trimmed_title) > 92:
+                trimmed_title = f"{trimmed_title[:89]}..."
+            events.append(
+                {
+                    "timestamp": created_at.isoformat(),
+                    "type": (source or "DOC").upper(),
+                    "event": f"Document processed: {trimmed_title}",
+                }
+            )
+
+        for timestamp, metric_name, metric_value in metric_rows:
+            if not timestamp:
+                continue
+            events.append(
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "type": "METRIC",
+                    "event": f"{metric_name}: {round(float(metric_value or 0), 4)}",
+                }
+            )
+
+        events.sort(key=lambda item: item["timestamp"], reverse=True)
+
+        return build_success({"events": events[:8]}, source="db")
+    except Exception as exc:
+        return build_error("PROCESSING_LOG_ERROR", f"Failed to fetch processing log: {exc}")

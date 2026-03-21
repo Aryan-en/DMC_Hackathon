@@ -1,170 +1,178 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import { Share2, GitBranch, Cpu, Search, Filter, RefreshCw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Filter, RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useKnowledgeGraphMetrics } from '@/app/hooks/useKnowledgeGraphMetrics';
 
-const NODE_TYPES = [
-  { type: 'Country', color: '#00d4ff', count: 216 },
-  { type: 'Policy', color: '#8b5cf6', count: 1204 },
-  { type: 'Event', color: '#ef4444', count: 5621 },
-  { type: 'Sector', color: '#f59e0b', count: 342 },
-  { type: 'Actor', color: '#00ff88', count: 3892 },
-  { type: 'Concept', color: '#64748b', count: 9841 },
-];
+type Relationship = {
+  source: string;
+  target: string;
+  relation: string;
+  strength: number;
+};
 
-const RELATIONSHIPS = [
-  { source: 'Iran', target: 'Oil Supply Chain', relation: 'CONTROLS', strength: 94 },
-  { source: 'NATO', target: 'European Defense Policy', relation: 'GOVERNS', strength: 88 },
-  { source: 'Fed Policy', target: 'USD Index', relation: 'INFLUENCES', strength: 97 },
-  { source: 'Climate Event', target: 'Crop Yield', relation: 'IMPACTS', strength: 76 },
-  { source: 'Social Unrest', target: 'Election Outcome', relation: 'CORRELATES', strength: 71 },
-  { source: 'Semiconductor Embargo', target: 'GDP Growth', relation: 'RESTRICTS', strength: 83 },
-  { source: 'Central Bank Rate', target: 'Inflation Index', relation: 'REGULATES', strength: 91 },
-  { source: 'Migration Policy', target: 'Labor Market', relation: 'SHAPES', strength: 68 },
-];
+function GraphCanvas({
+  relationships,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onRefresh,
+  highlightedPathChain,
+}: {
+  relationships: Relationship[];
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onRefresh: () => void;
+  highlightedPathChain: string[];
+}) {
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const dragRef = useRef({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 });
 
-const ONTOLOGY_PATHS = [
-  {
-    chain: ['Russia', 'Energy Export', 'EU Energy Dependency', 'Industrial Output', 'GDP Contraction'],
-    colors: ['#ef4444', '#f59e0b', '#f59e0b', '#00d4ff', '#8b5cf6'],
-  },
-  {
-    chain: ['Fed Rate Hike', 'USD Appreciation', 'EM Capital Flight', 'Currency Crisis', 'IMF Intervention'],
-    colors: ['#00d4ff', '#00d4ff', '#f59e0b', '#ef4444', '#8b5cf6'],
-  },
-  {
-    chain: ['Drought', 'Water Scarcity', 'Food Insecurity', 'Social Unrest', 'Political Instability'],
-    colors: ['#00ff88', '#f59e0b', '#f59e0b', '#ef4444', '#ef4444'],
-  },
-];
+  const graph = useMemo(() => {
+    const nodeMap = new Map<string, { id: string; degree: number }>();
 
-// Animated graph visualization using SVG
-function GraphCanvas() {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [tick, setTick] = useState(0);
+    for (const edge of relationships) {
+      if (!nodeMap.has(edge.source)) nodeMap.set(edge.source, { id: edge.source, degree: 0 });
+      if (!nodeMap.has(edge.target)) nodeMap.set(edge.target, { id: edge.target, degree: 0 });
+      nodeMap.get(edge.source)!.degree += 1;
+      nodeMap.get(edge.target)!.degree += 1;
+    }
 
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 2000);
-    return () => clearInterval(id);
-  }, []);
+    const nodes = Array.from(nodeMap.values()).slice(0, 40);
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const edges = relationships.filter((r) => nodeIds.has(r.source) && nodeIds.has(r.target)).slice(0, 120);
 
-  const nodes = [
-    { id: 'country', x: 400, y: 160, r: 22, color: '#00d4ff', label: 'Country', count: '216' },
-    { id: 'policy', x: 620, y: 100, r: 16, color: '#8b5cf6', label: 'Policy', count: '1.2K' },
-    { id: 'event', x: 700, y: 260, r: 20, color: '#ef4444', label: 'Event', count: '5.6K' },
-    { id: 'sector', x: 540, y: 320, r: 14, color: '#f59e0b', label: 'Sector', count: '342' },
-    { id: 'actor', x: 260, y: 280, r: 18, color: '#00ff88', label: 'Actor', count: '3.9K' },
-    { id: 'concept', x: 200, y: 140, r: 12, color: '#64748b', label: 'Concept', count: '9.8K' },
-    { id: 'geo', x: 480, y: 230, r: 10, color: '#00d4ff', label: 'Region', count: '847' },
-    { id: 'impact', x: 350, y: 350, r: 13, color: '#f59e0b', label: 'Impact', count: '2.1K' },
-    { id: 'sentiment', x: 650, y: 380, r: 11, color: '#00ff88', label: 'Sentiment', count: '4.5K' },
-    { id: 'treaty', x: 160, y: 340, r: 9, color: '#8b5cf6', label: 'Treaty', count: '318' },
-  ];
+    const w = 900;
+    const h = 420;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = 150;
 
-  const edges = [
-    ['country', 'policy'], ['country', 'event'], ['country', 'actor'],
-    ['policy', 'event'], ['event', 'sector'], ['event', 'impact'],
-    ['actor', 'impact'], ['actor', 'geo'], ['geo', 'sector'],
-    ['sector', 'sentiment'], ['concept', 'country'], ['concept', 'actor'],
-    ['impact', 'sentiment'], ['treaty', 'actor'], ['treaty', 'country'],
-    ['country', 'geo'], ['policy', 'concept'],
-  ];
+    const positioned = nodes.map((n, idx) => {
+      const theta = (idx / Math.max(1, nodes.length)) * Math.PI * 2;
+      return {
+        ...n,
+        x: cx + Math.cos(theta) * radius,
+        y: cy + Math.sin(theta) * radius,
+      };
+    });
 
-  const getNode = (id: string) => nodes.find(n => n.id === id)!;
+    const lookup = new Map(positioned.map((n) => [n.id, n]));
+    return { positioned, edges, lookup };
+  }, [relationships]);
+
+  const highlightedEdgeKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (let i = 0; i < highlightedPathChain.length - 1; i += 1) {
+      const a = highlightedPathChain[i]?.toLowerCase();
+      const b = highlightedPathChain[i + 1]?.toLowerCase();
+      if (a && b) {
+        set.add(`${a}=>${b}`);
+      }
+    }
+    return set;
+  }, [highlightedPathChain]);
+
+  const highlightedNodeKeys = useMemo(() => {
+    return new Set(highlightedPathChain.map((n) => n.toLowerCase()));
+  }, [highlightedPathChain]);
+
+  const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    dragRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: pan.x,
+      originY: pan.y,
+    };
+    setIsPanning(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    if (!dragRef.current.active) return;
+    const dx = event.clientX - dragRef.current.startX;
+    const dy = event.clientY - dragRef.current.startY;
+    setPan({ x: dragRef.current.originX + dx, y: dragRef.current.originY + dy });
+  };
+
+  const onPointerUp: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    dragRef.current.active = false;
+    setIsPanning(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden" style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid #1e3a5f' }}>
-      {/* Grid background */}
-      <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.15 }}>
-        <defs>
-          <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e3a5f" strokeWidth="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#smallGrid)" />
-      </svg>
+    <div
+      className="relative w-full h-full rounded-xl overflow-hidden"
+      style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid #1e3a5f', cursor: isPanning ? 'grabbing' : 'grab' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet">
+        <g transform={`translate(${pan.x} ${pan.y}) translate(450 210) scale(${zoom}) translate(-450 -210)`}>
+          {graph.edges.map((edge, i) => {
+            const s = graph.lookup.get(edge.source);
+            const t = graph.lookup.get(edge.target);
+            if (!s || !t) return null;
 
-      <svg ref={svgRef} className="absolute inset-0 w-full h-full">
-        <defs>
-          <marker id="arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <path d="M 0 0 L 6 3 L 0 6 z" fill="#1e3a5f" />
-          </marker>
-          {nodes.map(n => (
-            <radialGradient key={n.id} id={`glow-${n.id}`} cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={n.color} stopOpacity="0.6" />
-              <stop offset="100%" stopColor={n.color} stopOpacity="0" />
-            </radialGradient>
-          ))}
-        </defs>
-
-        {/* Edges */}
-        {edges.map(([s, t], i) => {
-          const src = getNode(s);
-          const tgt = getNode(t);
-          const isActive = tick % edges.length === i || (tick - 1) % edges.length === i;
-          return (
-            <g key={`${s}-${t}`}>
+            const edgeKey = `${edge.source.toLowerCase()}=>${edge.target.toLowerCase()}`;
+            const isHighlighted = highlightedEdgeKeys.has(edgeKey);
+            return (
               <line
-                x1={src.x} y1={src.y} x2={tgt.x} y2={tgt.y}
-                stroke={isActive ? '#00d4ff' : '#1e3a5f'}
-                strokeWidth={isActive ? 1.5 : 0.8}
-                strokeOpacity={isActive ? 0.8 : 0.4}
-                strokeDasharray={isActive ? '4 3' : 'none'}
+                key={`${edge.source}-${edge.target}-${i}`}
+                x1={s.x}
+                y1={s.y}
+                x2={t.x}
+                y2={t.y}
+                stroke={isHighlighted ? '#00ff88' : edge.strength >= 80 ? '#ef4444' : edge.strength >= 60 ? '#f59e0b' : '#00d4ff'}
+                strokeOpacity={isHighlighted ? 0.95 : 0.45}
+                strokeWidth={isHighlighted ? 2.6 : 1.2}
               />
-            </g>
-          );
-        })}
+            );
+          })}
 
-        {/* Nodes */}
-        {nodes.map(n => (
-          <g key={n.id} className="cursor-pointer">
-            {/* Glow halo */}
-            <circle cx={n.x} cy={n.y} r={n.r * 2.5} fill={`url(#glow-${n.id})`} />
-            {/* Main circle */}
-            <circle
-              cx={n.x} cy={n.y} r={n.r}
-              fill={`${n.color}22`}
-              stroke={n.color}
-              strokeWidth={1.5}
-              strokeOpacity={0.8}
-            />
-            {/* Inner dot */}
-            <circle cx={n.x} cy={n.y} r={n.r * 0.35} fill={n.color} opacity={0.9} />
-            {/* Label */}
-            <text x={n.x} y={n.y + n.r + 14} textAnchor="middle" fill="#64748b" fontSize={10} fontFamily="monospace">
-              {n.label}
-            </text>
-            <text x={n.x} y={n.y + n.r + 24} textAnchor="middle" fill={n.color} fontSize={9} fontFamily="monospace" opacity={0.7}>
-              {n.count}
-            </text>
-          </g>
-        ))}
+          {graph.positioned.map((node) => (
+            <g key={node.id}>
+              {highlightedNodeKeys.has(node.id.toLowerCase()) && (
+                <circle cx={node.x} cy={node.y} r={16} fill="rgba(0,255,136,0.15)" stroke="#00ff88" strokeWidth={1.5} />
+              )}
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={Math.max(4, Math.min(12, 4 + node.degree * 0.6))}
+                fill={highlightedNodeKeys.has(node.id.toLowerCase()) ? 'rgba(0,255,136,0.28)' : 'rgba(0,212,255,0.2)'}
+                stroke={highlightedNodeKeys.has(node.id.toLowerCase()) ? '#00ff88' : '#00d4ff'}
+                strokeWidth={highlightedNodeKeys.has(node.id.toLowerCase()) ? 1.6 : 1.1}
+              />
+              <text x={node.x} y={node.y + 18} textAnchor="middle" fill="#94a3b8" fontSize={9}>
+                {node.id.length > 14 ? `${node.id.slice(0, 12)}...` : node.id}
+              </text>
+            </g>
+          ))}
+        </g>
       </svg>
 
-      {/* Controls overlay */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
-        {[ZoomIn, ZoomOut, Maximize2, RefreshCw].map((Icon, i) => (
-          <button
-            key={i}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
-            style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}
-          >
-            <Icon size={13} style={{ color: '#475569' }} />
-          </button>
-        ))}
+        <button onClick={onZoomIn} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}>
+          <ZoomIn size={13} style={{ color: '#94a3b8' }} />
+        </button>
+        <button onClick={onZoomOut} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}>
+          <ZoomOut size={13} style={{ color: '#94a3b8' }} />
+        </button>
+        <button onClick={onRefresh} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}>
+          <RefreshCw size={13} style={{ color: '#94a3b8' }} />
+        </button>
       </div>
 
-      {/* Node count overlay */}
-      <div
-        className="absolute bottom-4 left-4 px-3 py-2 rounded-lg"
-        style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}
-      >
-        <div className="text-xs font-mono" style={{ color: '#00d4ff', fontSize: '0.65rem' }}>
-          3,821,402 nodes · 14,294,871 edges
-        </div>
-        <div className="text-xs mt-0.5" style={{ color: '#334155', fontSize: '0.6rem' }}>
-          Viewport: cluster-7 / central-hub
+      <div className="absolute bottom-3 left-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}>
+        <div className="text-xs font-mono" style={{ color: '#00d4ff' }}>
+          {graph.positioned.length.toLocaleString()} nodes · {graph.edges.length.toLocaleString()} edges
         </div>
       </div>
     </div>
@@ -172,174 +180,174 @@ function GraphCanvas() {
 }
 
 export default function KnowledgeGraphPage() {
+  const [queryInput, setQueryInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sourceInput, setSourceInput] = useState('Russia');
+  const [targetInput, setTargetInput] = useState('EU');
+  const [source, setSource] = useState('Russia');
+  const [target, setTarget] = useState('EU');
+  const [minStrength, setMinStrength] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [selectedPathIndex, setSelectedPathIndex] = useState<number>(-1);
+
+  const { data, loading, error, reload } = useKnowledgeGraphMetrics({
+    source,
+    target,
+    searchQuery,
+    minStrength,
+    relationshipLimit: 120,
+    depth: 5,
+    maxPaths: 4,
+  });
+
+  const totalNodes = data.nodeTypes.reduce((acc, n) => acc + n.count, 0);
+  const graphDepth = data.paths.length ? Math.max(...data.paths.map((p) => p.hops ?? Math.max(0, p.chain.length - 1))) : 0;
+  const highlightedPathChain = selectedPathIndex >= 0 ? (data.paths[selectedPathIndex]?.chain ?? []) : [];
+
+  useEffect(() => {
+    if (data.paths.length === 0) {
+      setSelectedPathIndex(-1);
+      return;
+    }
+    if (selectedPathIndex >= data.paths.length) {
+      setSelectedPathIndex(0);
+    }
+  }, [data.paths, selectedPathIndex]);
+
+  const applyQuery = () => {
+    setSearchQuery(queryInput.trim());
+    setSource(sourceInput.trim() || 'Russia');
+    setTarget(targetInput.trim() || 'EU');
+    setSelectedPathIndex(-1);
+  };
+
   return (
     <div className="flex flex-col min-h-screen grid-bg">
-      <TopBar title="Knowledge Graph" subtitle="Ontology Core — Neo4j Cluster · RDF/OWL · SHACL Validation" />
+      <TopBar title="Knowledge Graph" subtitle="Interactive explorer with live pathing, SHACL summaries, and relationship filtering" />
       <main className="flex-1 px-6 py-6 space-y-6">
-        {/* Header row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
+        {error && (
+          <div className="px-4 py-2 rounded-xl" style={{ background: 'rgba(184,74,74,0.08)', border: '1px solid rgba(184,74,74,0.2)', color: '#b84a4a', fontSize: '0.72rem' }}>
+            Live knowledge graph data unavailable: {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
               <Search size={13} style={{ color: '#475569' }} />
-              <input placeholder="Query entity, relationship, path..." className="bg-transparent text-xs outline-none w-56" style={{ color: '#94a3b8' }} />
+              <input
+                value={queryInput}
+                onChange={(e) => setQueryInput(e.target.value)}
+                placeholder="Search source/target/relation"
+                className="bg-transparent text-xs outline-none w-48"
+                style={{ color: '#94a3b8' }}
+              />
             </div>
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f', color: '#64748b' }}>
-              <Filter size={12} />
-              Filter Ontology
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
+              <input value={sourceInput} onChange={(e) => setSourceInput(e.target.value)} placeholder="Path source" className="bg-transparent text-xs outline-none w-28" style={{ color: '#94a3b8' }} />
+              <span className="text-xs" style={{ color: '#334155' }}>{'->'}</span>
+              <input value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder="Path target" className="bg-transparent text-xs outline-none w-28" style={{ color: '#94a3b8' }} />
+            </div>
+            <button onClick={applyQuery} className="px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff' }}>
+              Run Query
             </button>
           </div>
-          <div className="flex items-center gap-4">
-            {NODE_TYPES.map(n => (
-              <div key={n.type} className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ background: n.color }} />
-                <span className="text-xs" style={{ color: '#64748b', fontSize: '0.68rem' }}>{n.type}</span>
-                <span className="text-xs font-mono" style={{ color: n.color, fontSize: '0.65rem' }}>({n.count.toLocaleString()})</span>
-              </div>
-            ))}
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
+              <Filter size={12} style={{ color: '#64748b' }} />
+              <label className="text-xs" style={{ color: '#64748b' }}>Min Strength</label>
+              <select value={minStrength} onChange={(e) => setMinStrength(Number(e.target.value))} className="bg-transparent text-xs outline-none" style={{ color: '#94a3b8' }}>
+                <option value={0}>0</option>
+                <option value={40}>40</option>
+                <option value={60}>60</option>
+                <option value={80}>80</option>
+              </select>
+            </div>
+            <button onClick={reload} className="px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6' }}>
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-5 gap-4">
           {[
-            { label: 'Total Nodes', value: '3.82M', color: '#00d4ff', sub: '+14,291 today' },
-            { label: 'Relationships', value: '14.29M', color: '#8b5cf6', sub: '+47,832 today' },
-            { label: 'Ontology Classes', value: '2,847', color: '#f59e0b', sub: 'RDF/OWL' },
-            { label: 'SHACL Violations', value: '0', color: '#00ff88', sub: 'All valid' },
-            { label: 'Graph Depth', value: '12', color: '#00d4ff', sub: 'Max traversal' },
-          ].map(s => (
-            <div key={s.label} className="glass-card rounded-xl px-4 py-4 text-center">
-              <div className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-xs font-semibold mb-1" style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{s.label}</div>
-              <div className="text-xs" style={{ color: '#334155', fontSize: '0.65rem' }}>{s.sub}</div>
+            { label: 'Total Nodes', value: totalNodes.toLocaleString(), color: '#00d4ff' },
+            { label: 'Loaded Relationships', value: data.relationships.length.toLocaleString(), color: '#8b5cf6' },
+            { label: 'SHACL Violations', value: data.shaclSummary.total_violations.toLocaleString(), color: data.shaclSummary.total_violations > 0 ? '#f59e0b' : '#00ff88' },
+            { label: 'Conflict Risk Ratio', value: `${data.conflict.risk_ratio}%`, color: '#ef4444' },
+            { label: 'Path Depth', value: graphDepth.toString(), color: '#00d4ff' },
+          ].map((card) => (
+            <div key={card.label} className="glass-card rounded-xl px-4 py-4 text-center">
+              <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
+              <div className="text-xs mt-1" style={{ color: '#94a3b8' }}>{card.label}</div>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-6" style={{ height: '440px' }}>
-          {/* Graph canvas */}
+        <div className="grid grid-cols-3 gap-6" style={{ height: '460px' }}>
           <div className="col-span-2 h-full">
-            <GraphCanvas />
+            <GraphCanvas
+              relationships={data.relationships}
+              zoom={zoom}
+              onZoomIn={() => setZoom((z) => Math.min(2.2, z + 0.12))}
+              onZoomOut={() => setZoom((z) => Math.max(0.5, z - 0.12))}
+              onRefresh={reload}
+              highlightedPathChain={highlightedPathChain}
+            />
           </div>
 
-          {/* Relationship panel */}
           <div className="glass-card rounded-xl p-5 overflow-hidden flex flex-col">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Active Relationships</h3>
+            <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Active Relationships</h3>
             <div className="flex-1 overflow-y-auto space-y-2">
-              {RELATIONSHIPS.map((rel, i) => (
-                <div key={i} className="p-3 rounded-lg cursor-pointer hover:bg-white/3 transition-colors" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-semibold" style={{ color: '#e2e8f0', fontSize: '0.7rem' }}>{rel.source}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full font-mono" style={{ background: 'rgba(0,212,255,0.08)', color: '#00d4ff', fontSize: '0.58rem' }}>
-                      {rel.relation}
-                    </span>
-                    <span className="text-xs font-semibold" style={{ color: '#e2e8f0', fontSize: '0.7rem' }}>{rel.target}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${rel.strength}%`, background: rel.strength > 85 ? '#ef4444' : rel.strength > 70 ? '#f59e0b' : '#00d4ff', opacity: 0.7 }} />
-                    </div>
-                    <span className="text-xs font-mono font-bold" style={{ color: '#475569', fontSize: '0.65rem' }}>{rel.strength}%</span>
-                  </div>
-                </div>
+              {data.relationships.map((rel, idx) => (
+                <button
+                  key={`${rel.source}-${rel.target}-${idx}`}
+                  onClick={() => {
+                    setSourceInput(rel.source);
+                    setTargetInput(rel.target);
+                    setSource(rel.source);
+                    setTarget(rel.target);
+                    setSelectedPathIndex(-1);
+                  }}
+                  className="w-full text-left p-3 rounded-lg"
+                  style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}
+                >
+                  <div className="text-xs" style={{ color: '#e2e8f0' }}>{`${rel.source} -> ${rel.target}`}</div>
+                  <div className="text-xs mt-0.5" style={{ color: '#00d4ff' }}>{rel.relation}</div>
+                  <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>Strength: {rel.strength}%</div>
+                </button>
               ))}
+              {!loading && data.relationships.length === 0 && (
+                <div className="text-xs" style={{ color: '#64748b' }}>No relationships for the current filter/query.</div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Ontology causal paths */}
         <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Causal Pathways — Automated Reasoning</h3>
-              <p className="text-xs mt-0.5" style={{ color: '#475569' }}>Apache Jena semantic reasoning · Graph traversal depth: 5</p>
-            </div>
-            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6', fontSize: '0.68rem' }}>
-              OWL/RDF Inferred
-            </span>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>{`Discovered Paths (${source} -> ${target})`}</h3>
+            <span className="text-xs" style={{ color: '#64748b' }}>{data.paths.length} path(s) · click to highlight</span>
           </div>
-          <div className="space-y-4">
-            {ONTOLOGY_PATHS.map((path, i) => (
-              <div key={i}>
-                <div className="flex items-center gap-0">
-                  {path.chain.map((node, j) => (
-                    <div key={j} className="flex items-center">
-                      <div
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                        style={{
-                          background: `${path.colors[j]}12`,
-                          border: `1px solid ${path.colors[j]}40`,
-                          color: path.colors[j],
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {node}
-                      </div>
-                      {j < path.chain.length - 1 && (
-                        <div className="flex items-center mx-1" style={{ color: '#1e3a5f' }}>
-                          <div className="w-4 h-px" style={{ background: '#1e3a5f' }} />
-                          <span style={{ color: '#334155', fontSize: '0.6rem' }}>▶</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="space-y-3">
+            {data.paths.map((path, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedPathIndex(i)}
+                className="w-full text-left p-3 rounded-lg"
+                style={{
+                  background: selectedPathIndex === i ? 'rgba(0,255,136,0.08)' : 'rgba(2,8,23,0.5)',
+                  border: selectedPathIndex === i ? '1px solid rgba(0,255,136,0.45)' : '1px solid rgba(30,58,95,0.4)',
+                }}
+              >
+                <div className="text-xs mb-1" style={{ color: '#94a3b8' }}>Strength {path.strength}% · Hops {path.hops ?? Math.max(0, path.chain.length - 1)}</div>
+                <div className="text-xs" style={{ color: selectedPathIndex === i ? '#00ff88' : '#00d4ff' }}>{path.chain.join(' -> ')}</div>
+              </button>
             ))}
-          </div>
-        </div>
-
-        {/* Schema validation */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>SHACL Schema Validation</h3>
-            <div className="space-y-2 data-table">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left">Shape</th>
-                    <th className="text-left">Target Class</th>
-                    <th className="text-left">Constraints</th>
-                    <th className="text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { shape: 'CountryShape', target: 'geo:Country', constraints: 12, status: 'PASS' },
-                    { shape: 'PolicyShape', target: 'gov:Policy', constraints: 8, status: 'PASS' },
-                    { shape: 'EventShape', target: 'evt:Event', constraints: 15, status: 'PASS' },
-                    { shape: 'ActorShape', target: 'act:Actor', constraints: 11, status: 'PASS' },
-                    { shape: 'ImpactShape', target: 'imp:Impact', constraints: 7, status: 'PASS' },
-                  ].map(row => (
-                    <tr key={row.shape}>
-                      <td className="font-mono" style={{ color: '#8b5cf6' }}>{row.shape}</td>
-                      <td style={{ color: '#64748b' }}>{row.target}</td>
-                      <td style={{ color: '#94a3b8' }}>{row.constraints}</td>
-                      <td><span className="status-online px-2 py-0.5 rounded text-xs">{row.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Semantic Reasoning Stats</h3>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Inference Rules Active', value: '847', color: '#00d4ff' },
-                { label: 'OWL Axioms', value: '12,441', color: '#8b5cf6' },
-                { label: 'Materialized Triples', value: '291M', color: '#f59e0b' },
-                { label: 'Query Avg (ms)', value: '14ms', color: '#00ff88' },
-                { label: 'Cache Hit Rate', value: '94.2%', color: '#00ff88' },
-                { label: 'Daily Inferences', value: '48M', color: '#00d4ff' },
-              ].map(s => (
-                <div key={s.label} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-lg font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
-                  <div className="text-xs mt-0.5" style={{ color: '#475569', fontSize: '0.68rem' }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
+            {!loading && data.paths.length === 0 && (
+              <div className="text-xs" style={{ color: '#64748b' }}>No path found for this source/target in current graph sample.</div>
+            )}
           </div>
         </div>
       </main>

@@ -26,7 +26,16 @@ class Country(Base):
     
     # Relationships
     economic_indicators = relationship("EconomicIndicator", back_populates="country")
-    relations = relationship("CountryRelation", foreign_keys=[ForeignKey("country_relations.country_a_id")], back_populates="country_a")
+    relations_as_a = relationship(
+        "CountryRelation",
+        foreign_keys="CountryRelation.country_a_id",
+        back_populates="country_a",
+    )
+    relations_as_b = relationship(
+        "CountryRelation",
+        foreign_keys="CountryRelation.country_b_id",
+        back_populates="country_b",
+    )
 
 
 class CountryRelation(Base):
@@ -47,8 +56,8 @@ class CountryRelation(Base):
     source = Column(String(50), default="MEA")
     
     # Relationships
-    country_a = relationship("Country", foreign_keys=[country_a_id])
-    country_b = relationship("Country", foreign_keys=[country_b_id])
+    country_a = relationship("Country", foreign_keys=[country_a_id], back_populates="relations_as_a")
+    country_b = relationship("Country", foreign_keys=[country_b_id], back_populates="relations_as_b")
 
 
 class EconomicIndicator(Base):
@@ -86,7 +95,7 @@ class Document(Base):
     published_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     processed = Column(Boolean, default=False)
-    metadata = Column(JSONB, nullable=True)
+    doc_metadata = Column(JSONB, nullable=True)
 
 
 class Entity(Base):
@@ -139,10 +148,12 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
+    roles = Column(JSONB, default=['analyst'], nullable=False)  # List of roles: admin, analyst, viewer, etc.
     clearance_level = Column(String(20), default='FOUO')  # UNCLASS, FOUO, SECRET, TS, TS/SCI
     is_active = Column(Boolean, default=True)
+    last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

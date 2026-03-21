@@ -1,0 +1,305 @@
+---
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ontora-postgres
+  namespace: ontora
+  labels:
+    app: ontora-postgres
+spec:
+  serviceName: ontora-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ontora-postgres
+  template:
+    metadata:
+      labels:
+        app: ontora-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        env:
+        - name: POSTGRES_DB
+          value: "ontora_prod"
+        - name: POSTGRES_USER
+          value: "ontora_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: POSTGRES_PASSWORD
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U ontora_user
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U ontora_user
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+      
+      securityContext:
+        fsGroup: 999
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ontora-postgres
+  namespace: ontora
+  labels:
+    app: ontora-postgres
+spec:
+  clusterIP: None
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: ontora-postgres
+
+---
+# Neo4j StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ontora-neo4j
+  namespace: ontora
+  labels:
+    app: ontora-neo4j
+spec:
+  serviceName: ontora-neo4j
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ontora-neo4j
+  template:
+    metadata:
+      labels:
+        app: ontora-neo4j
+    spec:
+      containers:
+      - name: neo4j
+        image: neo4j:5.13-enterprise
+        ports:
+        - containerPort: 7687
+          name: bolt
+        - containerPort: 7474
+          name: http
+        env:
+        - name: NEO4J_AUTH
+          value: "neo4j/$(NEO4J_PASSWORD)"
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: NEO4J_PASSWORD
+        - name: NEO4J_PLUGINS
+          value: '["apoc"]'
+        - name: NEO4J_dbms_memory_heap_initial__size
+          value: "2g"
+        - name: NEO4J_dbms_memory_heap_max__size
+          value: "4g"
+        
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+        
+        livenessProbe:
+          tcpSocket:
+            port: 7687
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        
+        readinessProbe:
+          tcpSocket:
+            port: 7687
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        
+        volumeMounts:
+        - name: neo4j-storage
+          mountPath: /var/lib/neo4j/data
+        - name: neo4j-logs
+          mountPath: /var/lib/neo4j/logs
+      
+      securityContext:
+        fsGroup: 7474
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: neo4j-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 100Gi
+  - metadata:
+      name: neo4j-logs
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ontora-neo4j
+  namespace: ontora
+  labels:
+    app: ontora-neo4j
+spec:
+  clusterIP: None
+  ports:
+  - port: 7687
+    targetPort: 7687
+    name: bolt
+  - port: 7474
+    targetPort: 7474
+    name: http
+  selector:
+    app: ontora-neo4j
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ontora-redis
+  namespace: ontora
+  labels:
+    app: ontora-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ontora-redis
+  template:
+    metadata:
+      labels:
+        app: ontora-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - "--requirepass"
+        - "$(REDIS_PASSWORD)"
+        - "--appendonly"
+        - "yes"
+        - "--maxmemory"
+        - "2gb"
+        - "--maxmemory-policy"
+        - "allkeys-lru"
+        ports:
+        - containerPort: 6379
+          name: redis
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: REDIS_PASSWORD
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+      
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ontora
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ontora-redis
+  namespace: ontora
+  labels:
+    app: ontora-redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: ontora-redis

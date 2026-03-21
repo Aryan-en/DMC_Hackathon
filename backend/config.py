@@ -3,8 +3,17 @@ ONTORA Backend Configuration Management
 """
 
 import os
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 from pydantic_settings import BaseSettings
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+BACKEND_DIR = Path(__file__).resolve().parent
+ENV_CANDIDATES = [
+    ROOT_DIR / ".env",
+    BACKEND_DIR / ".env",
+]
 
 
 class Settings(BaseSettings):
@@ -32,27 +41,30 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "ontora_user")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "ontora_password")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "ontora_prod")
-    POSTGRES_URL: str = None
+    POSTGRES_URL: Optional[str] = os.getenv("POSTGRES_URL")
     
     # Neo4j Configuration
     NEO4J_HOST: str = os.getenv("NEO4J_HOST", "localhost")
     NEO4J_PORT: int = int(os.getenv("NEO4J_PORT", "7687"))
     NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "neo4j_password")
-    NEO4J_URL: str = None
+    NEO4J_URL: Optional[str] = os.getenv("NEO4J_URL")
     
     # Redis Configuration
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
-    REDIS_URL: str = None
+    REDIS_URL: Optional[str] = os.getenv("REDIS_URL")
     
     # Kafka Configuration
     KAFKA_BROKERS: str = os.getenv("KAFKA_BROKERS", "localhost:9092")
-    KAFKA_BROKERS_LIST: List[str] = None
+    KAFKA_BROKERS_LIST: Optional[List[str]] = None
+    ACTIVE_ENV_FILE: str = "none"
     
     # ML Models
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3")
+    OLLAMA_TIMEOUT_SEC: int = int(os.getenv("OLLAMA_TIMEOUT_SEC", "20"))
     SPACY_MODEL: str = os.getenv("SPACY_MODEL", "en_core_web_sm")
     
     # Data Sources
@@ -65,31 +77,43 @@ class Settings(BaseSettings):
     JWT_EXPIRY_HOURS: int = 24
     
     class Config:
-        env_file = ".env"
+        env_file = (
+            str(ROOT_DIR / ".env"),
+            str(BACKEND_DIR / ".env"),
+            ".env",
+        )
         case_sensitive = True
     
     def __init__(self, **data):
         super().__init__(**data)
         
         # Build connection URLs
-        self.POSTGRES_URL = (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        if not self.POSTGRES_URL:
+            self.POSTGRES_URL = (
+                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
         
-        self.NEO4J_URL = (
-            f"neo4j+s://{self.NEO4J_USER}:{self.NEO4J_PASSWORD}"
-            f"@{self.NEO4J_HOST}:{self.NEO4J_PORT}"
-        )
+        if not self.NEO4J_URL:
+            self.NEO4J_URL = f"bolt://{self.NEO4J_HOST}:{self.NEO4J_PORT}"
         
-        self.REDIS_URL = (
-            f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
-            if self.REDIS_PASSWORD else f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
-        )
+        if not self.REDIS_URL:
+            self.REDIS_URL = (
+                f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
+                if self.REDIS_PASSWORD else f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
+            )
         
         self.KAFKA_BROKERS_LIST = [
             broker.strip() for broker in self.KAFKA_BROKERS.split(",")
         ]
+
+        self.ACTIVE_ENV_FILE = self._detect_active_env_file()
+
+    def _detect_active_env_file(self) -> str:
+        for candidate in ENV_CANDIDATES:
+            if candidate.exists():
+                return str(candidate)
+        return "process_environment_only"
 
 
 # Global settings instance

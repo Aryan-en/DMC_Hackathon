@@ -1,0 +1,313 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ontora
+  labels:
+    name: ontora
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ontora-config
+  namespace: ontora
+data:
+  ENVIRONMENT: production
+  DEBUG: "false"
+  LOG_LEVEL: "WARNING"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ontora-secrets
+  namespace: ontora
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "changeme"
+  NEO4J_PASSWORD: "changeme"
+  REDIS_PASSWORD: "changeme"
+  JWT_SECRET: "changeme_minimum_32_characters_required"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ontora-backend
+  namespace: ontora
+  labels:
+    app: ontora-backend
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ontora-backend
+  template:
+    metadata:
+      labels:
+        app: ontora-backend
+        version: v1
+    spec:
+      serviceAccountName: ontora-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z ontora-postgres 5432; do echo waiting for postgres; sleep 2; done']
+      
+      - name: wait-for-neo4j
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z ontora-neo4j 7687; do echo waiting for neo4j; sleep 2; done']
+      
+      containers:
+      - name: backend
+        image: ontora:v1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: ontora-config
+              key: ENVIRONMENT
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: ontora-config
+              key: DEBUG
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ontora-config
+              key: LOG_LEVEL
+        - name: POSTGRES_HOST
+          value: "ontora-postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "ontora_prod"
+        - name: POSTGRES_USER
+          value: "ontora_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: POSTGRES_PASSWORD
+        - name: NEO4J_HOST
+          value: "ontora-neo4j"
+        - name: NEO4J_PORT
+          value: "7687"
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: NEO4J_PASSWORD
+        - name: REDIS_HOST
+          value: "ontora-redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ontora-secrets
+              key: JWT_SECRET
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 40
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ontora-backend
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ontora-backend
+  namespace: ontora
+  labels:
+    app: ontora-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: ontora-backend
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ontora-backend-hpa
+  namespace: ontora
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ontora-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ontora-backend
+  namespace: ontora
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ontora-backend
+  namespace: ontora
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ontora-backend
+  namespace: ontora
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ontora-backend
+subjects:
+- kind: ServiceAccount
+  name: ontora-backend
+  namespace: ontora
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ontora-backend-pdb
+  namespace: ontora
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ontora-backend
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ontora-backend
+  namespace: ontora
+  labels:
+    app: ontora-backend
+spec:
+  selector:
+    matchLabels:
+      app: ontora-backend
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s

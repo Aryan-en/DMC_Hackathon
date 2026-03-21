@@ -4,40 +4,52 @@ import TopBar from '@/components/TopBar';
 import StatCard from '@/components/StatCard';
 import AlertFeed from '@/components/AlertFeed';
 import { GlobalRiskChart, EntityBarChart, SentimentChart } from '@/components/Charts';
+import { useStrategicMetrics } from '@/app/hooks/useStrategicMetrics';
+import { useProcessingLog } from '@/app/hooks/useProcessingLog';
 import {
   Globe, Activity, Share2, Brain, AlertTriangle,
   Database, Shield, Zap, Radio, Server
 } from 'lucide-react';
 
-const regions = [
-  { name: 'North America', risk: 34, color: '#3eb87a' },
-  { name: 'Europe', risk: 58, color: '#c8a84a' },
-  { name: 'MENA', risk: 82, color: '#b84a4a' },
-  { name: 'East Asia', risk: 61, color: '#c8a84a' },
-  { name: 'South Asia', risk: 55, color: '#5b8db8' },
-  { name: 'Sub-Saharan Africa', risk: 71, color: '#c8822a' },
-  { name: 'Latin America', risk: 47, color: '#5b8db8' },
-  { name: 'Central Asia', risk: 63, color: '#c8a84a' },
-];
-
-const recentIntel = [
-  { time: 'T-00:02', event: 'SHACL validation completed — 14,291 new ontology triples indexed', type: 'GRAPH' },
-  { time: 'T-00:08', event: 'LLaMA-3 NER pipeline processed 8,400 multilingual documents', type: 'NLP' },
-  { time: 'T-00:15', event: 'PyG model updated conflict risk scores for 47 regions', type: 'ML' },
-  { time: 'T-00:22', event: 'Kafka consumer lag: All partitions nominal (avg 12ms)', type: 'INFRA' },
-  { time: 'T-00:31', event: 'PostGIS geospatial index refreshed — 2.1M coordinates mapped', type: 'GEO' },
-  { time: 'T-00:45', event: 'Delta Lake checkpoint — 847GB new data committed to bronze layer', type: 'DATA' },
-];
-
 const TYPE_COLORS: Record<string, string> = {
-  GRAPH: '#8a78c8', NLP: '#5b8db8', ML: '#c8a84a', INFRA: '#4a6070', GEO: '#3eb87a', DATA: '#6a8a9a',
+  DOC: '#8a78c8',
+  MEA: '#5b8db8',
+  NEWS: '#c8a84a',
+  SOCIAL: '#3eb87a',
+  METRIC: '#4a6070',
 };
 
+function formatRelativeTs(isoTs: string) {
+  const parsed = new Date(isoTs).getTime();
+  if (!Number.isFinite(parsed)) return 'T-unknown';
+  const diffMs = Date.now() - parsed;
+  const mins = Math.max(0, Math.floor(diffMs / 60000));
+  if (mins < 60) {
+    const secs = Math.max(0, Math.floor((diffMs % 60000) / 1000));
+    return `T-${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return `T-${String(hrs).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
 export default function Home() {
+  const { data, loading, error } = useStrategicMetrics();
+  const { events } = useProcessingLog();
+
   return (
     <div className="flex flex-col min-h-screen grid-bg">
       <TopBar title="Strategic Overview" subtitle="Global Intelligence Command Dashboard — CLASSIFICATION: TS/SCI" />
       <main className="flex-1 px-6 py-6 space-y-6">
+
+        {error && (
+          <div
+            className="px-4 py-2 rounded-xl"
+            style={{ background: 'rgba(184,74,74,0.08)', border: '1px solid rgba(184,74,74,0.2)', color: '#b84a4a', fontSize: '0.72rem' }}
+          >
+            Live backend metrics unavailable: {error}. Displaying latest available live-response state.
+          </div>
+        )}
 
         {/* Mission brief banner */}
         <div
@@ -67,19 +79,55 @@ export default function Home() {
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Entities Tracked" value="1.47M" subValue="Nations, orgs, individuals, events" change={12.4} changeLabel="this month" icon={Share2} accentColor="#c8a84a" glowClass="glow-cyan" />
-          <StatCard label="Active Threat Threads" value="48" subValue="3 critical, 12 high, 33 monitor" change={-8.2} changeLabel="vs last week" icon={AlertTriangle} accentColor="#b84a4a" glowClass="glow-red" />
-          <StatCard label="Daily Data Ingested" value="2.9TB" subValue="847GB processed in real-time" change={6.1} changeLabel="above baseline" icon={Database} accentColor="#3eb87a" glowClass="glow-green" />
-          <StatCard label="Prediction Accuracy" value="91.3%" subValue="7-day geopolitical forecast" change={2.8} changeLabel="vs Q4 baseline" icon={Zap} accentColor="#c8822a" glowClass="glow-amber" />
+          <StatCard
+            label="Entities Tracked"
+            value={data.globalEntities.total >= 1000000 ? `${(data.globalEntities.total / 1000000).toFixed(2)}M` : data.globalEntities.total.toLocaleString()}
+            subValue="Nations, orgs, individuals, events"
+            change={12.4}
+            changeLabel="this month"
+            icon={Share2}
+            accentColor="#c8a84a"
+            glowClass="glow-cyan"
+          />
+          <StatCard
+            label="Active Threat Threads"
+            value={data.threatThreads.total.toLocaleString()}
+            subValue={`${data.threatThreads.critical} critical, ${data.threatThreads.high} high, ${data.threatThreads.monitor} monitor`}
+            change={-8.2}
+            changeLabel="vs last week"
+            icon={AlertTriangle}
+            accentColor="#b84a4a"
+            glowClass="glow-red"
+          />
+          <StatCard
+            label="Daily Data Ingested"
+            value={`${data.dailyIngestion.total_gb.toFixed(2)}TB`}
+            subValue={`${data.dailyIngestion.realtime_processed_gb.toFixed(3)}TB processed in real-time`}
+            change={6.1}
+            changeLabel="above baseline"
+            icon={Database}
+            accentColor="#3eb87a"
+            glowClass="glow-green"
+          />
+          <StatCard
+            label="Prediction Accuracy"
+            value={`${data.predictionAccuracy.accuracy.toFixed(1)}%`}
+            subValue="7-day geopolitical forecast"
+            change={2.8}
+            changeLabel="vs Q4 baseline"
+            icon={Zap}
+            accentColor="#c8822a"
+            glowClass="glow-amber"
+          />
         </div>
 
         {/* Sub-stats row */}
         <div className="grid grid-cols-4 gap-4">
           {[
-            { label: 'Knowledge Graph Nodes', value: '3.8M', icon: Share2, color: '#8a78c8' },
+            { label: 'Knowledge Graph Nodes', value: data.globalEntities.total.toLocaleString(), icon: Share2, color: '#8a78c8' },
             { label: 'Kafka Events/sec', value: '142K', icon: Activity, color: '#5b8db8' },
             { label: 'Model Inferences Today', value: '8.4M', icon: Brain, color: '#3eb87a' },
-            { label: 'Nations Monitored', value: '216', icon: Globe, color: '#c8a84a' },
+            { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: Globe, color: '#c8a84a' },
           ].map(s => (
             <div key={s.label} className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4">
               <div
@@ -123,7 +171,7 @@ export default function Home() {
           <div className="glass-card rounded-2xl p-5">
             <h3 style={{ color: '#c4cdd8', fontWeight: 600, fontSize: '0.85rem', marginBottom: '16px' }}>Regional Risk Matrix</h3>
             <div className="space-y-3">
-              {regions.map(r => (
+              {data.regions.map(r => (
                 <div key={r.name}>
                   <div className="flex items-center justify-between mb-1.5">
                     <span style={{ color: '#7a8fa8', fontSize: '0.71rem' }}>{r.name}</span>
@@ -156,13 +204,7 @@ export default function Home() {
             <div className="glass-card rounded-2xl p-5">
               <h3 style={{ color: '#c4cdd8', fontWeight: 600, fontSize: '0.85rem', marginBottom: '16px' }}>Infrastructure Health</h3>
               <div className="space-y-3">
-                {[
-                  { label: 'Kafka Cluster', value: 98, color: '#3eb87a' },
-                  { label: 'Neo4j Graph', value: 94, color: '#5b8db8' },
-                  { label: 'ML Pipeline', value: 87, color: '#c8a84a' },
-                  { label: 'Vector Search', value: 99, color: '#3eb87a' },
-                  { label: 'Flink Jobs', value: 91, color: '#5b8db8' },
-                ].map(s => (
+                {data.infraHealth.components.map(s => (
                   <div key={s.label}>
                     <div className="flex items-center justify-between mb-1">
                       <span style={{ color: '#4a6070', fontSize: '0.7rem' }}>{s.label}</span>
@@ -196,23 +238,23 @@ export default function Home() {
           <div className="glass-card rounded-2xl p-5">
             <h3 style={{ color: '#c4cdd8', fontWeight: 600, fontSize: '0.85rem', marginBottom: '16px' }}>System Processing Log</h3>
             <div className="space-y-1">
-              {recentIntel.map((entry, i) => (
+              {events.map((entry, i) => (
                 <div
                   key={i}
                   className="flex items-start gap-3 py-2"
-                  style={{ borderBottom: i < recentIntel.length - 1 ? '1px solid rgba(200,168,74,0.05)' : 'none' }}
+                  style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(200,168,74,0.05)' : 'none' }}
                 >
                   <span
                     className="font-mono shrink-0"
                     style={{ color: '#2a3d52', fontSize: '0.62rem', minWidth: '52px' }}
                   >
-                    {entry.time}
+                    {formatRelativeTs(entry.timestamp)}
                   </span>
                   <span
                     className="rounded font-bold shrink-0"
                     style={{
-                      background: `${TYPE_COLORS[entry.type]}14`,
-                      color: TYPE_COLORS[entry.type],
+                      background: `${(TYPE_COLORS[entry.type] || '#6a8a9a')}14`,
+                      color: TYPE_COLORS[entry.type] || '#6a8a9a',
                       fontSize: '0.58rem',
                       minWidth: '44px',
                       textAlign: 'center',
@@ -225,6 +267,11 @@ export default function Home() {
                   <span style={{ color: '#4a6070', fontSize: '0.71rem', lineHeight: '1.4' }}>{entry.event}</span>
                 </div>
               ))}
+              {events.length === 0 && (
+                <div style={{ color: '#4a6070', fontSize: '0.71rem' }}>
+                  No recent processing events available.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -234,7 +281,7 @@ export default function Home() {
           style={{ borderTop: '1px solid rgba(200,168,74,0.06)' }}
         >
           <span style={{ color: '#1e2e3e', fontSize: '0.62rem', letterSpacing: '0.04em' }}>
-            ONTORA v4.2.1 — CLASSIFICATION: TOP SECRET // SCI // ORCON // NOFORN
+            ONTORA v4.2.1 — CLASSIFICATION: TOP SECRET // SCI // ORCON // NOFORN {loading ? '(SYNCING)' : '(LIVE)'}
           </span>
           <div className="flex items-center gap-2">
             <Server size={10} style={{ color: '#1e2e3e' }} />
