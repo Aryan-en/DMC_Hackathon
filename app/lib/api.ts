@@ -12,9 +12,10 @@ async function parseJson(response: Response) {
 export async function apiGet<T>(path: string): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
+  const requestUrl = `${API_BASE_URL}${path}`;
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(requestUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
@@ -27,6 +28,9 @@ export async function apiGet<T>(path: string): Promise<T> {
     // Re-throw with more context
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('Request timeout - API server may be unavailable');
+    }
+    if (error instanceof TypeError) {
+      throw new Error(`Network request failed for ${path}. Verify backend availability at ${API_BASE_URL}.`);
     }
     throw error;
   } finally {

@@ -80,25 +80,29 @@ export function useStreamsMetrics(pollInterval = 5000) {
 
     async function load() {
       try {
-        const [topicsRes, pipelinesRes] = await Promise.all([
+        const [topicsResult, pipelinesResult] = await Promise.allSettled([
           apiGet<{ topics: Topic[] }>('/api/streams/topics'),
           apiGet<{ pipelines: Pipeline[] }>('/api/streams/pipelines'),
         ]);
 
         if (!active) return;
 
-        // apiGet returns payload.data directly, so destructure the response
-        const topics = topicsRes?.topics || SAMPLE_TOPICS;
-        const pipelines = pipelinesRes?.pipelines || SAMPLE_PIPELINES;
+        const topics =
+          topicsResult.status === 'fulfilled' && topicsResult.value?.topics
+            ? topicsResult.value.topics
+            : SAMPLE_TOPICS;
+        const pipelines =
+          pipelinesResult.status === 'fulfilled' && pipelinesResult.value?.pipelines
+            ? pipelinesResult.value.pipelines
+            : SAMPLE_PIPELINES;
+        const isUsingFallback = topicsResult.status === 'rejected' || pipelinesResult.status === 'rejected';
 
         setData({ topics, pipelines });
-        setError(null);
+        setError(isUsingFallback ? 'Live stream metrics are unavailable. Displaying sample data.' : null);
       } catch (err) {
         if (!active) return;
-        console.warn('Failed to load stream metrics (using sample data):', err);
-        // Use sample data as fallback
         setData({ topics: SAMPLE_TOPICS, pipelines: SAMPLE_PIPELINES });
-        setError(err instanceof Error ? err.message : 'Failed to load stream metrics - using sample data');
+        setError(err instanceof Error ? err.message : 'Failed to load stream metrics. Displaying sample data.');
       } finally {
         if (active) {
           setLoading(false);
