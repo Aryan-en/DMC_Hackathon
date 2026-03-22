@@ -5,7 +5,7 @@ import { usePredictionsMetrics } from '@/app/hooks/usePredictionsMetrics';
 
 export default function PredictionsPage() {
   const { data, loading, error } = usePredictionsMetrics();
-  const latest = data.forecast[0] || { probability: 0, date: '', trend: '' };
+  const latest = data.forecast.length > 0 ? data.forecast[data.forecast.length - 1] : { probability: 0, date: '', trend: 'stable' };
   const servingColor = data.servingHealth.status === 'healthy' ? '#00ff88' : data.servingHealth.status === 'degraded' ? '#f59e0b' : '#ef4444';
 
   return (

@@ -594,7 +594,7 @@ export default function GeospatialHeatmap({
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold" style={{ color: '#e2e8f0' }}>
-              🌍 Global Risk & Impact Heatmap
+              Global Risk & Impact Heatmap
             </h2>
             <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>
               Continuous thermal gradient visualization • Risk data interpolation
@@ -748,7 +748,7 @@ export default function GeospatialHeatmap({
                 }}
               >
                 <p className="text-2xs mb-1" style={{ color: '#94a3b8' }}>
-                  🌦️ Climate Events
+                  Climate Events
                 </p>
                 <p style={{ color: '#00d4ff', fontWeight: 'bold', fontSize: '1.1rem' }}>
                   {selectedRegion.climateEvents}
@@ -763,7 +763,7 @@ export default function GeospatialHeatmap({
                 }}
               >
                 <p className="text-2xs mb-1" style={{ color: '#94a3b8' }}>
-                  📊 Economy
+                  Economy
                 </p>
                 <p style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '1.1rem' }}>
                   {selectedRegion.economicIndicator.toFixed(0)}%

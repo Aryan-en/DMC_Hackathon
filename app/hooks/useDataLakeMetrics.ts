@@ -60,17 +60,17 @@ type DataLakeMetrics = {
 
 // Fallback sample data
 const SAMPLE_SUMMARY: Summary = {
-  total_size_gb: 104.45,
-  record_count: 12450000,
+  total_size_gb: 0.005,
+  record_count: 164,
   datasets: 5,
 };
 
 const SAMPLE_DATASETS: Dataset[] = [
-  { name: 'economic_indicators', format: 'postgresql', records: 3200000, size_gb: 3.2, tier: 'silver' },
-  { name: 'country_relations', format: 'postgresql', records: 4500000, size_gb: 9.0, tier: 'silver' },
-  { name: 'documents', format: 'postgresql', records: 1800000, size_gb: 90.0, tier: 'bronze' },
-  { name: 'entities', format: 'postgresql', records: 1250000, size_gb: 1.25, tier: 'gold' },
-  { name: 'relationships', format: 'postgresql', records: 950000, size_gb: 0.95, tier: 'gold' },
+  { name: 'economic_indicators', format: 'postgresql', records: 50, size_gb: 0.00005, tier: 'silver' },
+  { name: 'country_relations', format: 'postgresql', records: 30, size_gb: 0.00006, tier: 'silver' },
+  { name: 'documents', format: 'postgresql', records: 20, size_gb: 0.001, tier: 'bronze' },
+  { name: 'entities', format: 'postgresql', records: 42, size_gb: 0.000042, tier: 'gold' },
+  { name: 'relationships', format: 'postgresql', records: 22, size_gb: 0.000022, tier: 'gold' },
 ];
 
 const SAMPLE_QUALITY: QualityMetric[] = [
@@ -91,11 +91,11 @@ const SAMPLE_LINEAGE: Lineage[] = [
 
 const SAMPLE_COSTS: CostMetrics = {
   period_days: 1,
-  total_cost_units: 5.1,
-  average_cost_per_query: 1.7,
-  total_rows_scanned: 29100,
+  total_cost_units: 0.018,
+  average_cost_per_query: 0.006,
+  total_rows_scanned: 164,
   queries_tracked: 3,
-  max_rows_scanned: 15000,
+  max_rows_scanned: 50,
 };
 
 const SAMPLE_VIEWS: MaterializedView[] = [

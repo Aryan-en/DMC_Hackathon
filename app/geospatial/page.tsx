@@ -78,7 +78,7 @@ export default function GeospatialPage() {
                       </div>
                     </div>
                     <div className="text-xs" style={{ color: '#64748b' }}>
-                      📍 {h.lat?.toFixed(2)}, {h.lng?.toFixed(2)} <span style={{ marginLeft: '0.5rem' }}>Region: {h.region}</span>
+                      {h.lat?.toFixed(2)}, {h.lng?.toFixed(2)} <span style={{ marginLeft: '0.5rem' }}>Region: {h.region}</span>
                     </div>
                   </div>
                 );
@@ -156,7 +156,7 @@ export default function GeospatialPage() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm" style={{ color: '#e2e8f0', fontWeight: 600 }}>{i.name}</div>
                       <div className="text-xs mt-1" style={{ color: '#94a3b8' }}>{i.type}</div>
-                      <div className="text-xs" style={{ color: '#64748b', marginTop: '0.25rem' }}>📍 {i.lat?.toFixed(2)}, {i.lng?.toFixed(2)}</div>
+                      <div className="text-xs" style={{ color: '#64748b', marginTop: '0.25rem' }}>{i.lat?.toFixed(2)}, {i.lng?.toFixed(2)}</div>
                     </div>
                     <div className="text-xs" style={{ color: '#64748b', flexShrink: 0, whiteSpace: 'nowrap' }}>
                       {new Date(i.date).toISOString().split('T')[0]} {new Date(i.date).toISOString().split('T')[1].substring(0, 5)}
@@ -171,7 +171,7 @@ export default function GeospatialPage() {
 
         {/* Economic Activity Mapping Section */}
         <div className="glass-card rounded-xl p-5">
-          <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>💼 Economic Activity Mapping</h3>
+          <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Economic Activity Mapping</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {data.economicRegions?.map((region) => (
               <div
@@ -324,7 +324,7 @@ export default function GeospatialPage() {
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>📊 RISK CLASSIFICATION</div>
+                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>RISK CLASSIFICATION</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   <strong>Drought Level: {selectedClimate.drought}</strong><br/>
                   {selectedClimate.drought === 'CRITICAL' && 'Severe water stress with complete depletion risk. Agricultural productivity severely compromised.'}
@@ -347,7 +347,7 @@ export default function GeospatialPage() {
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>✅ RECOMMENDED DECISIONS & ACTIONS</div>
+                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>RECOMMENDED DECISIONS & ACTIONS</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   {selectedClimate.cropRisk >= 80 ? (
                     <>
@@ -436,7 +436,7 @@ export default function GeospatialPage() {
                   
                   {selectedClimate.cropRisk >= 60 && selectedClimate.cropRisk < 80 && (
                     <>
-                      <strong style={{ color: '#f59e0b' }}>📈 INDIA MODERATE OPPORTUNITY - MEDIUM</strong><br/>
+                      <strong style={{ color: '#f59e0b' }}>INDIA MODERATE OPPORTUNITY - MEDIUM</strong><br/>
                       • <strong>Supply Stability:</strong> Regions with 60-80% crop risk need diversified suppliers<br/>
                       • <strong>Partnership Potential:</strong> India can offer technical assistance and agricultural partnerships<br/>
                       • <strong>Market Access:</strong> Opportunity to build long-term agricultural trade relationships<br/>
@@ -453,7 +453,7 @@ export default function GeospatialPage() {
                     </>
                   ) : (
                     <>
-                      <br/><strong style={{ color: '#3b82f6' }}>🌍 GLOBAL RELEVANCE - INDIRECT IMPACT ON INDIA</strong><br/>
+                      <br/><strong style={{ color: '#3b82f6' }}>GLOBAL RELEVANCE - INDIRECT IMPACT ON INDIA</strong><br/>
                       Global climate trends in this region contribute to worldwide climate patterns that eventually affect India's monsoon patterns and agricultural cycles.
                     </>
                   )}
@@ -523,7 +523,7 @@ export default function GeospatialPage() {
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(51,165,224,0.3)' }}>
                 <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Geographic Region</div>
-                <div className="text-lg font-bold mt-2" style={{ color: '#e2e8f0' }}>📍 {selectedHotspot.region}</div>
+                <div className="text-lg font-bold mt-2" style={{ color: '#e2e8f0' }}>{selectedHotspot.region}</div>
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.3)', border: '1px solid rgba(148,163,184,0.2)' }}>
@@ -541,7 +541,7 @@ export default function GeospatialPage() {
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>📊 CLASSIFICATION REASONING</div>
+                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>CLASSIFICATION REASONING</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   {selectedHotspot.severity === 'critical' ? (
                     <>
@@ -578,7 +578,7 @@ export default function GeospatialPage() {
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>✅ RECOMMENDED DECISION & ACTIONS</div>
+                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>RECOMMENDED DECISION & ACTIONS</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   {selectedHotspot.severity === 'critical' ? (
                     <>
@@ -726,12 +726,12 @@ export default function GeospatialPage() {
                   This event occurred on {new Date(selectedIncident.date).toISOString().split('T')[0]} at {new Date(selectedIncident.date).toISOString().split('T')[1].substring(0, 5)}, 
                   at coordinates ({selectedIncident.lat?.toFixed(4)}, {selectedIncident.lng?.toFixed(4)}).
                   <br /><br />
-                  <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠️ This incident requires immediate attention and monitoring.</span>
+                  <span style={{ color: '#ef4444', fontWeight: 600 }}>This incident requires immediate attention and monitoring.</span>
                 </div>
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(245,158,11,0.3)' }}>
-                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>📊 INCIDENT CLASSIFICATION</div>
+                <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>INCIDENT CLASSIFICATION</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   <strong>Type: {selectedIncident.type}</strong><br/>
                   {selectedIncident.type === 'Conflict' && 'Armed conflict or violent confrontation. Poses direct threat to civilian populations and infrastructure. Requires immediate crisis management.'}
@@ -748,7 +748,7 @@ export default function GeospatialPage() {
               </div>
 
               <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.4)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>✅ RECOMMENDED DECISION & ACTIONS</div>
+                <div style={{ color: '#3b82f6', fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>RECOMMENDED DECISION & ACTIONS</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.8rem', lineHeight: '1.6' }}>
                   {selectedIncident.type === 'Conflict' && (
                     <>

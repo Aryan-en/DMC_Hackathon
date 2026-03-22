@@ -4,6 +4,7 @@ import TopBar from '@/components/TopBar';
 import { Brain, MessageSquare, Tag, Search, Layers } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useIntelligenceMetrics } from '@/app/hooks/useIntelligenceMetrics';
+import { useIntelligenceAlerts } from '@/app/hooks/useIntelligenceAlerts';
 import { useState } from 'react';
 
 const TYPE_C: Record<string, string> = {
@@ -26,6 +27,7 @@ const CLSF_COLORS: Record<string, string> = {
 
 export default function IntelligencePage() {
   const { data, loading, error } = useIntelligenceMetrics();
+  const { data: alertsData, loading: alertsLoading } = useIntelligenceAlerts();
   const [isGeneratingBrief, setIsGeneratingBrief] = useState(false);
 
   const totalDocs = data.languages.reduce((acc, item) => acc + item.doc_count, 0);
@@ -67,6 +69,73 @@ export default function IntelligencePage() {
             Live intelligence metrics unavailable: {error}. Displaying latest available live-response state.
           </div>
         )}
+
+        {/* Intelligence Alerts */}
+        <div className="glass-card rounded-xl p-5">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Intelligence Alerts</h3>
+            <span className="text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '0.65rem' }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
+              LIVE
+            </span>
+          </div>
+
+          {alertsLoading ? (
+            <div className="text-xs p-4 text-center" style={{ color: '#64748b' }}>Loading live alerts...</div>
+          ) : alertsData.alerts.length === 0 ? (
+            <div className="text-xs p-4 text-center" style={{ color: '#64748b' }}>No alerts at this time.</div>
+          ) : (
+            <div className="space-y-3">
+              {alertsData.alerts.map((alert, idx) => {
+                const severityColor = alert.severity === 'CRITICAL' ? '#ef4444' : alert.severity === 'HIGH' ? '#f59e0b' : alert.severity === 'MEDIUM' ? '#3b82f6' : '#64748b';
+                const severityBg = alert.severity === 'CRITICAL' ? 'rgba(239,68,68,0.1)' : alert.severity === 'HIGH' ? 'rgba(251,146,60,0.1)' : alert.severity === 'MEDIUM' ? 'rgba(59,130,246,0.1)' : 'rgba(100,116,139,0.1)';
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-lg flex items-start justify-between"
+                    style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${severityColor}20` }}
+                  >
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="text-xs font-mono mt-0.5" style={{ color: '#94a3b8', minWidth: '60px' }}>
+                        {alert.timestamp}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span
+                            className="text-xs px-2 py-0.5 rounded font-bold"
+                            style={{ background: severityBg, color: severityColor, fontSize: '0.65rem' }}
+                          >
+                            {alert.severity}
+                          </span>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded font-mono"
+                            style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', fontSize: '0.62rem' }}
+                          >
+                            {alert.region}
+                          </span>
+                        </div>
+                        <p className="text-xs" style={{ color: '#cbd5e1', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                          {alert.title}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right ml-3 shrink-0">
+                      <span className="text-xs font-mono" style={{ color: '#00ff88', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                        {(alert.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!alertsLoading && alertsData.total_count > alertsData.alerts.length && (
+            <div className="text-xs mt-3 text-center" style={{ color: '#64748b' }}>
+              View all {alertsData.total_count} alerts →
+            </div>
+          )}
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -306,7 +375,7 @@ export default function IntelligencePage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>
-                <span style={{ fontSize: '1.2rem' }}>🌍</span>
+                <span style={{ fontSize: '1.2rem' }}></span>
               </div>
               <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Climate Intelligence — IndiAPI Regional Risk Assessment</h3>
             </div>
@@ -333,7 +402,7 @@ export default function IntelligencePage() {
                         {region.geopolitical_impact}
                       </p>
                       <p className="text-xs" style={{ color: '#94a3b8', fontSize: '0.68rem', lineHeight: 1.3 }}>
-                        ⚠️ <span style={{ color: '#f59e0b' }}>Strategic concern:</span> {region.strategic_concern}
+                        <span style={{ color: '#f59e0b' }}>Strategic concern:</span> {region.strategic_concern}
                       </p>
                     </div>
                   </div>
@@ -369,6 +438,104 @@ export default function IntelligencePage() {
             })}
           </div>
         </div>
+
+        {/* MEA Strategic Overview */}
+        {data.meaSummary && (
+          <div className="glass-card rounded-xl p-5 border-l-4" style={{ borderLeftColor: '#ef4444' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                  <span style={{ fontSize: '1.3rem' }}></span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>MEA Strategic Overview — Bilateral Relations Intelligence</h3>
+                  <p className="text-xs mt-0.5" style={{ color: '#94a3b8' }}>208 bilateral relation PDFs ingested from MEA foreign relations database</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold" style={{ color: '#ef4444' }}>{data.meaSummary.total_bilateral_relations}</div>
+                <div className="text-xs" style={{ color: '#94a3b8' }}>Relations Documented</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>COUNTRIES COVERED</div>
+                <div className="text-xl font-bold" style={{ color: '#ef4444' }}>{data.meaSummary.countries_covered}+</div>
+              </div>
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(251,146,60,0.2)' }}>
+                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>DATA CLASSIFICATION</div>
+                <div className="text-xs font-bold" style={{ color: '#f59e0b' }}>{data.meaSummary.data_classification}</div>
+              </div>
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(0,212,255,0.2)' }}>
+                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>CONFIDENCE SCORE</div>
+                <div className="text-xs font-bold" style={{ color: '#00d4ff' }}>{(data.meaSummary.analysis_confidence * 100).toFixed(0)}%</div>
+              </div>
+            </div>
+
+            {data.meaRelations && data.meaRelations.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold mb-3" style={{ color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Bilateral Relations</h4>
+                <div className="space-y-2">
+                  {data.meaRelations.slice(0, 5).map(rel => (
+                    <div key={rel.country_pair} className="p-3 rounded-lg flex items-between justify-between" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.5)' }}>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-xs" style={{ color: '#e2e8f0' }}>{rel.country_pair}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: rel.intelligence_priority === 'CRITICAL' ? 'rgba(239,68,68,0.15)' : 'rgba(251,146,60,0.15)', color: rel.intelligence_priority === 'CRITICAL' ? '#ef4444' : '#f59e0b', fontSize: '0.6rem', fontWeight: 'bold' }}>
+                            {rel.intelligence_priority}
+                          </span>
+                        </div>
+                        <p className="text-xs" style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Status: <span style={{ color: '#cbd5e1' }}>{rel.status}</span></p>
+                        <div className="flex gap-1 flex-wrap mt-1">
+                          {rel.key_issues.slice(0, 2).map(issue => (
+                            <span key={issue} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(30,58,95,0.4)', color: '#94a3b8', fontSize: '0.65rem' }}>
+                              {issue}
+                            </span>
+                          ))}
+                          {rel.key_issues.length > 2 && (
+                            <span className="text-xs px-1.5 py-0.5" style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                              +{rel.key_issues.length - 2} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="text-xs font-mono font-bold" style={{ color: '#00ff88' }}>
+                          {(rel.confidence * 100).toFixed(0)}% confidence
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {data.regionalHotspots && data.regionalHotspots.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-3" style={{ color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Regional Hot Spots</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {data.regionalHotspots.slice(0, 4).map(hotspot => (
+                    <div key={hotspot.region} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${hotspot.tension_level === 'CRITICAL' ? 'rgba(239,68,68,0.3)' : 'rgba(251,146,60,0.3)'}` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: hotspot.tension_level === 'CRITICAL' ? 'rgba(239,68,68,0.2)' : 'rgba(251,146,60,0.2)', color: hotspot.tension_level === 'CRITICAL' ? '#ef4444' : '#f59e0b', fontSize: '0.6rem' }}>
+                          {hotspot.tension_level}
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: '#e2e8f0' }}>{hotspot.region}</span>
+                      </div>
+                      <p className="text-xs mb-2" style={{ color: '#94a3b8', fontSize: '0.7rem', lineHeight: 1.3 }}>
+                        {hotspot.intelligence_assessment}
+                      </p>
+                      <div className="text-xs" style={{ color: '#cbd5e1', fontSize: '0.65rem', borderTop: '1px solid rgba(30,58,95,0.3)', paddingTop: '0.5rem' }}>
+                        <span style={{ color: '#00d4ff' }}>Strategic importance:</span> {hotspot.strategic_importance}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

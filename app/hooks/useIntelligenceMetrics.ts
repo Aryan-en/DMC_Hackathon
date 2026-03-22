@@ -46,6 +46,31 @@ type PipelineModel = {
   gpu: string;
 };
 
+type MEARelation = {
+  country_pair: string;
+  status: string;
+  key_issues: string[];
+  confidence: number;
+  intelligence_priority: string;
+};
+
+type RegionalHotspot = {
+  region: string;
+  countries_involved: string[];
+  tension_level: string;
+  intelligence_assessment: string;
+  strategic_importance: string;
+};
+
+type StrategicSummary = {
+  total_bilateral_relations: number;
+  mea_documents_ingested: number;
+  countries_covered: number;
+  data_classification: string;
+  primary_source: string;
+  analysis_confidence: number;
+};
+
 type ClimateRegion = {
   region: string;
   risk_level: string;
@@ -65,6 +90,9 @@ type IntelligenceMetrics = {
   briefs: StrategicBrief[];
   models: PipelineModel[];
   climateRegions: ClimateRegion[];
+  meaSummary?: StrategicSummary;
+  meaRelations?: MEARelation[];
+  regionalHotspots?: RegionalHotspot[];
 };
 
 // Fallback sample data
@@ -167,7 +195,7 @@ export function useIntelligenceMetrics() {
 
     async function load() {
       try {
-        const [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes] = await Promise.allSettled([
+        const [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes, meaRes] = await Promise.allSettled([
           apiGet<{ entities: ExtractedEntity[] }>('/api/intelligence/entity-extraction'),
           apiGet<{ languages: LanguageDistribution[] }>('/api/intelligence/language-distribution'),
           apiGet<{ keywords: TrendingKeyword[] }>('/api/intelligence/trending-keywords'),
@@ -175,6 +203,7 @@ export function useIntelligenceMetrics() {
           apiGet<{ briefs: StrategicBrief[] }>('/api/intelligence/strategic-briefs'),
           apiGet<{ models: PipelineModel[] }>('/api/intelligence/pipeline-status'),
           apiGet<{ regions: ClimateRegion[] }>('/api/intelligence/climate-intelligence'),
+          apiGet<{ summary: StrategicSummary; key_relations: MEARelation[]; regional_hotspots: RegionalHotspot[] }>('/api/intelligence/mea-strategic-relations'),
         ]);
 
         if (!active) return;
@@ -188,12 +217,15 @@ export function useIntelligenceMetrics() {
           briefs: briefsRes.status === 'fulfilled' && briefsRes.value?.briefs ? briefsRes.value.briefs : SAMPLE_BRIEFS,
           models: modelsRes.status === 'fulfilled' && modelsRes.value?.models ? modelsRes.value.models : SAMPLE_MODELS,
           climateRegions: climateRes.status === 'fulfilled' && climateRes.value?.regions ? climateRes.value.regions : SAMPLE_CLIMATE_REGIONS,
+          meaSummary: meaRes.status === 'fulfilled' && meaRes.value?.summary ? meaRes.value.summary : undefined,
+          meaRelations: meaRes.status === 'fulfilled' && meaRes.value?.key_relations ? meaRes.value.key_relations : undefined,
+          regionalHotspots: meaRes.status === 'fulfilled' && meaRes.value?.regional_hotspots ? meaRes.value.regional_hotspots : undefined,
         };
 
         setData(newData);
 
         // Only show error if all endpoints failed
-        const allFailed = [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes].every(
+        const allFailed = [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes, meaRes].every(
           (r) => r.status === 'rejected'
         );
         setError(allFailed ? 'Live intelligence data unavailable - displaying sample data' : null);
@@ -208,6 +240,9 @@ export function useIntelligenceMetrics() {
           briefs: SAMPLE_BRIEFS,
           models: SAMPLE_MODELS,
           climateRegions: SAMPLE_CLIMATE_REGIONS,
+          meaSummary: undefined,
+          meaRelations: undefined,
+          regionalHotspots: undefined,
         });
         setError(err instanceof Error ? err.message : 'Failed to load intelligence metrics - using sample data');
       } finally {

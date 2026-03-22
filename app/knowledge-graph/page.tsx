@@ -265,102 +265,102 @@ export default function KnowledgeGraphPage() {
   // Entity category system
   const entityCategories = [
     {
-      emoji: '🌍',
+      emoji: '',
       label: 'Geopolitical',
       color: '#00d4ff',
       entities: ['Country', 'State/Region', 'City', 'Territory'],
     },
     {
-      emoji: '👤',
+      emoji: '',
       label: 'Actors',
       color: '#8b5cf6',
       entities: ['Leaders', 'Organizations', 'Governments', 'NGOs'],
     },
     {
-      emoji: '📜',
+      emoji: '',
       label: 'Governance',
       color: '#00ff88',
       entities: ['Policies', 'Schemes', 'Treaties', 'Laws'],
     },
     {
-      emoji: '📊',
+      emoji: '',
       label: 'Economy',
       color: '#f59e0b',
       entities: ['GDP', 'Trade', 'Industry', 'Inflation'],
     },
     {
-      emoji: '🌦️',
+      emoji: '',
       label: 'Environment',
       color: '#06b6d4',
       entities: ['Flood', 'Cyclone', 'Climate Events', 'Disasters'],
     },
     {
-      emoji: '⚡',
+      emoji: '',
       label: 'Events',
       color: '#ef4444',
       entities: ['News', 'Agreements', 'Conflicts', 'Incidents'],
     },
     {
-      emoji: '🧠',
+      emoji: '',
       label: 'Social',
       color: '#ec4899',
       entities: ['Sentiment', 'Population', 'Public Opinion', 'Culture'],
     },
   ];
 
-  // Relationship types - most important connections 🔥
+  // Relationship types - most important connections
   const relationshipTypes = [
     {
-      icon: '💼',
+      icon: '',
       type: 'trades_with',
       description: 'Commercial exchange',
       color: '#f59e0b',
       strength: 'economic',
     },
     {
-      icon: '🤝',
+      icon: '',
       type: 'allies_with',
       description: 'Political alliance',
       color: '#00ff88',
       strength: 'diplomatic',
     },
     {
-      icon: '⚔️',
+      icon: '',
       type: 'conflicts_with',
       description: 'Active conflict',
       color: '#ef4444',
       strength: 'critical',
     },
     {
-      icon: '🔄',
+      icon: '',
       type: 'affects',
       description: 'Direct influence',
       color: '#8b5cf6',
       strength: 'high',
     },
     {
-      icon: '📈',
+      icon: '',
       type: 'impacts',
       description: 'Cascading effect',
       color: '#06b6d4',
       strength: 'medium',
     },
     {
-      icon: '📍',
+      icon: '',
       type: 'located_in',
       description: 'Geographic relation',
       color: '#00d4ff',
       strength: 'structural',
     },
     {
-      icon: '🏛️',
+      icon: '',
       type: 'belongs_to',
       description: 'Organizational membership',
       color: '#8b5cf6',
       strength: 'structural',
     },
     {
-      icon: '💰',
+      icon: '',
       type: 'invests_in',
       description: 'Financial investment',
       color: '#f59e0b',
@@ -643,7 +643,7 @@ export default function KnowledgeGraphPage() {
           <div ref={nodeAnalysisRef} className="glass-card rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>📊 Node Analysis: {selectedNodeId}</h3>
+                <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Node Analysis: {selectedNodeId}</h3>
                 <p className="text-xs mt-1" style={{ color: '#64748b' }}>Detailed node and relationship breakdown</p>
               </div>
               <button
@@ -657,7 +657,7 @@ export default function KnowledgeGraphPage() {
 
             {/* Node Properties */}
             <div className="mb-5 p-4 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(0,212,255,0.2)' }}>
-              <h4 className="font-semibold text-xs mb-3" style={{ color: '#00d4ff' }}>🔍 Node Properties</h4>
+              <h4 className="font-semibold text-xs mb-3" style={{ color: '#00d4ff' }}>Node Properties</h4>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-2xs">
                 <div>
                   <div style={{ color: '#94a3b8' }}>Name</div>
@@ -699,7 +699,7 @@ export default function KnowledgeGraphPage() {
               </div>
             )}
 
-            <h4 className="font-semibold text-xs mb-3" style={{ color: '#c4cdd8' }}>🔥 Connected Relationships</h4>
+            <h4 className="font-semibold text-xs mb-3" style={{ color: '#c4cdd8' }}>Connected Relationships</h4>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {selectedNodeRelationships.length > 0 ? (
                 selectedNodeRelationships.map((rel, idx) => {

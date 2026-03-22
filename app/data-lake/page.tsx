@@ -82,11 +82,11 @@ export default function DataLakePage() {
                 borderBottom: activeTab === tab ? '2px solid #00d4ff' : '2px solid transparent',
               }}
             >
-              {tab === 'datasets' && '📦 Datasets'}
-              {tab === 'quality' && '✅ Quality'}
-              {tab === 'lineage' && '🔗 Lineage'}
-              {tab === 'costs' && '💰 Costs'}
-              {tab === 'views' && '👁️ Views'}
+              {tab === 'datasets' && 'Datasets'}
+              {tab === 'quality' && 'Quality'}
+              {tab === 'lineage' && 'Lineage'}
+              {tab === 'costs' && 'Costs'}
+              {tab === 'views' && 'Views'}
             </button>
           ))}
         </div>
@@ -94,7 +94,7 @@ export default function DataLakePage() {
         {/* Datasets Tab */}
         {activeTab === 'datasets' && (
           <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>📊 Dataset Catalog (MEA + IndiAPI)</h3>
+            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Dataset Catalog (MEA + IndiAPI)</h3>
             <div className="overflow-x-auto">
               <table className="w-full data-table">
                 <thead>
@@ -132,7 +132,7 @@ export default function DataLakePage() {
         {/* Quality Tab */}
         {activeTab === 'quality' && (
           <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>✅ Data Quality Metrics</h3>
+            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Data Quality Metrics</h3>
             <div className="overflow-x-auto">
               <table className="w-full data-table">
                 <thead>
@@ -163,7 +163,7 @@ export default function DataLakePage() {
         {/* Lineage Tab */}
         {activeTab === 'lineage' && (
           <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>🔗 Data Lineage Tracking</h3>
+            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Data Lineage Tracking</h3>
             <div className="space-y-3">
               {data.lineage.map((l) => (
                 <div key={l.dataset} className="p-3 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
@@ -185,7 +185,7 @@ export default function DataLakePage() {
         {/* Costs Tab */}
         {activeTab === 'costs' && (
           <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>💰 Query Cost Monitoring</h3>
+            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Query Cost Monitoring</h3>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' }}>
                 <div className="text-xs" style={{ color: '#f59e0b', marginBottom: '0.5rem' }}>Total Cost (24h)</div>
@@ -220,7 +220,7 @@ export default function DataLakePage() {
         {/* Materialized Views Tab */}
         {activeTab === 'views' && (
           <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>👁️ Materialized Views</h3>
+            <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>Materialized Views</h3>
             <div className="space-y-3">
               {data.materialized_views.map((view) => (
                 <div key={view.name} className="p-4 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>

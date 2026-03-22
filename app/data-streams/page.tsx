@@ -43,7 +43,7 @@ export default function DataStreamsPage() {
               color: '#b84a4a',
             }}
           >
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
@@ -113,7 +113,7 @@ export default function DataStreamsPage() {
         <div className="glass-card rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>
-              📊 Kafka Topics
+              Kafka Topics
             </h3>
             <span className="text-2xs" style={{ color: '#64748b' }}>
               {loading ? 'Loading...' : 'Live'}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Sorry for the inconvenience.</title>
+<style type="text/css">
+* {padding:0; margin:0;}
+html, body {min-height:100%; height:100%;}
+body {background:#f8f8f8 url(images/error-bg.gif) left bottom repeat-x; font-family:Tahoma, Geneva, sans-serif; font-size:16px; color:#333;}
+.buttonGo {background:url(images/mea-button.gif) left top no-repeat; width:183px; height:43px; display:inline-block; text-indent:-9999px;  float:left;}
+.buttonContact {background:url(images/writeus-button.gif) left top no-repeat; width:183px; height:43px; display:inline-block; text-indent:-9999px; margin-left:20px;}
+table td{ margin:0; padding:0; vertical-align:top;}
+</style>
+</head>
+
+<body>
+
+<table style="width:100%">
+  <!-- <tr>
+    <td  style="background:url(images/top-striep.gif) center top no-repeat; height:60px;">&nbsp;</td>
+  </tr> -->
+  <tr>
+    <td >
+	<div style="background:#fff; padding:50px; margin:100px auto; width:968px; border-radius:10px; box-shadow:0px 2px 4px 0px #d1d1d1;">
+	<table>
+     <!-- <tr>
+        <td style="height:10px;"><img src="images/box-top.gif" width="968" height="10" alt="" /></td>
+      </tr> -->
+      <tr>
+        <td >
+		<table style="width:100%;">
+         <!-- <tr>
+            <td >&nbsp;</td>
+            <td style="height:40px" >&nbsp;</td>
+            <td >&nbsp;</td>
+          </tr> -->
+          <tr>
+            <td style="width:6%" >&nbsp;</td>
+            <td ><table style="width:100%">
+              <tr>
+                <td style="height:100px"  ><a href="index.htm"><img src="images/logo_error.gif" width="371" height="68" alt="Ministry of External Affairs, Government of India" title="Ministry of External Affairs, Government of India" border="0" /></a></td>
+              </tr>
+              <tr>
+                <td  >
+                  <span style="font-size:22px; color:#cfcfcf; font-weight:bold;">Sorry for the inconvenience.</span></td>
+              </tr>
+              <tr>
+                <td style="height:15px;"  ></td>
+              </tr>
+              <tr>
+                <td   style="font-family:Arial, Helvetica, sans-serif; line-height:22px;">It seems that the page you were trying to reach doesn't exist anymore, or maybe it has just moved. Feel free to provide your feedback if the problem persist further or even you can contact us if you are not getting specific content on this portal you are looking for.</td>
+              </tr>
+              <tr>
+                <td style="height:10px;"  >&nbsp;</td>
+              </tr>
+              <tr>
+                <td style="height:43px;"><a href="index.htm" class="buttonGo" title="Back to Home">http://www.mea.gov.in/</a><a href="feedback.htm" class="buttonContact" title="Write Us">http://mea.gov.in/feedback.htm</a></td>
+              </tr>
+            </table></td>
+            <td style="width:38%; padding-bottom:20px;"><img src="images/minst-image.gif" width="230" height="221" alt="" /></td>
+          </tr>
+          <!-- <tr>
+            <td >&nbsp;</td>
+            <td style="height:40px" >&nbsp;</td>
+            <td >&nbsp;</td>
+          </tr> -->
+        </table>
+		
+		</td>
+      </tr>
+     <!-- <tr>
+        <td style="height:10px;"><img src="images/box-bottom.gif" width="968" height="10" alt="" /></td>
+      </tr> -->
+    </table>
+	</div>
+	</td>
+  </tr>
+  <!-- <tr>
+    <td >&nbsp;</td>
+  </tr> -->
+</table>
+
+
+</body>
+</html>
