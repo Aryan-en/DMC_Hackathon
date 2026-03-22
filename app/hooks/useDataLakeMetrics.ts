@@ -22,10 +22,26 @@ type DataLakeMetrics = {
   datasets: Dataset[];
 };
 
+// Fallback sample data
+const SAMPLE_SUMMARY: Summary = {
+  total_size_gb: 847.3,
+  record_count: 12450000,
+  datasets: 6,
+};
+
+const SAMPLE_DATASETS: Dataset[] = [
+  { name: 'diplomatic_cables', format: 'parquet', records: 3200000, size_gb: 245.1, tier: 'hot' },
+  { name: 'economic_indicators', format: 'parquet', records: 4500000, size_gb: 198.7, tier: 'hot' },
+  { name: 'geospatial_events', format: 'parquet', records: 1800000, size_gb: 156.2, tier: 'warm' },
+  { name: 'media_corpus', format: 'json', records: 1250000, size_gb: 112.4, tier: 'warm' },
+  { name: 'satellite_imagery_meta', format: 'parquet', records: 950000, size_gb: 89.3, tier: 'cold' },
+  { name: 'historical_archives', format: 'csv', records: 750000, size_gb: 45.6, tier: 'cold' },
+];
+
 export function useDataLakeMetrics() {
   const [data, setData] = useState<DataLakeMetrics>({
-    summary: { total_size_gb: 0, record_count: 0, datasets: 0 },
-    datasets: [],
+    summary: SAMPLE_SUMMARY,
+    datasets: SAMPLE_DATASETS,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,9 +58,12 @@ export function useDataLakeMetrics() {
 
         if (!active) return;
         setData({ summary: summaryRes, datasets: datasetsRes.datasets });
+        setError(null);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Failed to load data lake metrics');
+        // Use sample data as fallback
+        setData({ summary: SAMPLE_SUMMARY, datasets: SAMPLE_DATASETS });
+        setError(err instanceof Error ? err.message : 'Failed to load data lake metrics - using sample data');
       } finally {
         if (active) setLoading(false);
       }

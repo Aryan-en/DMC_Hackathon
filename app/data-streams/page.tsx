@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 export default function DataStreamsPage() {
   const { data, loading, error } = useStreamsMetrics(5000);
-  const [refreshTime, setRefreshTime] = useState<string>('');
+  const [refreshTime, setRefreshTime] = useState<string | null>(null);
 
   useEffect(() => {
     const updateTime = () => {
@@ -104,7 +104,7 @@ export default function DataStreamsPage() {
               {avgLatency.toFixed(0)}ms
             </div>
             <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              updated {refreshTime}
+              {refreshTime ? `updated ${refreshTime}` : 'updating...'}
             </div>
           </div>
         </div>

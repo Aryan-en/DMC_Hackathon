@@ -31,7 +31,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 8,
     economicIndicator: 85,
     populationDensity: 25,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 83, s: 15, e: -50, w: -170 },
   },
   {
@@ -43,7 +43,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 12,
     economicIndicator: 55,
     populationDensity: 22,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 12, s: -56, e: -35, w: -82 },
   },
   {
@@ -55,7 +55,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 5,
     economicIndicator: 80,
     populationDensity: 70,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 71, s: 36, e: 40, w: -10 },
   },
   {
@@ -67,7 +67,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 18,
     economicIndicator: 40,
     populationDensity: 35,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 37, s: -35, e: 55, w: -20 },
   },
   {
@@ -79,7 +79,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 10,
     economicIndicator: 65,
     populationDensity: 55,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 42, s: 12, e: 65, w: 25 },
   },
   {
@@ -91,7 +91,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 22,
     economicIndicator: 75,
     populationDensity: 120,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: 77, s: -10, e: 180, w: 55 },
   },
   {
@@ -103,7 +103,7 @@ const sampleRegions: RegionData[] = [
     climateEvents: 6,
     economicIndicator: 82,
     populationDensity: 3,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: '2026-03-22T12:00:00Z',
     bounds: { n: -10, s: -47, e: 180, w: 113 },
   },
 ];

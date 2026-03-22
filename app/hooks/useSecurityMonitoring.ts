@@ -44,7 +44,7 @@ const SAMPLE_SUMMARY: SecuritySummary = {
     critical: 1,
   },
   critical_unresolved: 1,
-  timestamp: new Date().toISOString(),
+  timestamp: '2026-03-22T12:00:00Z',
 };
 
 const SAMPLE_CRITICAL_EVENTS: SecurityEvent[] = [
@@ -55,7 +55,7 @@ const SAMPLE_CRITICAL_EVENTS: SecurityEvent[] = [
     user_id: 'user-12345',
     resource: 'users/admin-role',
     description: 'Unauthorized privilege escalation attempt detected',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    timestamp: '2026-03-22T11:00:00Z',
   },
 ];
 
@@ -64,7 +64,7 @@ const SAMPLE_DATA: SecurityMonitoringData = {
   critical_events: SAMPLE_CRITICAL_EVENTS,
   recent_events_count: 42,
   current_status: 'degraded',
-  last_updated: new Date().toISOString(),
+  last_updated: '2026-03-22T12:00:00Z',
 };
 
 export function useSecurityMonitoring(pollInterval = 10000) {
@@ -90,7 +90,7 @@ export function useSecurityMonitoring(pollInterval = 10000) {
         setError(null);
       } catch (err) {
         if (!active) return;
-        console.error('Error loading security monitoring:', err);
+        console.warn('Error loading security monitoring (using sample data):', err);
         setError(err instanceof Error ? err.message : 'Failed to load security data');
         // Keep using sample data on error
       } finally {

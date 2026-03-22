@@ -23,6 +23,12 @@ export async function apiGet<T>(path: string): Promise<T> {
 
     const payload = await parseJson(response);
     return payload.data as T;
+  } catch (error) {
+    // Re-throw with more context
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout - API server may be unavailable');
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }

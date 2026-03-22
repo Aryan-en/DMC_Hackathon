@@ -86,15 +86,81 @@ type HookOptions = {
   maxPaths?: number;
 };
 
+// Fallback sample data
+const SAMPLE_NODE_TYPES: NodeType[] = [
+  { type: 'Country', count: 195, color: '#3b82f6' },
+  { type: 'Organization', count: 342, color: '#10b981' },
+  { type: 'Person', count: 1205, color: '#f59e0b' },
+  { type: 'Event', count: 876, color: '#ef4444' },
+  { type: 'Treaty', count: 128, color: '#8b5cf6' },
+  { type: 'Resource', count: 94, color: '#06b6d4' },
+];
+
+const SAMPLE_RELATIONSHIPS: Relationship[] = [
+  { source: 'Russia', target: 'EU', relation: 'SANCTIONS', strength: 0.92, date: '2026-03-15', impact: 'high' },
+  { source: 'China', target: 'USA', relation: 'TRADE_PARTNER', strength: 0.85, date: '2026-03-14' },
+  { source: 'India', target: 'Russia', relation: 'DEFENSE_AGREEMENT', strength: 0.78, date: '2026-03-12' },
+  { source: 'NATO', target: 'Ukraine', relation: 'MILITARY_SUPPORT', strength: 0.88, date: '2026-03-10', impact: 'critical' },
+  { source: 'OPEC', target: 'Global Markets', relation: 'PRICE_INFLUENCE', strength: 0.81, date: '2026-03-08' },
+  { source: 'EU', target: 'China', relation: 'DIPLOMATIC_TENSION', strength: 0.67, date: '2026-03-05' },
+];
+
+const SAMPLE_PATHS: Path[] = [
+  { chain: ['Russia', 'SANCTIONS', 'EU', 'TRADE_PARTNER', 'China'], strength: 0.74, hops: 2 },
+  { chain: ['Russia', 'DEFENSE_AGREEMENT', 'India', 'TRADE_PARTNER', 'EU'], strength: 0.68, hops: 2 },
+  { chain: ['Russia', 'ENERGY_SUPPLIER', 'Europe', 'NATO_MEMBER', 'EU'], strength: 0.71, hops: 2 },
+];
+
+const SAMPLE_SHACL_SUMMARY: ShaclSummary = {
+  shapes_total: 12,
+  shapes_passed: 9,
+  shapes_warn: 2,
+  total_violations: 3,
+};
+
+const SAMPLE_SHACL_SHAPES: ShaclShape[] = [
+  { shape: 'CountryShape', target: 'Country', constraints: 8, target_nodes: 195, violations: 0, status: 'passed' },
+  { shape: 'OrganizationShape', target: 'Organization', constraints: 6, target_nodes: 342, violations: 2, status: 'warning' },
+  { shape: 'PersonShape', target: 'Person', constraints: 5, target_nodes: 1205, violations: 1, status: 'warning' },
+  { shape: 'EventShape', target: 'Event', constraints: 7, target_nodes: 876, violations: 0, status: 'passed' },
+];
+
+const SAMPLE_CONFLICT: ConflictMetrics = {
+  total_edges: 4562,
+  high_risk_edges: 342,
+  risk_ratio: 0.075,
+  hotspots: [
+    { entity: 'Ukraine', hits: 89 },
+    { entity: 'Taiwan', hits: 67 },
+    { entity: 'South China Sea', hits: 54 },
+    { entity: 'Iran', hits: 48 },
+    { entity: 'Sahel', hits: 41 },
+  ],
+};
+
+const SAMPLE_CENTRALITY: CentralityStats = {
+  node_count: 2840,
+  edge_count: 4562,
+  avg_degree: 3.21,
+  density: 0.0011,
+  top_central_nodes: [
+    { entity: 'United States', degree: 142, centrality: 0.89 },
+    { entity: 'China', degree: 128, centrality: 0.84 },
+    { entity: 'Russia', degree: 115, centrality: 0.79 },
+    { entity: 'European Union', degree: 108, centrality: 0.76 },
+    { entity: 'India', degree: 95, centrality: 0.71 },
+  ],
+};
+
 export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
   const [data, setData] = useState<KnowledgeGraphMetrics>({
-    nodeTypes: [],
-    relationships: [],
-    paths: [],
-    shaclSummary: { shapes_total: 0, shapes_passed: 0, shapes_warn: 0, total_violations: 0 },
-    shaclShapes: [],
-    conflict: { total_edges: 0, high_risk_edges: 0, risk_ratio: 0, hotspots: [] },
-    centrality: { node_count: 0, edge_count: 0, avg_degree: 0, density: 0, top_central_nodes: [] },
+    nodeTypes: SAMPLE_NODE_TYPES,
+    relationships: SAMPLE_RELATIONSHIPS,
+    paths: SAMPLE_PATHS,
+    shaclSummary: SAMPLE_SHACL_SUMMARY,
+    shaclShapes: SAMPLE_SHACL_SHAPES,
+    conflict: SAMPLE_CONFLICT,
+    centrality: SAMPLE_CENTRALITY,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,9 +202,20 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
           conflict: conflictRes,
           centrality: centralityRes,
         });
+        setError(null);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Failed to load knowledge graph metrics');
+        // Use sample data as fallback
+        setData({
+          nodeTypes: SAMPLE_NODE_TYPES,
+          relationships: SAMPLE_RELATIONSHIPS,
+          paths: SAMPLE_PATHS,
+          shaclSummary: SAMPLE_SHACL_SUMMARY,
+          shaclShapes: SAMPLE_SHACL_SHAPES,
+          conflict: SAMPLE_CONFLICT,
+          centrality: SAMPLE_CENTRALITY,
+        });
+        setError(err instanceof Error ? err.message : 'Failed to load knowledge graph metrics - using sample data');
       } finally {
         if (active) setLoading(false);
       }

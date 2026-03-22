@@ -703,7 +703,7 @@ export default function KnowledgeGraphPage() {
                 </div>
                 <div>
                   <div style={{ color: '#94a3b8' }}>Timestamp</div>
-                  <div className="font-mono" style={{ color: '#00ff88' }}>{new Date().toISOString().split('T')[0]}</div>
+                  <div className="font-mono" style={{ color: '#00ff88' }}>2026-03-22</div>
                 </div>
                 <div>
                   <div style={{ color: '#94a3b8' }}>Source</div>
@@ -789,7 +789,7 @@ export default function KnowledgeGraphPage() {
                         <div>
                           <div style={{ color: '#94a3b8' }}>Date</div>
                           <div className="font-mono" style={{ color: '#06b6d4' }}>
-                            {rel.date || new Date().toISOString().split('T')[0]}
+                            {rel.date || '2026-03-22'}
                           </div>
                         </div>
                         <div>

@@ -119,7 +119,7 @@ const SAMPLE_TRAINING: TrainingStatus = {
   epochs_target: 15,
   latest_loss: 0.0842,
   last_duration_sec: 342.5,
-  updated_at: new Date().toISOString(),
+  updated_at: '2026-03-22T12:00:00Z',
 };
 
 const SAMPLE_SERVING: ServingHealth = {
@@ -128,7 +128,7 @@ const SAMPLE_SERVING: ServingHealth = {
   latency_ms: 128.4,
   error_rate_pct: 0.23,
   uptime_pct: 99.97,
-  updated_at: new Date().toISOString(),
+  updated_at: '2026-03-22T12:00:00Z',
 };
 
 const SAMPLE_OVERVIEW: DashboardOverview = {
@@ -150,7 +150,7 @@ const SAMPLE_PYG: PygModelStatus = {
   recall: 0.79,
   f1_score: 0.80,
   avg_inference_ms: 42.3,
-  updated_at: new Date().toISOString(),
+  updated_at: '2026-03-22T12:00:00Z',
 };
 
 const SAMPLE_AB: AbSummary = {
@@ -214,7 +214,7 @@ export function usePredictionsMetrics(pollInterval = 5000) {
         setError(null);
       } catch (err) {
         if (!active) return;
-        console.error('Error loading predictions metrics:', err);
+        console.warn('Error loading predictions metrics (using sample data):', err);
         // Keep using sample data on error
         setError(err instanceof Error ? err.message : 'Using sample prediction data');
       } finally {

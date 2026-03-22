@@ -81,26 +81,21 @@ export function useStreamsMetrics(pollInterval = 5000) {
     async function load() {
       try {
         const [topicsRes, pipelinesRes] = await Promise.all([
-          apiGet<{ data: { topics: Topic[] } }>('/api/streams/topics'),
-          apiGet<{ data: { pipelines: Pipeline[] } }>('/api/streams/pipelines'),
+          apiGet<{ topics: Topic[] }>('/api/streams/topics'),
+          apiGet<{ pipelines: Pipeline[] }>('/api/streams/pipelines'),
         ]);
 
         if (!active) return;
 
-        // Handle nested data structure
-        const topics = topicsRes && typeof topicsRes === 'object' && 'data' in (topicsRes as any)
-          ? (topicsRes as any).data.topics
-          : (topicsRes as any)?.topics || SAMPLE_TOPICS;
-
-        const pipelines = pipelinesRes && typeof pipelinesRes === 'object' && 'data' in (pipelinesRes as any)
-          ? (pipelinesRes as any).data.pipelines
-          : (pipelinesRes as any)?.pipelines || SAMPLE_PIPELINES;
+        // apiGet returns payload.data directly, so destructure the response
+        const topics = topicsRes?.topics || SAMPLE_TOPICS;
+        const pipelines = pipelinesRes?.pipelines || SAMPLE_PIPELINES;
 
         setData({ topics, pipelines });
         setError(null);
       } catch (err) {
         if (!active) return;
-        console.error('Failed to load stream metrics:', err);
+        console.warn('Failed to load stream metrics (using sample data):', err);
         // Use sample data as fallback
         setData({ topics: SAMPLE_TOPICS, pipelines: SAMPLE_PIPELINES });
         setError(err instanceof Error ? err.message : 'Failed to load stream metrics - using sample data');
