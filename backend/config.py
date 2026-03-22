@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     OLLAMA_TIMEOUT_SEC: int = int(os.getenv("OLLAMA_TIMEOUT_SEC", "20"))
     SPACY_MODEL: str = os.getenv("SPACY_MODEL", "en_core_web_sm")
     
+    # Grok API for Bill Analysis (Efficient Large Document Processing)
+    GROK_API_KEY: str = os.getenv("GROK_API_KEY", "")
+    GROK_API_BASE_URL: str = os.getenv("GROK_API_BASE_URL", "https://api.x.ai/v1")
+    GROK_MODEL: str = os.getenv("GROK_MODEL", "grok-2")
+    GROK_MAX_TOKENS: int = int(os.getenv("GROK_MAX_TOKENS", "4096"))
+    GROK_TEMPERATURE: float = float(os.getenv("GROK_TEMPERATURE", "0.3"))
+    GROK_CHUNK_SIZE: int = int(os.getenv("GROK_CHUNK_SIZE", "8000"))  # Words per chunk for large documents
+    GROK_MAX_RETRIES: int = int(os.getenv("GROK_MAX_RETRIES", "3"))
+    GROK_TIMEOUT_SEC: int = int(os.getenv("GROK_TIMEOUT_SEC", "60"))
+    
     # Data Sources
     MEA_BASE_URL: str = "https://www.mea.gov.in"
     WORLDBANK_API_BASE: str = "https://api.worldbank.org/v2"

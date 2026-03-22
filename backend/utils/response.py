@@ -2,10 +2,10 @@
 
 from datetime import datetime
 import uuid
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 
-def build_success(data: Any, *, source: str = "db", latency_ms: Optional[int] = None, meta: Optional[dict] = None) -> dict:
+def build_success(data: Any, *, source: str = "db", latency_ms: Optional[int] = None, meta: Optional[dict] = None, progress: Optional[int] = None, logs: Optional[List[str]] = None) -> dict:
     base_meta = {
         "timestamp": datetime.utcnow().isoformat(),
         "request_id": str(uuid.uuid4()),
@@ -16,15 +16,22 @@ def build_success(data: Any, *, source: str = "db", latency_ms: Optional[int] = 
     if meta:
         base_meta.update(meta)
 
-    return {
+    response = {
         "status": "success",
         "data": data,
         "error": None,
         "meta": base_meta,
     }
+    
+    if progress is not None:
+        response["progress"] = progress
+    if logs is not None:
+        response["logs"] = logs
+
+    return response
 
 
-def build_error(code: str, message: str, *, status: str = "error", source: str = "service", meta: Optional[dict] = None) -> dict:
+def build_error(code: str, message: str, *, status: str = "error", source: str = "service", meta: Optional[dict] = None, progress: Optional[int] = None, logs: Optional[List[str]] = None) -> dict:
     base_meta = {
         "timestamp": datetime.utcnow().isoformat(),
         "request_id": str(uuid.uuid4()),
@@ -33,7 +40,7 @@ def build_error(code: str, message: str, *, status: str = "error", source: str =
     if meta:
         base_meta.update(meta)
 
-    return {
+    response = {
         "status": status,
         "data": None,
         "error": {
@@ -42,3 +49,10 @@ def build_error(code: str, message: str, *, status: str = "error", source: str =
         },
         "meta": base_meta,
     }
+    
+    if progress is not None:
+        response["progress"] = progress
+    if logs is not None:
+        response["logs"] = logs
+
+    return response

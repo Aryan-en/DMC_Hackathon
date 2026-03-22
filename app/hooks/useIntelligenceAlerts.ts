@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiGet } from '@/app/lib/api';
 
 export interface IntelligenceAlert {
   timestamp: string;
@@ -31,11 +32,10 @@ export function useIntelligenceAlerts() {
     const fetchAlerts = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/intelligence/live-alerts');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const result = await response.json();
-        if (result.success && result.data) {
+        const result = await apiGet<any>('/api/intelligence/live-alerts');
+        if (result && result.success && result.data) {
+          setData(result.data);
+        } else if (result && result.data) {
           setData(result.data);
         } else {
           throw new Error('Invalid response format');

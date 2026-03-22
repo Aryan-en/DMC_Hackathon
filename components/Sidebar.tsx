@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Globe, LayoutDashboard, Share2, Map, Brain,
-  Database, Shield, Layers, Activity, Zap
+  Database, Shield, Layers, Activity, Zap, FileText
 } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Strategic Overview', icon: LayoutDashboard, group: 'COMMAND' },
   { href: '/intelligence', label: 'AI Intelligence', icon: Brain, group: 'COMMAND' },
+  { href: '/bill-analysis', label: 'Bill Amendment', icon: FileText, group: 'COMMAND' },
   { href: '/knowledge-graph', label: 'Knowledge Graph', icon: Share2, group: 'ANALYSIS' },
   { href: '/geospatial', label: 'Geospatial Intel', icon: Map, group: 'ANALYSIS' },
   { href: '/predictions', label: 'Predictions Engine', icon: Zap, group: 'ANALYSIS' },
