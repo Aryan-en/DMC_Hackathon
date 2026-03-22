@@ -31,7 +31,10 @@ class Settings(BaseSettings):
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
+        "http://localhost:3002",
         "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3002",
         "https://ontora.example.com"
     ]
     

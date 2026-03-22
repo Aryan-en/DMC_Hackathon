@@ -55,7 +55,7 @@ export function useGeospatialHeatmap(options: HeatmapOptions = {}) {
           riskScore: Math.max(0, Math.min(100, region.riskScore + (Math.random() - 0.5) * 3)),
           climateEvents: Math.max(0, region.climateEvents + (Math.random() > 0.85 ? 1 : 0)),
           economicIndicator: Math.max(0, Math.min(100, region.economicIndicator + (Math.random() - 0.5) * 1.5)),
-          lastUpdate: new Date().toISOString(),
+          lastUpdate: new Date().toISOString(), // Safe: only in useEffect, client-side only
         }))
       );
     }, updateInterval);

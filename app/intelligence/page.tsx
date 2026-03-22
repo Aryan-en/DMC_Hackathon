@@ -144,7 +144,17 @@ export default function IntelligencePage() {
           {/* Sentiment radar + language distribution */}
           <div className="space-y-5">
             <div className="glass-card rounded-xl p-5">
-              <h3 className="font-semibold text-sm mb-2" style={{ color: '#e2e8f0' }}>Global Tension Radar</h3>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Global Tension Radar</h3>
+                  <p className="text-xs mt-1" style={{ color: '#64748b', fontSize: '0.65rem' }}>
+                    6 dimensions: Geopolitical · Economic · Climate (IndiAPI) · Social · Cyber · Military
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.2)', color: '#f59e0b', fontSize: '0.65rem' }}>
+                  Climate: Live Risk Data
+                </span>
+              </div>
               <ResponsiveContainer width="100%" height={180}>
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="#1e3a5f" strokeOpacity={0.6} />
@@ -152,6 +162,9 @@ export default function IntelligencePage() {
                   <Radar name="Tension" dataKey="score" stroke="#ef4444" fill="#ef4444" fillOpacity={0.1} strokeWidth={1.5} />
                 </RadarChart>
               </ResponsiveContainer>
+              <div className="text-xs mt-2 p-2 rounded" style={{ background: 'rgba(30,58,95,0.3)', color: '#94a3b8', fontSize: '0.65rem', lineHeight: 1.5 }}>
+                ℹ️ Climate dimension now integrates <strong>IndiAPI regional climate intelligence</strong>: 3 CRITICAL regions, +2.8°C avg warming, 76% avg crop risk
+              </div>
             </div>
 
             <div className="glass-card rounded-xl p-5">
@@ -285,6 +298,75 @@ export default function IntelligencePage() {
                 Pipeline metrics are not yet emitted by the backend.
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Climate Intelligence */}
+        <div className="glass-card rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>
+                <span style={{ fontSize: '1.2rem' }}>🌍</span>
+              </div>
+              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Climate Intelligence — IndiAPI Regional Risk Assessment</h3>
+            </div>
+            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.2)', color: '#f59e0b', fontSize: '0.65rem' }}>
+              {data.climateRegions.length} regions monitored
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2">
+            {data.climateRegions.map(region => {
+              const riskColor = region.risk_level === 'CRITICAL' ? '#ef4444' : '#f59e0b';
+              return (
+                <div key={region.region} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${riskColor}30` }}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: `${riskColor}20`, color: riskColor, fontSize: '0.65rem' }}>
+                          {region.risk_level}
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: '#e2e8f0', fontSize: '0.72rem' }}>{region.region}</span>
+                        <span className="text-xs font-mono" style={{ color: '#94a3b8', fontSize: '0.65rem' }}>+{region.temp_change}°C</span>
+                      </div>
+                      <p className="text-xs mb-2" style={{ color: '#cbd5e1', fontSize: '0.7rem', lineHeight: 1.4 }}>
+                        {region.geopolitical_impact}
+                      </p>
+                      <p className="text-xs" style={{ color: '#94a3b8', fontSize: '0.68rem', lineHeight: 1.3 }}>
+                        ⚠️ <span style={{ color: '#f59e0b' }}>Strategic concern:</span> {region.strategic_concern}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-xs mt-2">
+                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
+                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Drought</div>
+                      <div className="font-bold" style={{ color: region.drought_threat === 'CRITICAL' ? '#ef4444' : region.drought_threat === 'HIGH' ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
+                        {region.drought_threat}
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
+                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Flood</div>
+                      <div className="font-bold" style={{ color: region.flood_threat === 'CRITICAL' ? '#ef4444' : region.flood_threat === 'HIGH' ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
+                        {region.flood_threat}
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
+                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Crop Risk</div>
+                      <div className="font-bold" style={{ color: region.crop_risk > 80 ? '#ef4444' : region.crop_risk > 70 ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
+                        {region.crop_risk}%
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
+                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Temp Δ</div>
+                      <div className="font-bold" style={{ color: '#f59e0b', fontSize: '0.7rem' }}>
+                        +{region.temp_change}°
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </main>

@@ -1,7 +1,6 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import GeospatialHeatmap from '@/app/components/GeospatialHeatmap';
 import { Filter, RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useKnowledgeGraphMetrics } from '@/app/hooks/useKnowledgeGraphMetrics';
@@ -261,6 +260,7 @@ export default function KnowledgeGraphPage() {
   const [zoom, setZoom] = useState(1);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number>(-1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const nodeAnalysisRef = useRef<HTMLDivElement>(null);
 
   // Entity category system
   const entityCategories = [
@@ -388,6 +388,13 @@ export default function KnowledgeGraphPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Scroll to Node Analysis section when a node is clicked
+  useEffect(() => {
+    if (selectedNodeId && nodeAnalysisRef.current) {
+      nodeAnalysisRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedNodeId]);
+
   const { data, loading, error, reload } = useKnowledgeGraphMetrics({
     source,
     target,
@@ -432,6 +439,8 @@ export default function KnowledgeGraphPage() {
     setSource(sourceInput.trim() || 'Russia');
     setTarget(targetInput.trim() || 'EU');
     setSelectedPathIndex(-1);
+    // Trigger reload to fetch new data with updated query
+    reload();
   };
 
   return (
@@ -461,8 +470,19 @@ export default function KnowledgeGraphPage() {
               <span className="text-xs" style={{ color: '#334155' }}>{'->'}</span>
               <input value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder="Path target" className="bg-transparent text-xs outline-none w-28" style={{ color: '#94a3b8' }} />
             </div>
-            <button onClick={applyQuery} className="px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff' }}>
-              Run Query
+            <button 
+              onClick={applyQuery} 
+              disabled={loading}
+              className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
+              style={{ 
+                background: loading ? 'rgba(0,212,255,0.05)' : 'rgba(0,212,255,0.1)', 
+                border: loading ? '1px solid rgba(0,212,255,0.2)' : '1px solid rgba(0,212,255,0.4)',
+                color: '#00d4ff',
+                opacity: loading ? 0.6 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? '⟳ Querying...' : 'Run Query'}
             </button>
           </div>
 
@@ -470,18 +490,71 @@ export default function KnowledgeGraphPage() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
               <Filter size={12} style={{ color: '#64748b' }} />
               <label className="text-xs" style={{ color: '#64748b' }}>Min Strength</label>
-              <select value={minStrength} onChange={(e) => setMinStrength(Number(e.target.value))} className="bg-transparent text-xs outline-none" style={{ color: '#94a3b8' }}>
+              <select 
+                value={minStrength} 
+                onChange={(e) => {
+                  const newValue = Number(e.target.value);
+                  setMinStrength(newValue);
+                  // Auto-trigger reload when filter changes
+                  setTimeout(() => reload(), 50);
+                }} 
+                className="bg-transparent text-xs outline-none" 
+                style={{ color: '#94a3b8', cursor: 'pointer' }}
+              >
                 <option value={0}>0</option>
                 <option value={40}>40</option>
                 <option value={60}>60</option>
                 <option value={80}>80</option>
               </select>
             </div>
-            <button onClick={reload} className="px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6' }}>
-              Refresh
+            <button 
+              onClick={reload}
+              disabled={loading}
+              className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${loading ? 'animate-spin' : ''}`}
+              style={{ 
+                background: loading ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.1)', 
+                border: loading ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(139,92,246,0.3)',
+                color: '#8b5cf6',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transformOrigin: 'center',
+              }}
+            >
+              {loading ? '↻' : '↻ Refresh'}
             </button>
           </div>
         </div>
+
+        {/* Active Query Status */}
+        {(source !== 'Russia' || target !== 'EU' || queryInput || minStrength > 0) && (
+          <div className="px-4 py-3 rounded-lg" style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)' }}>
+            <div className="text-xs" style={{ color: '#00d4ff', fontWeight: 600, marginBottom: '0.25rem' }}>
+              Active Query:
+            </div>
+            <div className="text-xs space-y-1" style={{ color: '#cbd5e1' }}>
+              {source && target && (
+                <div>
+                  <span style={{ color: '#94a3b8' }}>Paths:</span> {source} → {target}
+                </div>
+              )}
+              {queryInput && (
+                <div>
+                  <span style={{ color: '#94a3b8' }}>Search:</span> {queryInput}
+                </div>
+              )}
+              {minStrength > 0 && (
+                <div>
+                  <span style={{ color: '#94a3b8' }}>Min Strength:</span> {minStrength}%
+                </div>
+              )}
+              <div style={{ color: '#64748b', fontSize: '0.65rem', marginTop: '0.5rem' }}>
+                Found {data.relationships.length} relationships • {data.paths.length} path(s)
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-5 gap-4">
           {[
@@ -540,113 +613,6 @@ export default function KnowledgeGraphPage() {
           </div>
         </div>
 
-        {/* Geospatial Heatmap Section */}
-        <div className="glass-card rounded-xl overflow-hidden flex flex-col" style={{ height: '600px', border: '2px solid rgba(0,212,255,0.2)' }}>
-          <GeospatialHeatmap onRegionClick={(region) => {
-            console.log('Region clicked:', region);
-          }} />
-        </div>
-
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Entity Categories</h3>
-            <span className="text-xs" style={{ color: '#64748b' }}>{entityCategories.length} categories</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {entityCategories.map((category, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-lg text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg"
-                style={{
-                  background: `rgba(${parseInt(category.color.slice(1, 3), 16)}, ${parseInt(category.color.slice(3, 5), 16)}, ${parseInt(category.color.slice(5, 7), 16)}, 0.08)`,
-                  border: `1px solid ${category.color}33`,
-                }}
-              >
-                <div className="text-2xl mb-2">{category.emoji}</div>
-                <div className="text-xs font-semibold mb-2" style={{ color: category.color }}>
-                  {category.label}
-                </div>
-                <div className="text-2xs space-y-1">
-                  {category.entities.map((entity, eidx) => (
-                    <div key={eidx} style={{ color: '#94a3b8', fontSize: '0.65rem' }}>
-                      {entity}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {data.nodeTypes.length > 0 && (
-          <div className="glass-card rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Node Type Distribution</h3>
-              <span className="text-xs" style={{ color: '#64748b' }}>Current graph composition</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {data.nodeTypes.map((nodeType, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-lg"
-                  style={{
-                    background: `rgba(${parseInt(nodeType.color.slice(1, 3), 16)}, ${parseInt(nodeType.color.slice(3, 5), 16)}, ${parseInt(nodeType.color.slice(5, 7), 16)}, 0.08)`,
-                    border: `1px solid ${nodeType.color}33`,
-                  }}
-                >
-                  <div className="text-sm font-semibold" style={{ color: nodeType.color }}>
-                    {nodeType.type}
-                  </div>
-                  <div className="text-2xl font-bold mt-2" style={{ color: nodeType.color }}>
-                    {nodeType.count}
-                  </div>
-                  <div className="text-2xs mt-2" style={{ color: '#94a3b8' }}>
-                    {((nodeType.count / totalNodes) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}> Entity Relationships</h3>
-            <span className="text-xs" style={{ color: '#64748b' }}>Most important connections</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
-            {relationshipTypes.map((rel, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-lg cursor-pointer transition-all hover:scale-105 hover:shadow-lg"
-                style={{
-                  background: `${rel.color}08`,
-                  border: `1px solid ${rel.color}40`,
-                }}
-              >
-                <div className="text-2xl mb-2">{rel.icon}</div>
-                <div className="text-xs font-semibold mb-1" style={{ color: rel.color }}>
-                  {rel.type}
-                </div>
-                <div className="text-2xs mb-2" style={{ color: '#94a3b8' }}>
-                  {rel.description}
-                </div>
-                <div
-                  className="text-2xs px-2 py-1 rounded-full text-center"
-                  style={{
-                    background: `${rel.color}20`,
-                    color: rel.color,
-                    fontSize: '0.65rem',
-                    fontWeight: 600,
-                  }}
-                >
-                  {rel.strength}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="glass-card rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>{`Discovered Paths (${source} -> ${target})`}</h3>
@@ -674,7 +640,7 @@ export default function KnowledgeGraphPage() {
         </div>
 
         {selectedNodeId && (
-          <div className="glass-card rounded-xl p-5">
+          <div ref={nodeAnalysisRef} className="glass-card rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>📊 Node Analysis: {selectedNodeId}</h3>

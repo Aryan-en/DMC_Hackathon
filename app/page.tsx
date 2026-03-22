@@ -6,6 +6,7 @@ import AlertFeed from '@/components/AlertFeed';
 import { GlobalRiskChart, EntityBarChart, SentimentChart } from '@/components/Charts';
 import { useStrategicMetrics } from '@/app/hooks/useStrategicMetrics';
 import { useProcessingLog } from '@/app/hooks/useProcessingLog';
+import { useRelativeTime } from '@/app/hooks/useRelativeTime';
 import { useState } from 'react';
 import {
   Globe, Activity, Share2, Brain, AlertTriangle,
@@ -20,23 +21,12 @@ const TYPE_COLORS: Record<string, string> = {
   METRIC: '#4a6070',
 };
 
-function formatRelativeTs(isoTs: string) {
-  // Only calculate if we're on the client and can access Date.now()
-  if (typeof window === 'undefined') {
-    return 'T-unknown';
-  }
-  
-  const parsed = new Date(isoTs).getTime();
-  if (!Number.isFinite(parsed)) return 'T-unknown';
-  const diffMs = Date.now() - parsed;
-  const mins = Math.max(0, Math.floor(diffMs / 60000));
-  if (mins < 60) {
-    const secs = Math.max(0, Math.floor((diffMs % 60000) / 1000));
-    return `T-${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  const hrs = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return `T-${String(hrs).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+/**
+ * Component that safely renders timestamp without hydration mismatch
+ */
+function RelativeTimestamp({ timestamp }: { timestamp: string }) {
+  const relativeTime = useRelativeTime(timestamp);
+  return <span>{relativeTime}</span>;
 }
 
 export default function Home() {
@@ -256,7 +246,7 @@ export default function Home() {
                     className="font-mono shrink-0"
                     style={{ color: '#2a3d52', fontSize: '0.62rem', minWidth: '52px' }}
                   >
-                    {formatRelativeTs(entry.timestamp)}
+                    <RelativeTimestamp timestamp={entry.timestamp} />
                   </span>
                   <span
                     className="rounded font-bold shrink-0"

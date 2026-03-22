@@ -46,6 +46,17 @@ type PipelineModel = {
   gpu: string;
 };
 
+type ClimateRegion = {
+  region: string;
+  risk_level: string;
+  temp_change: number;
+  drought_threat: string;
+  flood_threat: string;
+  crop_risk: number;
+  geopolitical_impact: string;
+  strategic_concern: string;
+};
+
 type IntelligenceMetrics = {
   entities: ExtractedEntity[];
   languages: LanguageDistribution[];
@@ -53,6 +64,7 @@ type IntelligenceMetrics = {
   sentimentRadar: SentimentRadarPoint[];
   briefs: StrategicBrief[];
   models: PipelineModel[];
+  climateRegions: ClimateRegion[];
 };
 
 // Fallback sample data
@@ -104,6 +116,39 @@ const SAMPLE_MODELS: PipelineModel[] = [
   { name: 'Translation-Engine', version: 'v4.0', status: 'warming', infer: '120ms', gpu: 'A100 80GB' },
 ];
 
+const SAMPLE_CLIMATE_REGIONS: ClimateRegion[] = [
+  {
+    region: 'South Asia Plains',
+    risk_level: 'CRITICAL',
+    temp_change: 2.5,
+    drought_threat: 'HIGH',
+    flood_threat: 'CRITICAL',
+    crop_risk: 79,
+    geopolitical_impact: 'High - Monsoon failures affect food security in India, Bangladesh',
+    strategic_concern: 'Agricultural instability leads to migration and regional tensions',
+  },
+  {
+    region: 'Ganges Valley',
+    risk_level: 'CRITICAL',
+    temp_change: 2.7,
+    drought_threat: 'HIGH',
+    flood_threat: 'CRITICAL',
+    crop_risk: 84,
+    geopolitical_impact: 'Critical - Supports 400M+ people across India, Bangladesh, Nepal',
+    strategic_concern: 'Water stress conflicts over Ganges river sharing agreements',
+  },
+  {
+    region: 'Himalayan Region',
+    risk_level: 'HIGH',
+    temp_change: 3.2,
+    drought_threat: 'HIGH',
+    flood_threat: 'HIGH',
+    crop_risk: 78,
+    geopolitical_impact: 'High - Glacial melt impacts water supply for 2B+ people',
+    strategic_concern: 'Transnational water disputes (India-China, India-Pakistan)',
+  },
+];
+
 export function useIntelligenceMetrics() {
   const [data, setData] = useState<IntelligenceMetrics>({
     entities: SAMPLE_ENTITIES,
@@ -112,6 +157,7 @@ export function useIntelligenceMetrics() {
     sentimentRadar: SAMPLE_SENTIMENT_RADAR,
     briefs: SAMPLE_BRIEFS,
     models: SAMPLE_MODELS,
+    climateRegions: SAMPLE_CLIMATE_REGIONS,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,25 +167,36 @@ export function useIntelligenceMetrics() {
 
     async function load() {
       try {
-        const [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes] = await Promise.all([
+        const [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes] = await Promise.allSettled([
           apiGet<{ entities: ExtractedEntity[] }>('/api/intelligence/entity-extraction'),
           apiGet<{ languages: LanguageDistribution[] }>('/api/intelligence/language-distribution'),
           apiGet<{ keywords: TrendingKeyword[] }>('/api/intelligence/trending-keywords'),
           apiGet<{ radar: SentimentRadarPoint[] }>('/api/intelligence/sentiment-radar'),
           apiGet<{ briefs: StrategicBrief[] }>('/api/intelligence/strategic-briefs'),
           apiGet<{ models: PipelineModel[] }>('/api/intelligence/pipeline-status'),
+          apiGet<{ regions: ClimateRegion[] }>('/api/intelligence/climate-intelligence'),
         ]);
 
         if (!active) return;
-        setData({
-          entities: entityRes.entities,
-          languages: languageRes.languages,
-          keywords: keywordRes.keywords,
-          sentimentRadar: sentimentRes.radar,
-          briefs: briefsRes.briefs,
-          models: modelsRes.models,
-        });
-        setError(null);
+
+        // Handle each response individually for resilience
+        const newData: IntelligenceMetrics = {
+          entities: entityRes.status === 'fulfilled' && entityRes.value?.entities ? entityRes.value.entities : SAMPLE_ENTITIES,
+          languages: languageRes.status === 'fulfilled' && languageRes.value?.languages ? languageRes.value.languages : SAMPLE_LANGUAGES,
+          keywords: keywordRes.status === 'fulfilled' && keywordRes.value?.keywords ? keywordRes.value.keywords : SAMPLE_KEYWORDS,
+          sentimentRadar: sentimentRes.status === 'fulfilled' && sentimentRes.value?.radar ? sentimentRes.value.radar : SAMPLE_SENTIMENT_RADAR,
+          briefs: briefsRes.status === 'fulfilled' && briefsRes.value?.briefs ? briefsRes.value.briefs : SAMPLE_BRIEFS,
+          models: modelsRes.status === 'fulfilled' && modelsRes.value?.models ? modelsRes.value.models : SAMPLE_MODELS,
+          climateRegions: climateRes.status === 'fulfilled' && climateRes.value?.regions ? climateRes.value.regions : SAMPLE_CLIMATE_REGIONS,
+        };
+
+        setData(newData);
+
+        // Only show error if all endpoints failed
+        const allFailed = [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes].every(
+          (r) => r.status === 'rejected'
+        );
+        setError(allFailed ? 'Live intelligence data unavailable - displaying sample data' : null);
       } catch (err) {
         if (!active) return;
         // Use sample data as fallback
@@ -150,6 +207,7 @@ export function useIntelligenceMetrics() {
           sentimentRadar: SAMPLE_SENTIMENT_RADAR,
           briefs: SAMPLE_BRIEFS,
           models: SAMPLE_MODELS,
+          climateRegions: SAMPLE_CLIMATE_REGIONS,
         });
         setError(err instanceof Error ? err.message : 'Failed to load intelligence metrics - using sample data');
       } finally {

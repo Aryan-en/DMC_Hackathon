@@ -65,18 +65,45 @@ ENTITIES = [
     ("ORG", "IMF", "International Monetary Fund", 0.93, 689),
     ("ORG", "WHO", "World Health Organization", 0.92, 534),
     ("ORG", "BRICS", "Brazil, Russia, India, China, South Africa alliance", 0.91, 456),
+    # Military Organizations
+    ("ORG", "Indian Army", "Primary land-based service of the Indian Armed Forces", 0.96, 1432),
+    ("ORG", "Indian Navy", "Maritime service of Indian Armed Forces, operates in Indian Ocean", 0.95, 1198),
+    ("ORG", "Indian Air Force", "Aerial warfare branch of Indian Armed Forces", 0.94, 987),
+    ("ORG", "People's Liberation Army", "Military arm of Communist Party of China", 0.97, 2145),
+    ("ORG", "US Navy", "Maritime warfare service of United States Armed Forces", 0.98, 1876),
+    ("ORG", "Russian Armed Forces", "Military organization of Russian Federation", 0.96, 1654),
+    ("ORG", "Ministry of Defence India", "Government ministry overseeing Indian defence", 0.93, 856),
+    ("ORG", "Shanghai Cooperation Organization", "Regional military and security alliance", 0.92, 734),
+    ("ORG", "United States Indo-Pacific Command", "US military command for Indo-Pacific region", 0.94, 1023),
+    ("ORG", "Indian Coast Guard", "Maritime law enforcement and security agency", 0.91, 567),
+    # Military Personnel
     ("PER", "Vladimir Putin", "President of Russian Federation", 0.98, 956),
     ("PER", "Xi Jinping", "President of People's Republic of China", 0.97, 892),
     ("PER", "Narendra Modi", "Prime Minister of India", 0.97, 845),
     ("PER", "Joe Biden", "President of the United States", 0.96, 1234),
     ("PER", "Volodymyr Zelenskyy", "President of Ukraine", 0.95, 678),
+    ("PER", "General Manoj Pande", "Chief of Defence Staff, Indian Armed Forces", 0.92, 543),
+    ("PER", "Admiral R Hari Kumar", "Chief of Naval Staff, Indian Navy", 0.89, 412),
+    # Military Equipment/Weapons
+    ("ORG", "BrahMos Missile", "Supersonic cruise missile developed by India and Russia", 0.89, 634),
+    ("ORG", "S-400 Air Defence System", "Russian long-range surface-to-air missile system", 0.90, 723),
+    ("ORG", "INS Vikrant", "First Indian-built aircraft carrier", 0.88, 521),
+    ("ORG", "Type 055 Destroyer", "Chinese guided-missile destroyer", 0.87, 456),
+    # Military Locations
     ("LOC", "South China Sea", "Disputed maritime region in Southeast Asia", 0.94, 1203),
     ("LOC", "Taiwan Strait", "Waterway between Taiwan and mainland China", 0.93, 567),
     ("LOC", "Sahel Region", "Semi-arid region spanning West to East Africa", 0.91, 423),
     ("LOC", "Horn of Africa", "Peninsula in Northeast Africa", 0.90, 389),
+    ("LOC", "Lakshadweep Islands", "Strategic Indian territory in Arabian Sea", 0.88, 345),
+    ("LOC", "Andaman & Nicobar Islands", "Indian strategic military territory", 0.87, 298),
+    ("LOC", "Strait of Malacca", "Critical global maritime chokepoint", 0.91, 876),
+    # Events
     ("EVENT", "Belt and Road Initiative", "Chinese infrastructure development strategy", 0.91, 823),
     ("EVENT", "Ukraine Conflict", "Ongoing Russia-Ukraine military conflict", 0.96, 2341),
     ("EVENT", "COP28 Climate Summit", "28th Conference of the Parties", 0.89, 345),
+    ("EVENT", "India-China Border Tensions", "Military standoff at Ladakh border since 2020", 0.94, 1567),
+    ("EVENT", "US-China Military Escalation", "Rising military tensions between US and China", 0.93, 1342),
+    ("EVENT", "Indo-Pacific Strategy", "Coalition strategy for regional stability", 0.92, 987),
 ]
 
 DOCUMENTS = [
@@ -90,6 +117,17 @@ DOCUMENTS = [
     ("Cyber Threat Landscape Q1 2026", "Analysis of state-sponsored cyber operations targeting critical infrastructure across NATO member states.", "INTELLIGENCE", "en", "https://ontora.int/briefs/cyber-threats-q1-2026"),
     ("Middle East Diplomatic Developments", "Summary of diplomatic engagements and treaty negotiations across the Middle East region.", "MEA", "ar", "https://ontora.int/briefs/mideast-diplo-2026"),
     ("Trade Corridor Analysis: India-Central Asia", "Assessment of India's trade connectivity with Central Asian nations via Chabahar port and INSTC corridor.", "NEWS", "en", "https://ontora.int/briefs/india-central-asia-trade"),
+    # Military Intelligence Documents
+    ("India-China Military Posture Assessment 2026", "Detailed analysis of military buildup along India-China border with assessment of capabilities in Ladakh, Arunachal Pradesh, and Sikkim. Includes intelligence on PLA deployments, weapons systems, and command structure.", "INTELLIGENCE", "en", "https://ontora.int/briefs/india-china-military-2026"),
+    ("South China Sea Naval Capabilities Report", "Comprehensive assessment of Chinese naval operations in South China Sea including carrier strike group deployments, submarine activity, and artificial island military installations.", "INTELLIGENCE", "en", "https://ontora.int/briefs/scs-naval-2026"),
+    ("India Defence Modernization Strategy Q1 2026", "Analysis of Indian military modernization including induction of Tejas fighter aircraft, BrahMos missiles, INS Vikrant carrier operations, and indigenous defense technology development.", "MEA", "en", "https://mea.gov.in/defence/modernization-2026"),
+    ("US Indo-Pacific Military Strategy", "Strategic overview of US military posture in Indo-Pacific region including naval deployments, military alliances through QUAD and AUKUS, and response to PLA expansion.", "INTELLIGENCE", "en", "https://ontora.int/briefs/us-indopacific-strategy-2026"),
+    ("Russian Military Activities in Arctic and Eastern Europe", "Assessment of Russian military modernization, Arctic expansion strategy, and military presence along NATO borders. Includes nuclear capabilities review and submarine activity analysis.", "INTELLIGENCE", "en", "https://ontora.int/briefs/russia-military-2026"),
+    ("Taiwan Strait Military Dynamics", "Analysis of military tensions across Taiwan Strait with focus on PRC military threats, ROC defense capabilities, and international military posture. Includes cross-strait military balance assessment.", "INTELLIGENCE", "en", "https://ontora.int/briefs/taiwan-military-2026"),
+    ("Global Military Spending and Armament Trends 2026", "Worldwide analysis of defense budgets, military procurements, and arms race developments. Regional focus on Asia-Pacific, Europe, and Middle East with technology focus on AI, hypersonic weapons, and cyber warfare.", "NEWS", "en", "https://ontora.int/briefs/global-military-spending-2026"),
+    ("Cyber Warfare and Information Operations Assessment", "Strategic assessment of state-sponsored cyber attacks, information warfare capabilities, and critical infrastructure vulnerabilities. Focus on Russia, China, Iran, and North Korea operations.", "INTELLIGENCE", "en", "https://ontora.int/briefs/cyber-warfare-2026"),
+    ("Naval Modernization in Indian Ocean Region", "Analysis of naval power balance in Indian Ocean including Indian Navy expansion, Chinese PLAN presence, and UK/French maritime operations. Strategic chokepoints and submarine capabilities reviewed.", "MEA", "en", "https://mea.gov.in/naval/modernization-2026"),
+    ("Weapons Systems Technology Assessment", "Detailed technical analysis of emerging military technologies including hypersonic missiles, stealth systems, AI-enabled autonomous weapons, directed energy weapons, and next-generation fighter aircraft platforms.", "INTELLIGENCE", "en", "https://ontora.int/briefs/weapons-tech-2026"),
 ]
 
 AUDIT_LOGS = [
@@ -231,6 +269,22 @@ async def seed_data():
                 ("CHN", "RUS", "bilateral", "stable", 220000.0, "positive", 0.78),
                 ("JPN", "KOR", "bilateral", "tense", 80000.0, "neutral", 0.68),
                 ("IND", "AUS", "bilateral", "stable", 28000.0, "positive", 0.82),
+                # Military Relations
+                ("IND", "USA", "military_alliance", "stable", 5000.0, "positive", 0.92),
+                ("IND", "JPN", "military_cooperation", "stable", 2500.0, "positive", 0.89),
+                ("USA", "AUS", "military_alliance", "stable", 8000.0, "positive", 0.94),
+                ("USA", "GBR", "military_alliance", "stable", 12000.0, "positive", 0.96),
+                ("IND", "AUS", "military_cooperation", "stable", 1800.0, "positive", 0.87),
+                ("CHN", "RUS", "military_exercises", "stable", 3000.0, "positive", 0.81),
+                ("IND", "CHN", "border_military", "tense", 500.0, "negative", 0.88),
+                ("USA", "CHN", "military_rivalry", "tense", 8500.0, "negative", 0.85),
+                ("CHN", "TWN", "military_threat", "active_dispute", 0.0, "negative", 0.91),
+                ("IND", "RUS", "military_cooperation", "stable", 1200.0, "positive", 0.84),
+                ("USA", "KOR", "military_alliance", "stable", 2800.0, "positive", 0.90),
+                ("USA", "JPN", "military_alliance", "stable", 4500.0, "positive", 0.93),
+                ("RUS", "UKR", "military_conflict", "conflict", 0.0, "negative", 0.97),
+                ("IND", "PAK", "military_standoff", "active_dispute", 0.0, "negative", 0.79),
+                ("DEU", "POL", "military_alliance", "stable", 1500.0, "positive", 0.88),
             ]
             for iso_a, iso_b, rel_type, status, trade, sentiment, conf in relations_data:
                 id_a = country_ids.get(iso_a)
@@ -283,6 +337,27 @@ async def seed_data():
                 ("BRICS", "ECONOMIC_COOPERATION", "India"),
                 ("World Bank", "FUNDING", "South Asia"),
                 ("IMF", "LENDING", "Pakistan"),
+                # Military Relationships
+                ("Indian Army", "OPERATIONAL_PRESENCE", "Lakshadweep Islands"),
+                ("Indian Navy", "MARITIME_PATROL", "Strait of Malacca"),
+                ("People's Liberation Army", "MILITARY_BUILDUP", "South China Sea"),
+                ("US Navy", "CARRIER_DEPLOYMENT", "Indo-Pacific"),
+                ("Indian Air Force", "DEFENSE_AGREEMENT", "United States"),
+                ("Shanghai Cooperation Organization", "MILITARY_EXERCISE", "India"),
+                ("Ministry of Defence India", "COORDINATES", "Indian Army"),
+                ("S-400 Air Defence System", "DEPLOYED_BY", "India"),
+                ("BrahMos Missile", "DEVELOPED_BY", "India"),
+                ("INS Vikrant", "OPERATED_BY", "Indian Navy"),
+                ("General Manoj Pande", "COMMANDS", "Indian Army"),
+                ("Admiral R Hari Kumar", "COMMANDS", "Indian Navy"),
+                ("India-China Border Tensions", "INVOLVES", "People's Liberation Army"),
+                ("US-China Military Escalation", "INVOLVES", "United States Indo-Pacific Command"),
+                ("Taiwan Strait Military Dynamics", "INVOLVES", "US Navy"),
+                ("Type 055 Destroyer", "OPERATED_BY", "People's Liberation Army"),
+                ("Russian Armed Forces", "MAINTAINS_PRESENCE", "Arctic"),
+                ("India", "MILITARY_ALLIANCE", "United States"),
+                ("China", "MILITARY_MODERNIZATION", "People's Liberation Army"),
+                ("Ukraine Conflict", "INVOLVES", "Russian Armed Forces"),
             ]
             entity_name_to_id = {}
             result = await db.execute(text("SELECT id, name FROM entities"))
