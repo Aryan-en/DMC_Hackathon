@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef } from 'react';
+
+import { useState } from 'react';
 
 interface Alert {
   id: number;
@@ -36,6 +37,7 @@ const alerts: Alert[] = [
 ];
 
 export default function AlertFeed() {
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <div
@@ -126,8 +128,12 @@ export default function AlertFeed() {
         className="px-5 py-3 text-center"
         style={{ borderTop: '1px solid rgba(200,168,74,0.07)' }}
       >
-        <button style={{ color: 'rgba(200,168,74,0.3)', fontSize: '0.68rem' }} className="hover:underline">
-          View all 2,847 alerts →
+        <button 
+          onClick={() => setShowAllAlerts(!showAllAlerts)}
+          style={{ color: showAllAlerts ? 'rgba(200,168,74,0.6)' : 'rgba(200,168,74,0.3)', fontSize: '0.68rem', transition: 'color 0.2s' }} 
+          className="hover:underline"
+        >
+          {showAllAlerts ? 'Collapse alerts' : 'View all 2,847 alerts'} →
         </button>
       </div>
     </div>

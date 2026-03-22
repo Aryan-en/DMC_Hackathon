@@ -6,6 +6,7 @@ import AlertFeed from '@/components/AlertFeed';
 import { GlobalRiskChart, EntityBarChart, SentimentChart } from '@/components/Charts';
 import { useStrategicMetrics } from '@/app/hooks/useStrategicMetrics';
 import { useProcessingLog } from '@/app/hooks/useProcessingLog';
+import { useState } from 'react';
 import {
   Globe, Activity, Share2, Brain, AlertTriangle,
   Database, Shield, Zap, Radio, Server
@@ -20,6 +21,11 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function formatRelativeTs(isoTs: string) {
+  // Only calculate if we're on the client and can access Date.now()
+  if (typeof window === 'undefined') {
+    return 'T-unknown';
+  }
+  
   const parsed = new Date(isoTs).getTime();
   if (!Number.isFinite(parsed)) return 'T-unknown';
   const diffMs = Date.now() - parsed;
@@ -36,6 +42,7 @@ function formatRelativeTs(isoTs: string) {
 export default function Home() {
   const { data, loading, error } = useStrategicMetrics();
   const { events } = useProcessingLog();
+  const [showBriefing, setShowBriefing] = useState(false);
 
   return (
     <div className="flex flex-col min-h-screen grid-bg">
@@ -64,16 +71,17 @@ export default function Home() {
             </span>
           </div>
           <button
+            onClick={() => setShowBriefing(!showBriefing)}
             className="px-3 py-1.5 rounded-xl transition-colors"
             style={{
-              background: 'rgba(200,168,74,0.08)',
+              background: showBriefing ? 'rgba(200,168,74,0.15)' : 'rgba(200,168,74,0.08)',
               border: '1px solid rgba(200,168,74,0.2)',
               color: '#c8a84a',
               fontSize: '0.72rem',
               fontWeight: 600,
             }}
           >
-            View Briefing
+            {showBriefing ? 'Hide Briefing' : 'View Briefing'}
           </button>
         </div>
 

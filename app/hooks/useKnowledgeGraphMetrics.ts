@@ -14,6 +14,8 @@ type Relationship = {
   target: string;
   relation: string;
   strength: number;
+  date?: string;
+  impact?: string;
 };
 
 type Path = {

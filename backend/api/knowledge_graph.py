@@ -322,3 +322,198 @@ async def get_paths(
         )
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch graph paths: {exc}")
+
+
+@router.post("/seed-data")
+async def seed_knowledge_graph_data(db: AsyncSession = Depends(get_db_session)):
+    """POST /api/knowledge-graph/seed-data - Populate knowledge graph with sample entities and relationships"""
+    try:
+        import uuid
+        from sqlalchemy import text
+        
+        # Clear existing data
+        await db.execute(text("DELETE FROM relationships"))
+        await db.execute(text("DELETE FROM entities"))
+        await db.commit()
+        
+        # Define entities
+        entities_data = {
+            # Countries (GPE)
+            "USA": ("COUNTRY", "United States of America - Global superpower", 0.95),
+            "Russia": ("COUNTRY", "Russian Federation - Major regional power", 0.95),
+            "China": ("COUNTRY", "People's Republic of China - Rising superpower", 0.95),
+            "India": ("COUNTRY", "Republic of India - Regional power", 0.95),
+            "EU": ("COUNTRY", "European Union - Political and economic union", 0.92),
+            "Ukraine": ("COUNTRY", "Eastern European nation", 0.95),
+            "Pakistan": ("COUNTRY", "South Asian nation", 0.95),
+            "Iran": ("COUNTRY", "Middle Eastern power", 0.95),
+            "Saudi Arabia": ("COUNTRY", "Gulf state leader", 0.95),
+            
+            # Organizations
+            "NATO": ("ORG", "North Atlantic Treaty Organization - Military alliance", 0.98),
+            "UN": ("ORG", "United Nations - International organization", 0.98),
+            "OPEC": ("ORG", "Organization of Petroleum Exporting Countries", 0.95),
+            "WTO": ("ORG", "World Trade Organization", 0.95),
+            "IMF": ("ORG", "International Monetary Fund", 0.95),
+            "SCO": ("ORG", "Shanghai Cooperation Organization", 0.92),
+            
+            # Events
+            "Ukraine Conflict": ("EVENT", "Ongoing military conflict in Ukraine", 0.94),
+            "Taiwan Strait Tensions": ("EVENT", "Geopolitical tensions in Taiwan Strait", 0.93),
+            "Middle East Crisis": ("EVENT", "Regional instability and conflicts", 0.92),
+            "Kashmir Dispute": ("EVENT", "Long-standing territorial dispute", 0.94),
+            
+            # Actors
+            "Putin": ("PERSON", "Russian President", 0.99),
+            "Biden": ("PERSON", "US President", 0.99),
+            "Xi Jinping": ("PERSON", "Chinese President", 0.99),
+            "Modi": ("PERSON", "Indian Prime Minister", 0.99),
+            
+            # Concepts & Policy Areas
+            "Energy Security": ("CONCEPT", "Reliable access to energy resources", 0.90),
+            "Nuclear Proliferation": ("CONCEPT", "Spread of nuclear weapons", 0.92),
+            "Trade Dispute": ("POLICY", "Commercial and tariff conflicts", 0.88),
+            "Cyber Warfare": ("CONCEPT", "Digital conflict and attacks", 0.91),
+            "Climate Crisis": ("CONCEPT", "Global environmental challenge", 0.93),
+            "Sanctions": ("POLICY", "Economic and political penalties", 0.89),
+        }
+        
+        # Create entity records
+        entity_map = {}
+        for name, (entity_type, description, confidence) in entities_data.items():
+            entity_id = str(uuid.uuid4())
+            stmt = text("""
+                INSERT INTO entities (id, name, entity_type, description, confidence_score, mention_count, created_at, updated_at)
+                VALUES (:id, :name, :type, :description, :confidence, 1, NOW(), NOW())
+            """)
+            await db.execute(stmt, {
+                "id": entity_id,
+                "name": name,
+                "type": entity_type,
+                "description": description,
+                "confidence": confidence,
+            })
+            entity_map[name] = entity_id
+        
+        await db.commit()
+        
+        # Define relationships
+        relationships_data = [
+            # USA relationships
+            ("USA", "supports", "NATO", 0.95),
+            ("USA", "sanctions", "Russia", 0.94),
+            ("USA", "in_conflict_with", "China", 0.88),
+            ("USA", "opposes", "Iran", 0.92),
+            ("USA", "leads", "WTO", 0.91),
+            ("Biden", "heads", "USA", 0.99),
+            
+            # Russia relationships
+            ("Russia", "conflicts_with", "Ukraine", 0.96),
+            ("Russia", "competes_with", "USA", 0.93),
+            ("Russia", "allied_with", "China", 0.85),
+            ("Russia", "threatens", "NATO", 0.89),
+            ("Russia", "member_of", "SCO", 0.92),
+            ("Putin", "heads", "Russia", 0.99),
+            ("Putin", "directs", "Ukraine Conflict", 0.95),
+            
+            # China relationships
+            ("China", "disputes_with", "India", 0.90),
+            ("China", "threatens", "Taiwan Strait Tensions", 0.94),
+            ("China", "competes_with", "USA", 0.91),
+            ("China", "cooperates_with", "Russia", 0.82),
+            ("China", "member_of", "SCO", 0.93),
+            ("Xi Jinping", "heads", "China", 0.99),
+            
+            # India relationships
+            ("India", "disputes_with", "Pakistan", 0.95),
+            ("India", "disputes_with", "China", 0.93),
+            ("India", "cooperates_with", "USA", 0.80),
+            ("India", "member_of", "SCO", 0.91),
+            ("Modi", "heads", "India", 0.99),
+            
+            # EU relationships
+            ("EU", "supports", "Ukraine", 0.94),
+            ("EU", "member_of", "NATO", 0.81),
+            ("EU", "sanctions", "Russia", 0.95),
+            ("EU", "trades_with", "USA", 0.85),
+            
+            # Conflict relationships
+            ("Ukraine Conflict", "involves", "Russia", 0.96),
+            ("Ukraine Conflict", "involves", "Ukraine", 0.97),
+            ("Ukraine Conflict", "supported_by", "USA", 0.91),
+            ("Ukraine Conflict", "supported_by", "EU", 0.92),
+            
+            ("Taiwan Strait Tensions", "involves", "China", 0.95),
+            ("Taiwan Strait Tensions", "monitored_by", "USA", 0.93),
+            
+            ("Kashmir Dispute", "involves", "India", 0.96),
+            ("Kashmir Dispute", "involves", "Pakistan", 0.96),
+            
+            ("Middle East Crisis", "involves", "Iran", 0.88),
+            ("Middle East Crisis", "involves", "Saudi Arabia", 0.87),
+            
+            # Economic relationships
+            ("USA", "imposes", "Trade Dispute", 0.82),
+            ("China", "engages_in", "Trade Dispute", 0.84),
+            ("OPEC", "controls", "Energy Security", 0.91),
+            ("Russia", "supplies", "Energy Security", 0.89),
+            
+            # Threat relationships
+            ("Iran", "develops", "Nuclear Proliferation", 0.87),
+            ("Russia", "engages_in", "Cyber Warfare", 0.85),
+            ("China", "engages_in", "Cyber Warfare", 0.84),
+            
+            # Policy relationships
+            ("UN", "enforces", "Sanctions", 0.88),
+            ("Russia", "evades", "Sanctions", 0.83),
+            ("USA", "leads", "Sanctions", 0.89),
+            
+            # Climate relationships
+            ("USA", "addresses", "Climate Crisis", 0.75),
+            ("China", "addresses", "Climate Crisis", 0.72),
+            ("EU", "leads", "Climate Crisis", 0.86),
+            
+            # Organization relationships
+            ("NATO", "led_by", "USA", 0.94),
+            ("SCO", "includes", "Russia", 0.93),
+            ("SCO", "includes", "China", 0.95),
+            ("WTO", "regulates", "Trade Dispute", 0.87),
+            
+            # Additional connections for graph density
+            ("USA", "monitors", "Middle East Crisis", 0.85),
+            ("China", "interests_in", "Middle East Crisis", 0.78),
+            ("Russia", "involved_in", "Middle East Crisis", 0.80),
+            ("Pakistan", "disputes_with", "USA", 0.75),
+            ("Iran", "sanctions_by", "USA", 0.93),
+            ("Saudi Arabia", "allies_with", "USA", 0.87),
+            ("Energy Security", "related_to", "Middle East Crisis", 0.86),
+            ("India", "partners_with", "USA", 0.78),
+            ("India", "opposes", "Nuclear Proliferation", 0.85),
+            ("Pakistan", "develops", "Nuclear Proliferation", 0.88),
+        ]
+        
+        # Create relationship records
+        for subject, predicate, obj, confidence in relationships_data:
+            if subject in entity_map and obj in entity_map:
+                rel_id = str(uuid.uuid4())
+                stmt = text("""
+                    INSERT INTO relationships (id, subject_entity_id, predicate, object_entity_id, confidence_score, created_at)
+                    VALUES (:id, :subject_id, :predicate, :object_id, :confidence, NOW())
+                """)
+                await db.execute(stmt, {
+                    "id": rel_id,
+                    "subject_id": entity_map[subject],
+                    "predicate": predicate,
+                    "object_id": entity_map[obj],
+                    "confidence": confidence,
+                })
+        
+        await db.commit()
+        
+        return build_success({
+            "message": "Knowledge graph seeded successfully",
+            "entities": len(entity_map),
+            "relationships": len(relationships_data),
+        })
+    except Exception as exc:
+        return build_error("SEED_ERROR", f"Failed to seed knowledge graph: {exc}")

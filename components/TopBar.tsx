@@ -4,12 +4,11 @@ import { Bell, Search, Wifi, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
-  const [time, setTime] = useState('');
-  const [date, setDate] = useState('');
-  const [mounted, setMounted] = useState(false);
+  const [time, setTime] = useState<string | null>(null);
+  const [date, setDate] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const update = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -97,23 +96,26 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
 
         {/* Clock */}
-        <div className="text-right">
-          <div
-            className="font-mono font-bold"
-            style={{ color: '#c8a84a', fontSize: '0.82rem', letterSpacing: '0.08em' }}
-          >
-            {mounted ? time : '00:00:00'}
+        {time && date && (
+          <div className="text-right">
+            <div
+              className="font-mono font-bold"
+              style={{ color: '#c8a84a', fontSize: '0.82rem', letterSpacing: '0.08em' }}
+            >
+              {time}
+            </div>
+            <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
           </div>
-          <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{mounted ? date : ''}</div>
-        </div>
+        )}
 
         {/* Thin divider */}
         <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
 
         {/* Notifications */}
         <button
+          onClick={() => setShowNotifications(!showNotifications)}
           className="relative p-1.5 rounded-lg transition-colors"
-          style={{ color: '#3a4e62' }}
+          style={{ color: showNotifications ? '#c8a84a' : '#3a4e62' }}
           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.06)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >

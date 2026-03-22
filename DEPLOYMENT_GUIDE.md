@@ -1,8 +1,19 @@
-# ONTORA Production Deployment Guide - Week 16
+# ONTORA Production Deployment - Complete Guide
+
+## Quick Resources
+
+📚 **Complete Documentation Suite**
+- [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) - Daily operations & scaling
+- [DEPLOYMENT_TROUBLESHOOTING.md](DEPLOYMENT_TROUBLESHOOTING.md) - Problem solving
+- [MONITORING_SETUP.md](MONITORING_SETUP.md) - Monitoring & observability
+- [SECURITY_COMPLIANCE_GUIDE.md](SECURITY_COMPLIANCE_GUIDE.md) - Security & compliance
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - API endpoints & testing
+
+---
 
 ## Pre-Deployment Checklist
 
-### 1. Security Verification
+### 1. Security Verification (Week Before)
 - [ ] Run `python validate_production.py` - all checks must pass
 - [ ] Scan dependencies: `pip audit`
 - [ ] Scan code: `python -m bandit -r backend/`
@@ -11,35 +22,40 @@
 - [ ] Test API security: verify security headers present
 - [ ] Verify rate limiting: test 429 responses
 - [ ] Test input validation: verify injection detection
+- [ ] Review [SECURITY_COMPLIANCE_GUIDE.md](SECURITY_COMPLIANCE_GUIDE.md)
 
-### 2. Infrastructure Verification
-- [ ] Database backups configured
+### 2. Infrastructure Verification (3 Days Before)
+- [ ] Database backups configured and tested
 - [ ] Redis persistence verified
 - [ ] Network security groups configured
-- [ ] VPN/Bastion host setup
-- [ ] SSL/TLS certificates valid (not self-signed)
-- [ ] Load balancer configured
-- [ ] CDN configured (if applicable)
+- [ ] SSL/TLS certificates valid (not self-signed), expires > 30 days
+- [ ] Load balancer configured and healthy
+- [ ] Firewall rules configured
+- [ ] DNS records verified
+- [ ] Nginx reverse proxy tested
+- [ ] Review [MONITORING_SETUP.md](MONITORING_SETUP.md) configuration
 
-### 3. Application Readiness
-- [ ] All environment variables set
-- [ ] Database migrations applied
-- [ ] Neo4j indexes created
+### 3. Application Readiness (1 Day Before)
+- [ ] All environment variables set in .env.prod
+- [ ] Database migrations tested
+- [ ] Neo4j indexes created and verified
 - [ ] Redis cache cleared
 - [ ] Kafka topics created
 - [ ] Monitoring/logging agents configured
-- [ ] Health checks passing
-- [ ] Load testing completed
+- [ ] Health checks passing locally
+- [ ] Load testing completed (100 users, p95 < 1s)
+- [ ] Full test suite passing
+- [ ] Staging deployment successful
 
-### 4. Operational Readiness
+### 4. Operational Readiness (Day Before)
 - [ ] On-call rotation established
-- [ ] Incident response plan documented
+- [ ] Incident response plan documented (see OPERATIONS_RUNBOOK.md)
 - [ ] Rollback procedures tested
 - [ ] Status page configured
-- [ ] Alerts configured and tested
-- [ ] Dashboard created
-- [ ] Documentation updated
+- [ ] Alerts configured and tested (see MONITORING_SETUP.md)
+- [ ] Dashboard created (see MONITORING_SETUP.md)
 - [ ] Team trained on procedures
+- [ ] Emergency contacts listed and notified
 
 ## Deployment Process
 

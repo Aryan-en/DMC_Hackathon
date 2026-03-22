@@ -39,7 +39,122 @@ curl http://localhost:8000/health
 - **Prometheus**: http://localhost:9090
 - **Grafana**: http://localhost:3001 (admin/admin)
 - **Neo4j Browser**: http://localhost:7474 (neo4j/neo4j_password)
-- **PostgreSQL**: Use pgAdmin or command line
+- **pgAdmin4**: http://localhost:5050 (admin@admin.com / admin)
+- **PostgreSQL**: Use pgAdmin4 or command line
+
+### Step 4: Access PostgreSQL Data via pgAdmin4
+
+#### Option A: Using pgAdmin4 GUI (Recommended)
+
+1. **Open pgAdmin4**: http://localhost:5050
+   - Email: `admin@admin.com`
+   - Password: `admin`
+
+2. **Register PostgreSQL Server**:
+   - Right-click **Servers** → **Register** → **Server**
+   - **Name**: `ONTORA PostgreSQL`
+   - **Host**: `postgres`
+   - **Port**: `5432`
+   - **Database**: `ontora_prod`
+   - **Username**: `ontora_user`
+   - **Password**: `ontora_password`
+   - Click **Save**
+
+3. **Browse Database**:
+   - Navigate to `Servers` → `ONTORA PostgreSQL` → `Databases` → `ontora_prod` → `Schemas` → `public` → `Tables`
+   - Right-click any table → **View/Edit Data** → **All Rows**
+
+4. **Query Data**:
+   - Click **Tools** → **Query Tool** (or press Alt+Q)
+   - Write SQL queries to explore data:
+
+```sql
+-- View all users
+SELECT * FROM users;
+
+-- View user roles and permissions
+SELECT u.username, r.role_name, p.permission_name
+FROM users u
+JOIN user_roles ur ON u.id = ur.user_id
+JOIN roles r ON ur.role_id = r.id
+JOIN role_permissions rp ON r.id = rp.role_id
+JOIN permissions p ON rp.permission_id = p.id;
+
+-- View recent audit logs
+SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 50;
+
+-- View security events
+SELECT * FROM security_events ORDER BY timestamp DESC LIMIT 20;
+
+-- Check table row counts
+SELECT COUNT(*) as user_count FROM users;
+SELECT COUNT(*) as audit_count FROM audit_logs;
+SELECT COUNT(*) as event_count FROM security_events;
+```
+
+#### Option B: Using PostgreSQL CLI
+
+```bash
+# Access PostgreSQL directly
+docker-compose exec postgres psql -U ontora_user -d ontora_prod
+
+# Useful commands once inside psql:
+\dt                          # List all tables
+\d users                     # Describe users table structure
+SELECT * FROM users;         # View all users
+SELECT COUNT(*) FROM users;  # Count users
+\q                          # Exit
+```
+
+#### Option C: Using Python Script
+
+```python
+import psycopg2
+
+conn = psycopg2.connect(
+    host="localhost",
+    port=5432,
+    database="ontora_prod",
+    user="ontora_user",
+    password="ontora_password"
+)
+
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM users;")
+rows = cursor.fetchall()
+
+for row in rows:
+    print(row)
+
+cursor.close()
+conn.close()
+```
+
+### Step 5: Useful Docker Commands
+
+```bash
+# View all running containers
+docker-compose ps
+
+# View logs
+docker-compose logs -f backend    # Backend API logs
+docker-compose logs -f postgres   # PostgreSQL logs
+
+# Restart PostgreSQL
+docker-compose restart postgres
+
+# Stop all services (keep data)
+docker-compose stop
+
+# Stop and remove all (keep volumes)
+docker-compose down
+
+# Remove everything including data volumes
+docker-compose down -v
+
+# Access backend shell
+docker-compose exec backend /bin/bash
+```
 
 ## Local Development (Without Docker)
 

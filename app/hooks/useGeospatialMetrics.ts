@@ -29,14 +29,40 @@ type Incident = {
   date: string;
 };
 
+type Industry = {
+  name: string;
+  percentage: number;
+  value_usd_billion: number;
+};
+
+type AgriculturalZone = {
+  zone: string;
+  countries: string[];
+  crops: string[];
+  production_million_tons: number;
+  employment_percent: number;
+};
+
+type EconomicRegion = {
+  name: string;
+  gdp_usd_trillion: number;
+  gdp_growth_percent: number;
+  population_billion: number;
+  employment_rate: number;
+  unemployment_rate: number;
+  major_industries: Industry[];
+  agriculture_zones: AgriculturalZone[];
+};
+
 type GeospatialMetrics = {
   hotspots: Hotspot[];
   climateRegions: ClimateRegion[];
   incidents: Incident[];
+  economicRegions?: EconomicRegion[];
 };
 
 export function useGeospatialMetrics() {
-  const [data, setData] = useState<GeospatialMetrics>({ hotspots: [], climateRegions: [], incidents: [] });
+  const [data, setData] = useState<GeospatialMetrics>({ hotspots: [], climateRegions: [], incidents: [], economicRegions: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,10 +71,11 @@ export function useGeospatialMetrics() {
 
     async function load() {
       try {
-        const [hotspotsRes, climateRes, incidentsRes] = await Promise.all([
+        const [hotspotsRes, climateRes, incidentsRes, economicRes] = await Promise.all([
           apiGet<{ hotspots: Hotspot[] }>('/api/geospatial/hotspots'),
           apiGet<{ regions: ClimateRegion[] }>('/api/geospatial/climate-indicators'),
           apiGet<{ incidents: Incident[] }>('/api/geospatial/incidents/global'),
+          apiGet<{ regions: EconomicRegion[] }>('/api/geospatial/economic-activity'),
         ]);
 
         if (!active) return;
@@ -56,6 +83,7 @@ export function useGeospatialMetrics() {
           hotspots: hotspotsRes.hotspots,
           climateRegions: climateRes.regions,
           incidents: incidentsRes.incidents,
+          economicRegions: economicRes.regions,
         });
       } catch (err) {
         if (!active) return;

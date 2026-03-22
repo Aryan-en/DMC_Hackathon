@@ -162,8 +162,15 @@ ontora/
 
 ### Prerequisites
 
+#### Option 1: Frontend Only (Next.js)
 - [Node.js](https://nodejs.org) 18.x or later
 - npm, yarn, pnpm, or bun
+
+#### Option 2: Full Stack with Docker
+- [Docker](https://www.docker.com/products/docker-desktop) installed and running
+- [Docker Compose](https://docs.docker.com/compose/install/) v2.20+
+- 4GB+ available RAM
+- Ports 3000, 5432, 9090, 3001 available
 
 ### Installation
 
@@ -172,17 +179,216 @@ ontora/
 git clone <repository-url>
 cd ontora
 
-# Install dependencies
+# Install frontend dependencies
 npm install
 ```
 
-### Development
+### Development - Option 1: Frontend Only
 
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The application hot-reloads on every file save via Turbopack HMR.
+
+### Development - Option 2: Full Stack with Docker Compose
+
+#### Step 1: Start All Services
+
+```bash
+# From the root directory
+cd d:/DMC_Hackathon
+docker-compose up -d
+```
+
+This starts:
+- **Backend API**: http://localhost:8000
+- **PostgreSQL**: localhost:5432
+- **pgAdmin4**: http://localhost:5050
+- **Neo4j**: http://localhost:7474
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3001
+- **Frontend**: http://localhost:3000 (run `npm run dev` separately in frontend directory)
+
+#### Step 2: Verify Services
+
+```bash
+# Check service health
+docker-compose ps
+
+# View logs
+docker-compose logs -f backend    # Backend API logs
+docker-compose logs -f postgres   # PostgreSQL logs
+```
+
+#### Step 3: Access the Backend API
+
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "environment": "development"
+}
+```
+
+#### Step 4: Access Frontend
+
+```bash
+# In the root directory (separate terminal)
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Checking PostgreSQL Data with pgAdmin4
+
+### Step 1: Access pgAdmin4
+
+1. Open browser: **http://localhost:5050**
+2. Login with credentials:
+   - **Email**: `admin@admin.com`
+   - **Password**: `admin`
+
+### Step 2: Register PostgreSQL Server in pgAdmin4
+
+1. Right-click **Servers** in left panel → **Register** → **Server**
+
+2. **General** tab:
+   - **Name**: `ONTORA PostgreSQL`
+
+3. **Connection** tab:
+   - **Host name/address**: `postgres`
+   - **Port**: `5432`
+   - **Maintenance database**: `postgres`
+   - **Username**: `ontora_user`
+   - **Password**: `ontora_password`
+   - **Save password?**: ✓ (optional)
+
+4. Click **Save**
+
+### Step 3: Explore Database
+
+Once connected, navigate:
+
+```
+Servers 
+├── ONTORA PostgreSQL
+│   ├── Databases
+│   │   ├── ontora_prod
+│   │   │   ├── Schemas
+│   │   │   │   ├── public
+│   │   │   │   │   ├── Tables
+│   │   │   │   │   │   ├── users
+│   │   │   │   │   │   ├── roles
+│   │   │   │   │   │   ├── permissions
+│   │   │   │   │   │   ├── audit_logs
+│   │   │   │   │   │   ├── security_events
+│   │   │   │   │   │   └── ... (other tables)
+│   │   │   │   │   └── Views
+```
+
+### Step 4: View Data
+
+1. Right-click on a table (e.g., `users`) → **View/Edit Data** → **All Rows**
+
+2. Query data using SQL:
+   - Click **Query Tool** (lightning bolt icon)
+   - Example queries:
+
+```sql
+-- View all users
+SELECT * FROM users;
+
+-- View user roles and permissions
+SELECT u.username, r.role_name, p.permission_name
+FROM users u
+JOIN user_roles ur ON u.id = ur.user_id
+JOIN roles r ON ur.role_id = r.id
+JOIN role_permissions rp ON r.id = rp.role_id
+JOIN permissions p ON rp.permission_id = p.id
+ORDER BY u.username;
+
+-- View recent audit logs
+SELECT * FROM audit_logs
+ORDER BY timestamp DESC
+LIMIT 50;
+
+-- View security events
+SELECT * FROM security_events
+ORDER BY timestamp DESC
+LIMIT 20;
+
+-- Count records by table
+SELECT COUNT(*) as user_count FROM users;
+SELECT COUNT(*) as audit_count FROM audit_logs;
+SELECT COUNT(*) as event_count FROM security_events;
+```
+
+### Step 5: Export Data
+
+1. Right-click table → **Backup...**
+2. Or right-click → **View/Edit Data** → **Export** (for CSV/JSON)
+
+---
+
+## Useful Docker Commands
+
+```bash
+# View running containers
+docker-compose ps
+
+# Stop all services
+docker-compose stop
+
+# Stop and remove containers (keep volumes)
+docker-compose down
+
+# Remove everything including volumes
+docker-compose down -v
+
+# View logs
+docker-compose logs -f              # All services
+docker-compose logs -f backend      # Backend only
+docker-compose logs -f postgres     # PostgreSQL only
+
+# Access PostgreSQL CLI directly
+docker-compose exec postgres psql -U ontora_user -d ontora_prod
+
+# Access backend shell
+docker-compose exec backend /bin/bash
+
+# Restart a specific service
+docker-compose restart postgres
+```
+
+### PostgreSQL CLI Commands (if using `docker-compose exec postgres psql...`)
+
+```sql
+-- List all databases
+\l
+
+-- Connect to database
+\c ontora_prod
+
+-- List all tables
+\dt
+
+-- Describe table structure
+\d users
+
+-- Count rows
+SELECT COUNT(*) FROM {table_name};
+
+-- Exit
+\q
+```
 
 ### Production Build
 

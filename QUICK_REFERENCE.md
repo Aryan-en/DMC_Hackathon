@@ -1,53 +1,182 @@
-# ONTORA Development Quick Reference
+# ONTORA Local Development - Quick Reference Card
 
-## Project Summary
-
-**Project Name**: ONTORA (Intelligence Platform)
-**Status**: Phase 1 Foundation - 55% Complete
-**Tech Stack**: FastAPI + PostgreSQL + Neo4j + Kafka + React
-**Created**: January 15, 2024
-**Location**: `d:\DMC_Hackathon`
-
----
-
-## Quick Start
+## 🚀 Quick Start (Copy-Paste)
 
 ```bash
-# 1. Start all services
-cd d:\DMC_Hackathon
+cd d:/DMC_Hackathon
 docker-compose up -d
+```
 
-# 2. Verify health
+Verify:
+```bash
+docker-compose ps
 curl http://localhost:8000/health
-
-# 3. Access services
-# API Docs: http://localhost:8000/docs
-# Postgres: psql -h localhost -U ontora_user -d ontora_db
-# Neo4j: http://localhost:7474 (neo4j/neo4j_password)
-# Grafana: http://localhost:3001 (admin/admin)
-# Prometheus: http://localhost:9090
 ```
 
 ---
 
-## File Structure
+## 🌐 Services Dashboard
 
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Frontend | [localhost:3000](http://localhost:3000) | none |
+| Backend API | [localhost:8000/docs](http://localhost:8000/docs) | none |
+| **pgAdmin4** | **[localhost:5050](http://localhost:5050)** | **admin@admin.com / admin** |
+| Neo4j | [localhost:7474](http://localhost:7474) | neo4j / neo4j_password |
+| Grafana | [localhost:3001](http://localhost:3001) | admin / admin |
+| Prometheus | [localhost:9090](http://localhost:9090) | none |
+
+---
+
+## 📊 PostgreSQL Access (3 Ways)
+
+### ✅ **Easiest: pgAdmin4 Web UI**
+1. Go to http://localhost:5050
+2. Login: `admin@admin.com` / `admin`
+3. Right-click Servers → Register → Server
+4. Fill in:
+   - Name: `ONTORA PostgreSQL`
+   - Host: `postgres`
+   - User: `ontora_user`
+   - Password: `ontora_password`
+5. Browse tables and run queries
+
+### **Command Line**
+```bash
+docker-compose exec postgres psql -U ontora_user -d ontora_prod
+
+# Examples:
+SELECT * FROM users;
+SELECT COUNT(*) FROM audit_logs;
+\dt  # List tables
+\q   # Exit
 ```
-d:\DMC_Hackathon\
-├── app/                          # Next.js React frontend
-│   ├── layout.tsx
-│   ├── page.tsx
-│   ├── globals.css
-│   └── [modules]/                # 8 dashboard modules
-│       ├── data-lake/page.tsx
-│       ├── data-streams/page.tsx
-│       ├── geospatial/page.tsx
-│       ├── intelligence/page.tsx
-│       ├── knowledge-graph/page.tsx
-│       ├── predictions/page.tsx
-│       ├── security/page.tsx
-│       └── data-streams/page.tsx
-│
+
+### **Python**
+```python
+import psycopg2
+conn = psycopg2.connect(
+    host="localhost", port=5432, 
+    database="ontora_prod",
+    user="ontora_user", password="ontora_password"
+)
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM users;")
+print(cursor.fetchall())
+```
+
+---
+
+## 🐘 Useful PostgreSQL Queries
+
+```sql
+-- View all users
+SELECT * FROM users;
+
+-- Count records
+SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM audit_logs;
+
+-- Recent audit activity
+SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 10;
+
+-- User roles
+SELECT u.username, r.role_name FROM users u
+LEFT JOIN user_roles ur ON u.id = ur.user_id
+LEFT JOIN roles r ON ur.role_id = r.id;
+
+-- Security events
+SELECT * FROM security_events ORDER BY timestamp DESC LIMIT 10;
+```
+
+---
+
+## 🔧 Docker Commands
+
+```bash
+# View status
+docker-compose ps
+
+# View logs
+docker-compose logs -f backend     # Backend API
+docker-compose logs -f postgres    # PostgreSQL
+
+# Control services
+docker-compose stop                # Stop (keep data)
+docker-compose down               # Remove (keep volumes)
+docker-compose down -v            # Remove (delete data)
+docker-compose restart postgres   # Restart one service
+
+# Access shells
+docker-compose exec backend /bin/bash
+docker-compose exec postgres psql -U ontora_user -d ontora_prod
+```
+
+---
+
+## 📝 Important Credentials
+
+| Component | User | Password |
+|-----------|------|----------|
+| PostgreSQL | `ontora_user` | `ontora_password` |
+| pgAdmin4 | `admin@admin.com` | `admin` |
+| Neo4j | `neo4j` | `neo4j_password` |
+| Grafana | `admin` | `admin` |
+
+---
+
+## 🎯 Common Tasks
+
+### Check Backend Health
+```bash
+curl http://localhost:8000/health
+```
+
+### Test API
+```bash
+curl http://localhost:8000/docs
+```
+
+### Monitor Logs
+```bash
+docker-compose logs -f
+```
+
+### Restart PostgreSQL
+```bash
+docker-compose restart postgres
+```
+
+### Clear All Data
+```bash
+docker-compose down -v
+docker-compose up -d
+```
+
+---
+
+## 🐛 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Port already in use | `docker-compose down -v` then restart |
+| PostgreSQL won't connect | Check if healthy: `docker-compose ps postgres` |
+| pgAdmin won't load | Restart: `docker-compose restart pgadmin` |
+| Backend errors | Check logs: `docker-compose logs backend` |
+| Data not persisting | Ensure you didn't use `down -v` |
+
+---
+
+## 📚 Quick Links
+
+- **Main README**: [README.md](README.md)
+- **Backend Docs**: [backend/README.md](backend/README.md)
+- **Full Setup Guide**: [LOCAL_SETUP.md](LOCAL_SETUP.md)
+- **API Docs**: http://localhost:8000/docs (when running)
+
+---
+
+**Bookmark this page for easy reference!** 📌
 ├── backend/                       # FastAPI backend
 │   ├── main.py                   # Entry point
 │   ├── config.py                 # Environment config

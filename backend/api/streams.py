@@ -34,6 +34,7 @@ STREAM_ALERTS = [  # Week 9: Real-time alerting
 @router.get("/topics")
 async def get_topics(db: AsyncSession = Depends(get_db_session)):
     try:
+        # Try to fetch from database first
         rows = (
             await db.execute(
                 select(SystemMetric.metric_name, SystemMetric.metric_value)
@@ -68,6 +69,19 @@ async def get_topics(db: AsyncSession = Depends(get_db_session)):
                     "status": status,
                 }
             )
+
+        # If no topics from database, use in-memory data
+        if not topics:
+            for topic, partitions in KAFKA_LAG_STATE.items():
+                total_lag = sum(partitions.values())
+                status = "healthy" if total_lag < 500 else "warning" if total_lag < 1000 else "degraded"
+                topics.append({
+                    "topic": topic,
+                    "partitions": len(partitions),
+                    "lag": total_lag,
+                    "throughput": 5000 if "raw" in topic else 2000 if "batch" in topic else 1000,
+                    "status": status,
+                })
 
         topics.sort(key=lambda x: x["lag"], reverse=True)
         return build_success({"topics": topics}, meta={"update_frequency": "10 seconds"})
@@ -107,6 +121,16 @@ async def get_pipelines(db: AsyncSession = Depends(get_db_session)):
                     "latency": f"{round(vals.get('latency_ms', 0), 2)}ms",
                 }
             )
+
+        # If no pipelines from database, use in-memory data
+        if not pipelines:
+            for name, config in FLINK_CLUSTERS.items():
+                pipelines.append({
+                    "name": name,
+                    "status": "healthy" if config["health"] >= 85 else "warning" if config["health"] >= 60 else "degraded",
+                    "throughput": f"{config['parallelism'] * 2500} msg/s",
+                    "latency": f"{round(150 + (100 - config['health']), 1)}ms",
+                })
 
         return build_success({"pipelines": pipelines}, meta={"update_frequency": "30 seconds"})
     except Exception as exc:
