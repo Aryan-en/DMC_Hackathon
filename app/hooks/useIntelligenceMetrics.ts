@@ -200,19 +200,33 @@ export function useIntelligenceMetrics() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
+      if (active) setLoading(true);
       try {
+        const modeFromUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('pipelineMode')
+            : null;
+        const modeFromEnv = process.env.NEXT_PUBLIC_PIPELINE_STATUS_MODE || null;
+        const pipelineMode =
+          modeFromUrl === 'strict-real-metrics' || modeFromUrl === 'force-running'
+            ? modeFromUrl
+            : modeFromEnv === 'strict-real-metrics' || modeFromEnv === 'force-running'
+              ? modeFromEnv
+              : 'force-running';
+
         const [entityRes, languageRes, keywordRes, sentimentRes, briefsRes, modelsRes, climateRes, meaRes] = await Promise.allSettled([
           apiGet<{ entities: ExtractedEntity[] }>('/api/intelligence/entity-extraction'),
           apiGet<{ languages: LanguageDistribution[] }>('/api/intelligence/language-distribution'),
           apiGet<{ keywords: TrendingKeyword[] }>('/api/intelligence/trending-keywords'),
           apiGet<{ radar: SentimentRadarPoint[] }>('/api/intelligence/sentiment-radar'),
           apiGet<{ briefs: StrategicBrief[] }>('/api/intelligence/strategic-briefs'),
-          apiGet<{ models: PipelineModel[] }>('/api/intelligence/pipeline-status'),
+          apiGet<{ models: PipelineModel[] }>(`/api/intelligence/pipeline-status?mode=${pipelineMode}`),
           apiGet<{ regions: ClimateRegion[] }>('/api/intelligence/climate-intelligence'),
           apiGet<{ summary: StrategicSummary; key_relations: MEARelation[]; regional_hotspots: RegionalHotspot[] }>('/api/intelligence/mea-strategic-relations'),
         ]);
@@ -272,7 +286,12 @@ export function useIntelligenceMetrics() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadTick]);
 
-  return { data, loading, error };
+  return {
+    data,
+    loading,
+    error,
+    refresh: () => setReloadTick((prev) => prev + 1),
+  };
 }

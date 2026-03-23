@@ -37,3 +37,32 @@ export async function apiGet<T>(path: string): Promise<T> {
     clearTimeout(timeout);
   }
 }
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  const requestUrl = `${API_BASE_URL}${path}`;
+
+  try {
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+
+    const payload = await parseJson(response);
+    return payload.data as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout - API server may be unavailable');
+    }
+    if (error instanceof TypeError) {
+      throw new Error(`Network request failed for ${path}. Verify backend availability at ${API_BASE_URL}.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

@@ -47,7 +47,7 @@ async def seed_metrics():
                 metric_name="conflict_risk_probability",
                 metric_value=float(probability),
                 timestamp=metric_date,
-                metadata={"region": "Global"}
+                tags={"region": "Global"}
             )
             metrics.append(metric)
         
@@ -65,7 +65,7 @@ async def seed_metrics():
                 metric_name=metric_name,
                 metric_value=float(value),
                 timestamp=datetime.utcnow(),
-                metadata={"model": "PyG Conflict Risk GNN"}
+                tags={"model": "PyG Conflict Risk GNN"}
             )
             metrics.append(metric)
         
@@ -82,7 +82,29 @@ async def seed_metrics():
                 metric_name=metric_name,
                 metric_value=float(value),
                 timestamp=datetime.utcnow(),
-                metadata={"service": "prediction-serving"}
+                tags={"service": "prediction-serving"}
+            )
+            metrics.append(metric)
+
+        serving_cpu_metrics = [
+            ("serving_cpu_util_pct", 28.0),
+            ("serving_cpu_speed_ghz", 2.43),
+            ("serving_cpu_base_speed_ghz", 2.60),
+            ("serving_process_count", 500.0),
+            ("serving_thread_count", 9159.0),
+            ("serving_handle_count", 263925.0),
+            ("serving_socket_count", 1.0),
+            ("serving_core_count", 14.0),
+            ("serving_logical_processors", 20.0),
+            ("serving_uptime_seconds", 37237.0),
+        ]
+
+        for metric_name, value in serving_cpu_metrics:
+            metric = SystemMetric(
+                metric_name=metric_name,
+                metric_value=float(value),
+                timestamp=datetime.utcnow(),
+                tags={"service": "prediction-serving", "panel": "serving-live-matrix"}
             )
             metrics.append(metric)
         
@@ -101,7 +123,7 @@ async def seed_metrics():
                 metric_name=metric_name,
                 metric_value=float(value),
                 timestamp=datetime.utcnow(),
-                metadata={"training": "pyg-conflict-risk-v1"}
+                tags={"training": "pyg-conflict-risk-v1"}
             )
             metrics.append(metric)
         
@@ -119,7 +141,7 @@ async def seed_metrics():
                 metric_name=metric_name,
                 metric_value=float(value),
                 timestamp=datetime.utcnow(),
-                metadata={"model": "pyg-conflict-risk-gnn"}
+                tags={"model": "pyg-conflict-risk-gnn"}
             )
             metrics.append(metric)
         
@@ -138,7 +160,7 @@ async def seed_metrics():
                 metric_name=metric_name,
                 metric_value=float(value),
                 timestamp=datetime.utcnow(),
-                metadata={"experiment": "prediction-threshold-policy"}
+                tags={"experiment": "prediction-threshold-policy"}
             )
             metrics.append(metric)
         
@@ -147,7 +169,7 @@ async def seed_metrics():
             metric_name="model_drift_score",
             metric_value=0.15,
             timestamp=datetime.utcnow(),
-            metadata={"monitoring": "continuous-drift-detection"}
+            tags={"monitoring": "continuous-drift-detection"}
         )
         metrics.append(drift_metric)
         

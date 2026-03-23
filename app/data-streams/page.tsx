@@ -281,34 +281,44 @@ export default function DataStreamsPage() {
                     {p.status.toUpperCase()}
                   </span>
                 </div>
-                <div
-                  style={{
-                    width: '100%',
-                    height: '4px',
-                    background: 'rgba(30,58,95,0.6)',
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      width:
-                        p.status === 'healthy'
-                          ? '100%'
-                          : p.status === 'warning'
-                          ? '70%'
-                          : '40%',
-                      height: '100%',
-                      background:
-                        p.status === 'healthy'
-                          ? '#00ff88'
-                          : p.status === 'warning'
-                          ? '#f59e0b'
-                          : '#ef4444',
-                      transition: 'width 0.3s ease',
-                    }}
-                  />
-                </div>
+                {(() => {
+                  const healthScore =
+                    typeof p.health_score === 'number'
+                      ? Math.max(0, Math.min(100, p.health_score))
+                      : p.status === 'healthy'
+                      ? 96
+                      : p.status === 'warning'
+                      ? 70
+                      : 38;
+                  const healthColor =
+                    healthScore >= 85 ? '#00ff88' : healthScore >= 60 ? '#f59e0b' : '#ef4444';
+
+                  return (
+                    <>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '4px',
+                          background: 'rgba(30,58,95,0.6)',
+                          borderRadius: '2px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${healthScore}%`,
+                            height: '100%',
+                            background: healthColor,
+                            transition: 'width 0.3s ease',
+                          }}
+                        />
+                      </div>
+                      <div className="mt-1 text-2xs" style={{ color: '#64748b' }}>
+                        health {healthScore.toFixed(0)}%
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

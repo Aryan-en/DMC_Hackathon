@@ -406,6 +406,7 @@ export default function KnowledgeGraphPage() {
   });
 
   const totalNodes = data.nodeTypes.reduce((acc, n) => acc + n.count, 0);
+
   const graphDepth = data.paths.length ? Math.max(...data.paths.map((p) => p.hops ?? Math.max(0, p.chain.length - 1))) : 0;
   const highlightedPathChain = selectedPathIndex >= 0 ? (data.paths[selectedPathIndex]?.chain ?? []) : [];
 

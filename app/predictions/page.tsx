@@ -7,7 +7,7 @@ import ServingHealthChart from '@/app/components/ServingHealthChart';
 
 export default function PredictionsPage() {
   const { data, loading, error } = usePredictionsMetrics();
-  const { history, loading: historyLoading, error: historyError } = useServingHealthMetrics();
+  const { history, snapshot, loading: historyLoading, error: historyError } = useServingHealthMetrics();
   const latest = data.forecast.length > 0 ? data.forecast[data.forecast.length - 1] : { probability: 0, date: '', trend: 'stable' };
   const servingColor = data.servingHealth.status === 'healthy' ? '#00ff88' : data.servingHealth.status === 'degraded' ? '#f59e0b' : '#ef4444';
 
@@ -103,7 +103,7 @@ export default function PredictionsPage() {
           </div>
         </div>
 
-        <ServingHealthChart data={history.data} loading={historyLoading} error={historyError} />
+        <ServingHealthChart cpuModel={history.cpu_model} data={history.data} snapshot={snapshot} loading={historyLoading} error={historyError} />
 
         <div className="glass-card rounded-xl p-5">
           <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Conflict Risk Forecast ({data.region})</h3>

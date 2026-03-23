@@ -16,6 +16,7 @@ type Pipeline = {
   status: string;
   throughput: string;
   latency: string;
+  health_score?: number;
 };
 
 type StreamsMetrics = {
