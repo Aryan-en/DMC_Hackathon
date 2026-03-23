@@ -328,12 +328,11 @@ async def get_paths(
 async def seed_knowledge_graph_data(db: AsyncSession = Depends(get_db_session)):
     """POST /api/knowledge-graph/seed-data - Populate knowledge graph with sample entities and relationships"""
     try:
-        import uuid
-        from sqlalchemy import text
+        from sqlalchemy import delete
         
         # Clear existing data
-        await db.execute(text("DELETE FROM relationships"))
-        await db.execute(text("DELETE FROM entities"))
+        await db.execute(delete(Relationship))
+        await db.execute(delete(Entity))
         await db.commit()
         
         # Define entities
@@ -381,19 +380,16 @@ async def seed_knowledge_graph_data(db: AsyncSession = Depends(get_db_session)):
         # Create entity records
         entity_map = {}
         for name, (entity_type, description, confidence) in entities_data.items():
-            entity_id = str(uuid.uuid4())
-            stmt = text("""
-                INSERT INTO entities (id, name, entity_type, description, confidence_score, mention_count, created_at, updated_at)
-                VALUES (:id, :name, :type, :description, :confidence, 1, NOW(), NOW())
-            """)
-            await db.execute(stmt, {
-                "id": entity_id,
-                "name": name,
-                "type": entity_type,
-                "description": description,
-                "confidence": confidence,
-            })
-            entity_map[name] = entity_id
+            entity = Entity(
+                entity_type=entity_type,
+                name=name,
+                description=description,
+                confidence_score=confidence,
+                mention_count=1
+            )
+            db.add(entity)
+            await db.flush()
+            entity_map[name] = entity.id
         
         await db.commit()
         
@@ -495,18 +491,13 @@ async def seed_knowledge_graph_data(db: AsyncSession = Depends(get_db_session)):
         # Create relationship records
         for subject, predicate, obj, confidence in relationships_data:
             if subject in entity_map and obj in entity_map:
-                rel_id = str(uuid.uuid4())
-                stmt = text("""
-                    INSERT INTO relationships (id, subject_entity_id, predicate, object_entity_id, confidence_score, created_at)
-                    VALUES (:id, :subject_id, :predicate, :object_id, :confidence, NOW())
-                """)
-                await db.execute(stmt, {
-                    "id": rel_id,
-                    "subject_id": entity_map[subject],
-                    "predicate": predicate,
-                    "object_id": entity_map[obj],
-                    "confidence": confidence,
-                })
+                relationship = Relationship(
+                    subject_entity_id=entity_map[subject],
+                    predicate=predicate,
+                    object_entity_id=entity_map[obj],
+                    confidence_score=confidence
+                )
+                db.add(relationship)
         
         await db.commit()
         

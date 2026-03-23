@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from main import app
-from db.schemas import User, ConflictData, Entity, AuditLog
+from db.schemas import User, Entity, AuditLog
 from services.auth import AuthService
 from services.rbac import RBACService
 

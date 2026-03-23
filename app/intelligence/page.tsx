@@ -192,7 +192,7 @@ export default function IntelligencePage() {
                             style={{ background: 'rgba(0,212,255,0.08)', color: '#00d4ff', fontSize: '0.65rem' }}
                           >{e.type}</span>
                         </td>
-                        <td className="font-mono" style={{ color: '#94a3b8' }}>{e.mentions.toLocaleString()}</td>
+                        <td className="font-mono" style={{ color: '#94a3b8' }}>{e.mentions.toLocaleString('en-US')}</td>
                         <td>
                           <div className="flex items-center gap-2">
                             <div className="w-12 h-1 rounded-full" style={{ background: 'rgba(30,58,95,0.5)' }}>
@@ -385,10 +385,10 @@ export default function IntelligencePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2">
-            {data.climateRegions.map(region => {
+            {data.climateRegions.map((region, idx) => {
               const riskColor = region.risk_level === 'CRITICAL' ? '#ef4444' : '#f59e0b';
               return (
-                <div key={region.region} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${riskColor}30` }}>
+                <div key={`${region.region}-${idx}`} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${riskColor}30` }}>
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">

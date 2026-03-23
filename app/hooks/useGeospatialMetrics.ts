@@ -61,6 +61,17 @@ type GeospatialMetrics = {
   economicRegions?: EconomicRegion[];
 };
 
+function dedupeByKey<T>(items: T[], getKey: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item, index) => {
+    const raw = getKey(item).trim();
+    const key = raw || `__idx_${index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Fallback sample data - 100+ Hotspots (Critical & High-Risk Zones)
 const SAMPLE_HOTSPOTS: Hotspot[] = [
   // Europe (15)
@@ -467,18 +478,23 @@ export function useGeospatialMetrics() {
 
         if (!active) return;
 
-        const hotspots = hotspotsResult.status === 'fulfilled' && hotspotsResult.value?.hotspots
+        const hotspotsRaw = hotspotsResult.status === 'fulfilled' && hotspotsResult.value?.hotspots
           ? hotspotsResult.value.hotspots
           : SAMPLE_HOTSPOTS;
-        const climateRegions = climateResult.status === 'fulfilled' && climateResult.value?.regions
+        const climateRegionsRaw = climateResult.status === 'fulfilled' && climateResult.value?.regions
           ? climateResult.value.regions
           : SAMPLE_CLIMATE_REGIONS;
-        const incidents = incidentsResult.status === 'fulfilled' && incidentsResult.value?.incidents
+        const incidentsRaw = incidentsResult.status === 'fulfilled' && incidentsResult.value?.incidents
           ? incidentsResult.value.incidents
           : SAMPLE_INCIDENTS;
-        const economicRegions = economicResult.status === 'fulfilled' && economicResult.value?.regions
+        const economicRegionsRaw = economicResult.status === 'fulfilled' && economicResult.value?.regions
           ? economicResult.value.regions
           : SAMPLE_ECONOMIC_REGIONS;
+
+        const hotspots = dedupeByKey(hotspotsRaw, (item) => `${item.name}|${item.lat}|${item.lng}|${item.type}`);
+        const climateRegions = dedupeByKey(climateRegionsRaw, (item) => item.region);
+        const incidents = dedupeByKey(incidentsRaw, (item) => `${item.name}|${item.date}|${item.lat}|${item.lng}`);
+        const economicRegions = dedupeByKey(economicRegionsRaw, (item) => item.name);
         
         const isUsingFallback = hotspotsResult.status === 'rejected' || climateResult.status === 'rejected' 
           || incidentsResult.status === 'rejected' || economicResult.status === 'rejected';

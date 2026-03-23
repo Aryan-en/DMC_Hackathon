@@ -33,7 +33,7 @@ async def seed():
     
     try:
         conn = await asyncpg.connect(**conn_str_dict)
-        print("✓ Connected to PostgreSQL")
+        print("[OK] Connected to PostgreSQL")
         
         # Insert countries
         countries_data = [
@@ -56,9 +56,9 @@ async def seed():
                     VALUES ($1, $2, $3, $4, NOW(), NOW())
                     ON CONFLICT DO NOTHING
                 """, country_id, code, name, region)
-                print(f"  ✓ {name} ({code})")
+                print(f"  [OK] {name} ({code})")
             except Exception as e:
-                print(f"  ✗ {name}: {e}")
+                print(f"  [FAIL] {name}: {e}")
         
         # Get country IDs
         print("\nFetching country IDs...")
@@ -95,9 +95,9 @@ async def seed():
                         VALUES ($1, $2, $3, $4, $5, NOW(), 'SEED')
                         ON CONFLICT DO NOTHING
                     """, relation_id, countries_map[code_a], countries_map[code_b], rel_type, status)
-                    print(f"  ✓ {code_a} ← {rel_type} → {code_b}")
+                    print(f"  [OK] {code_a} <- {rel_type} -> {code_b}")
                 except Exception as e:
-                    print(f"  ✗ {code_a} ← {rel_type} → {code_b}: {e}")
+                    print(f"  [FAIL] {code_a} <- {rel_type} -> {code_b}: {e}")
         
         # Verify data was inserted
         print("\nVerifying data...")
@@ -106,12 +106,12 @@ async def seed():
         count = await conn.fetchval("SELECT COUNT(*) FROM country_relations")
         print(f"  Relations in database: {count}")
         
-        print("\n✅ Seeding complete!")
+        print("\n[SUCCESS] Seeding complete!")
         
         await conn.close()
         
     except Exception as e:
-        print(f"❌ ERROR: {e}")
+        print(f"[ERROR] ERROR: {e}")
         import traceback
         traceback.print_exc()
 

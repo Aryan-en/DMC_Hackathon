@@ -3,7 +3,7 @@
 import json
 import logging
 import asyncio
-from typing import Optional, dict, list, tuple
+from typing import Optional
 from datetime import datetime
 import httpx
 from config import Settings

@@ -12,6 +12,14 @@ export default function GeospatialPage() {
   const [selectedHotspot, setSelectedHotspot] = useState<any>(null);
   const criticalHotspots = data.hotspots.filter((h) => (h.severity || '').toLowerCase() === 'critical').length;
 
+  const formatIncidentTimestamp = (rawDate: string) => {
+    const normalized = rawDate.replace(' ', 'T');
+    const [datePart, timeRaw] = normalized.split('T');
+    const safeDate = datePart || rawDate;
+    const safeTime = timeRaw?.replace('Z', '').substring(0, 5) || '00:00';
+    return `${safeDate} ${safeTime}`;
+  };
+
   return (
     <div className="flex flex-col min-h-screen grid-bg">
       <TopBar title="Geospatial Intelligence" subtitle="Live geospatial feeds from backend endpoints" />
@@ -93,14 +101,14 @@ export default function GeospatialPage() {
             <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Climate Indicators</h3>
             <div className="overflow-y-auto" style={{ maxHeight: '500px' }}>
               <div className="space-y-2 pr-2">
-                {data.climateRegions.map((r) => {
+                {data.climateRegions.map((r, idx) => {
                   const droughtColor = r.drought === 'CRITICAL' ? '#ef4444' : r.drought === 'HIGH' ? '#f59e0b' : r.drought === 'MODERATE' ? '#3b82f6' : '#10b981';
                   const floodColor = r.flood === 'CRITICAL' ? '#ef4444' : r.flood === 'HIGH' ? '#f59e0b' : '#3b82f6';
                   const cropsRiskColor = r.cropRisk >= 80 ? '#ef4444' : r.cropRisk >= 60 ? '#f59e0b' : r.cropRisk >= 40 ? '#3b82f6' : '#10b981';
                   
                   return (
                     <div
-                      key={r.region}
+                      key={`${r.region}-${idx}`}
                       className="p-3 rounded-lg transition-all cursor-pointer"
                       style={{
                         background: 'rgba(2,8,23,0.5)',
@@ -140,9 +148,9 @@ export default function GeospatialPage() {
             <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Recent Incidents</h3>
             <div className="overflow-y-auto" style={{ maxHeight: '500px' }}>
               <div className="space-y-2 pr-2">
-                {data.incidents.map((i) => (
+                {data.incidents.map((i, idx) => (
                   <div
-                    key={`${i.name}-${i.date}`}
+                    key={`${i.name}-${i.date}-${idx}`}
                     className="flex items-start gap-3 p-3 rounded-lg transition-all cursor-pointer"
                     style={{
                       background: 'rgba(2,8,23,0.5)',
@@ -158,9 +166,7 @@ export default function GeospatialPage() {
                       <div className="text-xs mt-1" style={{ color: '#94a3b8' }}>{i.type}</div>
                       <div className="text-xs" style={{ color: '#64748b', marginTop: '0.25rem' }}>{i.lat?.toFixed(2)}, {i.lng?.toFixed(2)}</div>
                     </div>
-                    <div className="text-xs" style={{ color: '#64748b', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {new Date(i.date).toISOString().split('T')[0]} {new Date(i.date).toISOString().split('T')[1].substring(0, 5)}
-                    </div>
+                    <div className="text-xs" style={{ color: '#64748b', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatIncidentTimestamp(i.date)}</div>
                   </div>
                 ))}
               </div>
@@ -703,9 +709,9 @@ export default function GeospatialPage() {
                 <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(148,163,184,0.3)' }}>
                   <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Date & Time</div>
                   <div className="text-sm font-semibold mt-1" style={{ color: '#e2e8f0' }}>
-                    {new Date(selectedIncident.date).toISOString().split('T')[0]}
+                    {formatIncidentTimestamp(selectedIncident.date).split(' ')[0]}
                     <br />
-                    {new Date(selectedIncident.date).toISOString().split('T')[1].substring(0, 5)}
+                    {formatIncidentTimestamp(selectedIncident.date).split(' ')[1]}
                   </div>
                 </div>
               </div>
@@ -723,7 +729,7 @@ export default function GeospatialPage() {
                 <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Incident Details</div>
                 <div style={{ color: '#e2e8f0', fontSize: '0.85rem', lineHeight: '1.5' }}>
                   <strong>{selectedIncident.name}</strong> - A {selectedIncident.type} incident has been reported. 
-                  This event occurred on {new Date(selectedIncident.date).toISOString().split('T')[0]} at {new Date(selectedIncident.date).toISOString().split('T')[1].substring(0, 5)}, 
+                  This event occurred on {formatIncidentTimestamp(selectedIncident.date).split(' ')[0]} at {formatIncidentTimestamp(selectedIncident.date).split(' ')[1]}, 
                   at coordinates ({selectedIncident.lat?.toFixed(4)}, {selectedIncident.lng?.toFixed(4)}).
                   <br /><br />
                   <span style={{ color: '#ef4444', fontWeight: 600 }}>This incident requires immediate attention and monitoring.</span>

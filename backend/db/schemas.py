@@ -103,7 +103,7 @@ class Entity(Base):
     __tablename__ = "entities"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    entity_type = Column(String(50), nullable=False)  # 'PERSON', 'ORG', 'GPE', 'EVENT', 'CONCEPT'
+    entity_type = Column(String(50), nullable=False, index=True)  # 'PERSON', 'ORG', 'GPE', 'EVENT', 'CONCEPT'
     name = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     confidence_score = Column(Float, nullable=True)
@@ -118,10 +118,10 @@ class Relationship(Base):
     __tablename__ = "relationships"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    subject_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False)
-    predicate = Column(String(100), nullable=False)
-    object_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False)
-    confidence_score = Column(Float, nullable=True)
+    subject_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False, index=True)
+    predicate = Column(String(100), nullable=False, index=True)
+    object_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False, index=True)
+    confidence_score = Column(Float, nullable=True, index=True)
     source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

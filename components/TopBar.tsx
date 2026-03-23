@@ -1,12 +1,11 @@
 'use client';
 
-import { Bell, Search, Wifi, User } from 'lucide-react';
+import { Search, Wifi, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [time, setTime] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
-  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -110,21 +109,6 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
         {/* Thin divider */}
         <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
-
-        {/* Notifications */}
-        <button
-          onClick={() => setShowNotifications(!showNotifications)}
-          className="relative p-1.5 rounded-lg transition-colors"
-          style={{ color: showNotifications ? '#c8a84a' : '#3a4e62' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.06)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        >
-          <Bell size={14} />
-          <span
-            className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
-            style={{ background: '#b84a4a' }}
-          />
-        </button>
 
         {/* User */}
         <div

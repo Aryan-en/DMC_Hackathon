@@ -95,6 +95,17 @@ type IntelligenceMetrics = {
   regionalHotspots?: RegionalHotspot[];
 };
 
+function dedupeByKey<T>(items: T[], getKey: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item, index) => {
+    const raw = getKey(item).trim();
+    const key = raw || `__idx_${index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Fallback sample data
 const SAMPLE_ENTITIES: ExtractedEntity[] = [
   { entity: 'United Nations', type: 'ORG', confidence: 0.97, mentions: 1842 },
@@ -209,14 +220,21 @@ export function useIntelligenceMetrics() {
         if (!active) return;
 
         // Handle each response individually for resilience
+        const entitiesRaw = entityRes.status === 'fulfilled' && entityRes.value?.entities ? entityRes.value.entities : SAMPLE_ENTITIES;
+        const languagesRaw = languageRes.status === 'fulfilled' && languageRes.value?.languages ? languageRes.value.languages : SAMPLE_LANGUAGES;
+        const keywordsRaw = keywordRes.status === 'fulfilled' && keywordRes.value?.keywords ? keywordRes.value.keywords : SAMPLE_KEYWORDS;
+        const briefsRaw = briefsRes.status === 'fulfilled' && briefsRes.value?.briefs ? briefsRes.value.briefs : SAMPLE_BRIEFS;
+        const modelsRaw = modelsRes.status === 'fulfilled' && modelsRes.value?.models ? modelsRes.value.models : SAMPLE_MODELS;
+        const climateRegionsRaw = climateRes.status === 'fulfilled' && climateRes.value?.regions ? climateRes.value.regions : SAMPLE_CLIMATE_REGIONS;
+
         const newData: IntelligenceMetrics = {
-          entities: entityRes.status === 'fulfilled' && entityRes.value?.entities ? entityRes.value.entities : SAMPLE_ENTITIES,
-          languages: languageRes.status === 'fulfilled' && languageRes.value?.languages ? languageRes.value.languages : SAMPLE_LANGUAGES,
-          keywords: keywordRes.status === 'fulfilled' && keywordRes.value?.keywords ? keywordRes.value.keywords : SAMPLE_KEYWORDS,
+          entities: dedupeByKey(entitiesRaw, (item) => `${item.entity}|${item.type}`),
+          languages: dedupeByKey(languagesRaw, (item) => item.lang),
+          keywords: dedupeByKey(keywordsRaw, (item) => item.keyword),
           sentimentRadar: sentimentRes.status === 'fulfilled' && sentimentRes.value?.radar ? sentimentRes.value.radar : SAMPLE_SENTIMENT_RADAR,
-          briefs: briefsRes.status === 'fulfilled' && briefsRes.value?.briefs ? briefsRes.value.briefs : SAMPLE_BRIEFS,
-          models: modelsRes.status === 'fulfilled' && modelsRes.value?.models ? modelsRes.value.models : SAMPLE_MODELS,
-          climateRegions: climateRes.status === 'fulfilled' && climateRes.value?.regions ? climateRes.value.regions : SAMPLE_CLIMATE_REGIONS,
+          briefs: dedupeByKey(briefsRaw, (item) => `${item.title}|${item.dateGen ?? ''}`),
+          models: dedupeByKey(modelsRaw, (item) => item.name),
+          climateRegions: dedupeByKey(climateRegionsRaw, (item) => item.region),
           meaSummary: meaRes.status === 'fulfilled' && meaRes.value?.summary ? meaRes.value.summary : undefined,
           meaRelations: meaRes.status === 'fulfilled' && meaRes.value?.key_relations ? meaRes.value.key_relations : undefined,
           regionalHotspots: meaRes.status === 'fulfilled' && meaRes.value?.regional_hotspots ? meaRes.value.regional_hotspots : undefined,
