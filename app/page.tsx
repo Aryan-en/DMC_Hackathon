@@ -16,7 +16,7 @@ import {
 const TYPE_COLORS: Record<string, string> = {
   DOC: '#8a78c8',
   MEA: '#5b8db8',
-  NEWS: '#c8a84a',
+  NEWS: '#00d4ff',
   SOCIAL: '#3eb87a',
   METRIC: '#4a6070',
 };
@@ -51,12 +51,12 @@ export default function Home() {
         {/* Mission brief banner */}
         <div
           className="flex items-center justify-between px-5 py-3 rounded-2xl"
-          style={{ background: 'rgba(200,168,74,0.04)', border: '1px solid rgba(200,168,74,0.12)' }}
+          style={{ background: 'rgba(0,212,255,0.04)', border: '1px solid rgba(0,212,255,0.12)' }}
         >
           <div className="flex items-center gap-3">
-            <Radio size={14} style={{ color: '#c8a84a' }} className="live-indicator" />
+            <Radio size={14} style={{ color: '#00d4ff' }} className="live-indicator" />
             <span style={{ color: '#4a6070', fontSize: '0.75rem' }}>
-              <span style={{ color: '#c8a84a', fontWeight: 600 }}>SYSTEM BRIEF:</span>{' '}
+              <span style={{ color: '#00d4ff', fontWeight: 600 }}>SYSTEM BRIEF:</span>{' '}
               Ontora operating at 99.7% uptime — 216 nations monitored, 48 active threat threads, 3 critical assessments pending review
             </span>
           </div>
@@ -64,9 +64,9 @@ export default function Home() {
             onClick={() => setShowBriefing(!showBriefing)}
             className="px-3 py-1.5 rounded-xl transition-colors"
             style={{
-              background: showBriefing ? 'rgba(200,168,74,0.15)' : 'rgba(200,168,74,0.08)',
-              border: '1px solid rgba(200,168,74,0.2)',
-              color: '#c8a84a',
+              background: showBriefing ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.08)',
+              border: '1px solid rgba(0,212,255,0.2)',
+              color: '#00d4ff',
               fontSize: '0.72rem',
               fontWeight: 600,
             }}
@@ -84,7 +84,7 @@ export default function Home() {
             change={12.4}
             changeLabel="this month"
             icon={Share2}
-            accentColor="#c8a84a"
+            accentColor="#00d4ff"
             glowClass="glow-cyan"
           />
           <StatCard
@@ -125,7 +125,7 @@ export default function Home() {
             { label: 'Knowledge Graph Nodes', value: data.globalEntities.total.toLocaleString(), icon: Share2, color: '#8a78c8' },
             { label: 'Kafka Events/sec', value: '142K', icon: Activity, color: '#5b8db8' },
             { label: 'Model Inferences Today', value: '8.4M', icon: Brain, color: '#3eb87a' },
-            { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: Globe, color: '#c8a84a' },
+            { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: Globe, color: '#00d4ff' },
           ].map(s => (
             <div key={s.label} className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4">
               <div
@@ -154,7 +154,7 @@ export default function Home() {
                 <p style={{ color: '#3a4e62', fontSize: '0.68rem', marginTop: '3px' }}>Composite cross-domain risk scoring (0–100)</p>
               </div>
               <div className="flex items-center gap-4">
-                {[{ label: 'Geopolitical', color: '#b84a4a' }, { label: 'Economic', color: '#c8a84a' }, { label: 'Climate', color: '#3eb87a' }, { label: 'Cyber', color: '#8a78c8' }].map(l => (
+                {[{ label: 'Geopolitical', color: '#b84a4a' }, { label: 'Economic', color: '#00d4ff' }, { label: 'Climate', color: '#3eb87a' }, { label: 'Cyber', color: '#8a78c8' }].map(l => (
                   <div key={l.label} className="flex items-center gap-1.5">
                     <span className="w-3 h-px inline-block" style={{ background: l.color }} />
                     <span style={{ color: '#3a4e62', fontSize: '0.67rem' }}>{l.label}</span>
@@ -180,7 +180,7 @@ export default function Home() {
                       {r.risk}
                     </span>
                   </div>
-                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(200,168,74,0.06)' }}>
+                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,212,255,0.06)' }}>
                     <div
                       className="h-full rounded-full"
                       style={{ width: `${r.risk}%`, background: `linear-gradient(90deg, ${r.color}90, ${r.color}60)` }}
@@ -208,7 +208,7 @@ export default function Home() {
                       <span style={{ color: '#4a6070', fontSize: '0.7rem' }}>{s.label}</span>
                       <span style={{ color: s.color, fontSize: '0.68rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 700 }}>{s.value}%</span>
                     </div>
-                    <div className="h-1 rounded-full" style={{ background: 'rgba(200,168,74,0.05)' }}>
+                    <div className="h-1 rounded-full" style={{ background: 'rgba(0,212,255,0.05)' }}>
                       <div className="h-full rounded-full" style={{ width: `${s.value}%`, background: `linear-gradient(90deg, ${s.color}90, ${s.color}60)` }} />
                     </div>
                   </div>
@@ -240,7 +240,7 @@ export default function Home() {
                 <div
                   key={i}
                   className="flex items-start gap-3 py-2"
-                  style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(200,168,74,0.05)' : 'none' }}
+                  style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(0,212,255,0.05)' : 'none' }}
                 >
                   <span
                     className="font-mono shrink-0"
@@ -276,7 +276,7 @@ export default function Home() {
 
         <div
           className="flex items-center justify-between py-4"
-          style={{ borderTop: '1px solid rgba(200,168,74,0.06)' }}
+          style={{ borderTop: '1px solid rgba(0,212,255,0.06)' }}
         >
           <span style={{ color: '#1e2e3e', fontSize: '0.62rem', letterSpacing: '0.04em' }}>
             ONTORA v4.2.1 — CLASSIFICATION: TOP SECRET // SCI // ORCON // NOFORN {loading ? '(SYNCING)' : '(LIVE)'}

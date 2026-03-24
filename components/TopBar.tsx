@@ -1,11 +1,15 @@
 'use client';
 
-import { Search, Wifi, User } from 'lucide-react';
+import { Search, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '@/app/lib/api';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [time, setTime] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
+  const [activeUser, setActiveUser] = useState('Operator');
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -15,8 +19,61 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
     };
     update();
     const id = setInterval(update, 1000);
+
+    const localSession = localStorage.getItem('ontora.auth.session');
+    const tempSession = sessionStorage.getItem('ontora.auth.session');
+    const savedUser = localStorage.getItem('ontora.auth.user');
+
+    if (localSession || tempSession) {
+      setLoggedIn(true);
+    }
+
+    if (savedUser) {
+      setActiveUser(savedUser);
+    } else if (tempSession) {
+      try {
+        const parsed = JSON.parse(tempSession) as { user?: { username?: string } };
+        if (parsed?.user?.username) {
+          setActiveUser(parsed.user.username);
+        }
+      } catch {
+        // Ignore malformed session payloads
+      }
+    }
     return () => clearInterval(id);
   }, []);
+
+  async function handleLogout() {
+    if (logoutLoading) return;
+
+    setLogoutLoading(true);
+
+    try {
+      const localSessionRaw = localStorage.getItem('ontora.auth.session');
+      const tempSessionRaw = sessionStorage.getItem('ontora.auth.session');
+      const raw = localSessionRaw || tempSessionRaw;
+      const accessToken = raw ? (JSON.parse(raw) as { access_token?: string }).access_token : undefined;
+
+      if (accessToken) {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+      }
+    } catch {
+      // Logout should always clear local session even if API call fails
+    } finally {
+      localStorage.removeItem('ontora.auth.session');
+      localStorage.removeItem('ontora.auth.user');
+      sessionStorage.removeItem('ontora.auth.session');
+      setLoggedIn(false);
+      setActiveUser('Operator');
+      setLogoutLoading(false);
+    }
+  }
 
   return (
     <header
@@ -111,7 +168,10 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
 
         {/* User */}
-        <div
+        <button
+          onClick={() => {
+            window.location.href = 'http://localhost:3002';
+          }}
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
           style={{ border: '1px solid rgba(200,168,74,0.1)' }}
           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.04)')}
@@ -130,11 +190,31 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
             <div
               style={{ color: '#8a9aaa', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.04em' }}
             >
-              Admin
+              {activeUser}
             </div>
-            <div style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.08em' }}>Officer</div>
+            <div style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.08em' }}>{loggedIn ? 'Authenticated' : 'Sign in'}</div>
           </div>
-        </div>
+        </button>
+
+        {loggedIn && (
+          <button
+            onClick={handleLogout}
+            disabled={logoutLoading}
+            className="px-2.5 py-1.5 rounded-lg"
+            style={{
+              border: '1px solid rgba(184,74,74,0.28)',
+              background: 'rgba(184,74,74,0.1)',
+              color: '#ef4444',
+              fontSize: '0.62rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              cursor: logoutLoading ? 'not-allowed' : 'pointer',
+              opacity: logoutLoading ? 0.7 : 1,
+            }}
+          >
+            {logoutLoading ? 'SIGNING OUT...' : 'SIGN OUT'}
+          </button>
+        )}
       </div>
     </header>
   );

@@ -1,4 +1,4 @@
-"""Bill Amendment Analysis API Endpoints - Powered by Grok API for Efficient Processing"""
+"""Bill Amendment Analysis API Endpoints - Powered by Gemini/Grok for Efficient Processing"""
 
 import os
 import json
@@ -18,7 +18,7 @@ from services.grok_bill_analyzer import GrokBillAnalyzer
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Initialize Grok analyzer for 300+ page bill processing
+# Initialize analyzer for 300+ page bill processing
 settings = Settings()
 grok_analyzer = GrokBillAnalyzer(settings)
 
@@ -29,7 +29,7 @@ async def analyze_bill(
     db: AsyncSession = Depends(get_db_session)
 ):
     """
-    POST /api/bill-analysis/analyze - Analyze uploaded bill document using Grok API
+    POST /api/bill-analysis/analyze - Analyze uploaded bill document using Gemini (preferred) or Grok
     
     Optimized for:
     - 300+ page documents
@@ -83,14 +83,16 @@ async def analyze_bill(
             word_count = len(extracted_text.split())
             logs.append(f"✓ Extracted {word_count} words from {pages} pages")
         
-        # Step 2: Run Grok Analysis with intelligent chunking (40%)
+        # Step 2: Run AI analysis with intelligent chunking (40%)
         progress = 45
-        logs.append("✓ Initializing Grok API for parallel analysis...")
-        logs.append(f"  → Model: {settings.GROK_MODEL}")
+        provider_name = grok_analyzer.provider.upper() if grok_analyzer.enabled else "MOCK"
+        active_model = settings.GEMINI_MODEL if grok_analyzer.provider == "gemini" else settings.GROK_MODEL
+        logs.append(f"✓ Initializing {provider_name} analysis for parallel processing...")
+        logs.append(f"  → Model: {active_model}")
         logs.append(f"  → Chunk size: {settings.GROK_CHUNK_SIZE} words")
         logs.append("✓ Starting multi-section analysis...")
         
-        # Use Grok for comprehensive analysis
+        # Use configured provider for comprehensive analysis
         analysis, analysis_logs = await grok_analyzer.analyze_bill(extracted_text, logs)
         logs.extend(analysis_logs)
         
@@ -102,6 +104,7 @@ async def analyze_bill(
             "analysis_id": "bill_" + datetime.utcnow().isoformat(),
             "pages": pages,
             "words": len(extracted_text.split()),
+            "provider": grok_analyzer.provider,
             **analysis
         }
         
@@ -161,12 +164,15 @@ async def get_analysis_history(
 
 @router.get("/status")
 async def analysis_status():
-    """GET /api/bill-analysis/status - Check Grok API status and configuration"""
+    """GET /api/bill-analysis/status - Check bill analysis provider status and configuration"""
     
     try:
         status = {
-            "grok_enabled": grok_analyzer.enabled,
-            "model": settings.GROK_MODEL if grok_analyzer.enabled else "N/A",
+            "analysis_enabled": grok_analyzer.enabled,
+            "provider": grok_analyzer.provider,
+            "model": (settings.GEMINI_MODEL if grok_analyzer.provider == "gemini" else settings.GROK_MODEL) if grok_analyzer.enabled else "N/A",
+            "gemini_enabled": bool(settings.GEMINI_API_KEY),
+            "grok_enabled": bool(settings.GROK_API_KEY),
             "chunk_size": settings.GROK_CHUNK_SIZE,
             "max_tokens": settings.GROK_MAX_TOKENS,
             "timeout_sec": settings.GROK_TIMEOUT_SEC,

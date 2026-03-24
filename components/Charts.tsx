@@ -49,8 +49,8 @@ export function GlobalRiskChart() {
             <stop offset="95%" stopColor="#b84a4a" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="eco" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#c8a84a" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#c8a84a" stopOpacity={0} />
+            <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.25} />
+            <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="cli" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#3eb87a" stopOpacity={0.2} />
@@ -61,12 +61,12 @@ export function GlobalRiskChart() {
             <stop offset="95%" stopColor="#8a78c8" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(200,168,74,0.07)" />
+        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" />
         <XAxis dataKey="month" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip content={<CustomTooltip />} />
         <Area type="monotone" dataKey="geopolitical" stroke="#b84a4a" strokeWidth={1.5} fill="url(#geo)" name="Geopolitical" />
-        <Area type="monotone" dataKey="economic" stroke="#c8a84a" strokeWidth={1.5} fill="url(#eco)" name="Economic" />
+        <Area type="monotone" dataKey="economic" stroke="#00d4ff" strokeWidth={1.5} fill="url(#eco)" name="Economic" />
         <Area type="monotone" dataKey="climate" stroke="#3eb87a" strokeWidth={1.5} fill="url(#cli)" name="Climate" />
         <Area type="monotone" dataKey="cyber" stroke="#8a78c8" strokeWidth={1.5} fill="url(#cyb)" name="Cyber" />
       </AreaChart>
@@ -87,11 +87,11 @@ export function EntityBarChart() {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={entityData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(200,168,74,0.07)" vertical={false} />
+        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" vertical={false} />
         <XAxis dataKey="name" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#7a8fa8', fontSize: 11 }} itemStyle={{ color: '#c8a84a', fontSize: 11 }} />
-        <Bar dataKey="value" fill="#c8a84a" radius={[3, 3, 0, 0]} opacity={0.75} name="Entities" />
+        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#7a8fa8', fontSize: 11 }} itemStyle={{ color: '#00d4ff', fontSize: 11 }} />
+        <Bar dataKey="value" fill="#00d4ff" radius={[3, 3, 0, 0]} opacity={0.75} name="Entities" />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -111,7 +111,7 @@ export function SentimentChart() {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={sentimentData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }} stackOffset="expand">
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(200,168,74,0.07)" vertical={false} />
+        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" vertical={false} />
         <XAxis dataKey="date" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
         <Tooltip
@@ -137,7 +137,7 @@ export function ThroughputChart() {
   return (
     <ResponsiveContainer width="100%" height={160}>
       <LineChart data={throughputData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(200,168,74,0.07)" />
+        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" />
         <XAxis dataKey="hour" tick={{ fill: '#2a3d52', fontSize: 9 }} axisLine={false} tickLine={false} interval={3} />
         <YAxis tick={{ fill: '#2a3d52', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
         <Tooltip
@@ -145,7 +145,7 @@ export function ThroughputChart() {
           labelStyle={{ color: '#7a8fa8', fontSize: 11 }}
           formatter={(v: any) => [v.toLocaleString(), '']}
         />
-        <Line type="monotone" dataKey="events" stroke="#c8a84a" strokeWidth={1.5} dot={false} name="Ingested" />
+        <Line type="monotone" dataKey="events" stroke="#00d4ff" strokeWidth={1.5} dot={false} name="Ingested" />
         <Line type="monotone" dataKey="processed" stroke="#5b8db8" strokeWidth={1.5} dot={false} name="Processed" strokeDasharray="4 2" />
       </LineChart>
     </ResponsiveContainer>

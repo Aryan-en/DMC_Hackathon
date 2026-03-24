@@ -1,0 +1,250 @@
+================================================================================
+ENVIRONMENT VARIABLES CONFIGURATION GUIDE FOR .env.local
+================================================================================
+
+Current .env.local contains:
+├── NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+├── NODE_ENV=development
+└── (3 total variables)
+
+================================================================================
+ADDITIONAL VARIABLES THAT CAN BE ADDED TO .env.local
+================================================================================
+
+1. FRONTEND BUILD & OPTIMIZATION VARIABLES
+================================================================================
+
+# Next.js Optimization
+NEXT_TELEMETRY_DISABLED=1                          # Disable Next.js telemetry
+SKIP_PAGES_ANALYTICS=true                          # Skip page analytics in dev
+SWC_MINIFY=true                                    # Use SWC for minification
+
+# Build Configuration
+ANALYZE=false                                      # Enable bundle analysis (set true to analyze)
+EXPERIMENTAL_FEATURES_ENABLED=false                # Toggle experimental features
+
+
+2. FRONTEND API & CONNECTIVITY VARIABLES
+================================================================================
+
+# API Configuration
+NEXT_PUBLIC_API_TIMEOUT_MS=15000                   # API request timeout (milliseconds)
+NEXT_PUBLIC_API_POLLING_INTERVAL=5000              # Polling interval for live data
+NEXT_PUBLIC_API_RETRY_ATTEMPTS=3                   # Number of API retries
+NEXT_PUBLIC_API_MAX_CACHE_DURATION=300000          # Max cache duration (ms)
+
+# WebSocket Configuration (if using real-time updates)
+NEXT_PUBLIC_WS_BASE_URL=ws://127.0.0.1:8000       # WebSocket endpoint
+
+
+3. FRONTEND FEATURE FLAGS
+================================================================================
+
+# Dashboard Features
+NEXT_PUBLIC_ENABLE_LIVE_METRICS=true               # Enable/disable live metrics dashboard
+NEXT_PUBLIC_ENABLE_KNOWLEDGE_GRAPH=true            # Enable/disable knowledge graph module
+NEXT_PUBLIC_ENABLE_GEOSPATIAL=true                 # Enable/disable geospatial features
+NEXT_PUBLIC_ENABLE_PREDICTIONS=true                # Enable/disable prediction models
+NEXT_PUBLIC_ENABLE_INTELLIGENCE=true               # Enable/disable intelligence module
+NEXT_PUBLIC_ENABLE_DATA_LAKE=true                  # Enable/disable data lake features
+NEXT_PUBLIC_ENABLE_BILL_ANALYSIS=true              # Enable/disable bill analysis
+NEXT_PUBLIC_ENABLE_SECURITY_DASHBOARD=true         # Enable/disable security monitoring
+
+# UI/UX Features
+NEXT_PUBLIC_ENABLE_DARK_MODE=true                  # Enable dark mode toggle
+NEXT_PUBLIC_ENABLE_EXPORT_PDF=false                # Enable PDF export functionality
+NEXT_PUBLIC_ENABLE_ADVANCED_FILTERS=false          # Enable advanced filtering options
+
+
+4. AUTHENTICATION & SECURITY (Frontend-side)
+================================================================================
+
+# Session Configuration
+NEXT_PUBLIC_SESSION_TIMEOUT_MINUTES=30             # Session timeout duration
+NEXT_PUBLIC_REMEMBER_ME_DURATION_DAYS=7            # Remember me cookie duration
+
+
+5. DEVELOPMENT & DEBUGGING VARIABLES
+================================================================================
+
+# Debugging
+NEXT_PUBLIC_DEBUG_MODE=false                       # Enable frontend debug logging
+NEXT_PUBLIC_DEBUG_API_CALLS=false                  # Log API calls to console
+NEXT_PUBLIC_DEBUG_PERFORMANCE=false                # Log performance metrics
+DEBUG=nextauth:*                                   # NextAuth debug logging (if using)
+
+# Development Server
+PORT=3000                                          # Frontend dev server port
+HOSTNAME=0.0.0.0                                   # Dev server hostname
+
+
+6. MONITORING & ANALYTICS (Optional)
+================================================================================
+
+# Error Tracking
+NEXT_PUBLIC_SENTRY_DSN=                            # Sentry error tracking (if enabled)
+NEXT_PUBLIC_SENTRY_ENVIRONMENT=development         # Sentry environment
+
+# Analytics (if integrated)
+NEXT_PUBLIC_GA_ID=                                 # Google Analytics ID (if used)
+NEXT_PUBLIC_MIXPANEL_TOKEN=                        # Mixpanel token (if used)
+
+# Performance Monitoring
+NEXT_PUBLIC_ENABLE_WEB_VITALS=true                 # Monitor Core Web Vitals
+
+
+7. EXTERNAL SERVICE INTEGRATIONS (Optional)
+================================================================================
+
+# Map Services (for geospatial features)
+NEXT_PUBLIC_MAPBOX_TOKEN=                          # Mapbox API token (if using maps)
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=                   # Google Maps API key (if using)
+
+# AI/ML Services (if integrated directly in frontend)
+NEXT_PUBLIC_OPENAI_API_KEY=                        # OpenAI key (NOT recommended; backend only)
+NEXT_PUBLIC_GROK_API_KEY=                          # Grok API key (if integrated)
+
+# Third-party Integrations
+NEXT_PUBLIC_GROK_MODEL=grok-2                      # Grok model selection
+NEXT_PUBLIC_OLLAMA_BASE_URL=http://127.0.0.1:11434 # Local Ollama instance (if used)
+
+
+8. LOGGING & MONITORING
+================================================================================
+
+# Application Logging
+NEXT_PUBLIC_LOG_LEVEL=debug                        # Log level: debug, info, warn, error
+LOG_FORMAT=json                                    # Log format: json or text
+
+# Performance Profiling
+NEXT_PUBLIC_ENABLE_PROFILING=false                 # Enable React profiling
+
+
+9. CACHING & STORAGE
+================================================================================
+
+# Browser Caching
+NEXT_PUBLIC_CACHE_STRATEGY=stale-while-revalidate  # Cache strategy for API responses
+NEXT_PUBLIC_MAX_CACHED_PAGES=50                    # Max cached pages in memory
+
+# LocalStorage Configuration
+NEXT_PUBLIC_PERSIST_USER_PREFERENCES=true          # Persist UI preferences locally
+NEXT_PUBLIC_PERSIST_FILTERS=true                   # Persist filter selections
+
+
+10. UI/UX CONFIGURATION
+================================================================================
+
+# Theme Configuration
+NEXT_PUBLIC_THEME_COLOR=#003366                    # Primary theme color (hex)
+NEXT_PUBLIC_PRIMARY_COLOR=#003366                  # Primary color
+NEXT_PUBLIC_ACCENT_COLOR=#FF6B00                   # Accent color
+
+# Toast/Notification Configuration
+NEXT_PUBLIC_SHOW_DEBUG_TOASTS=false                # Show debug toast notifications
+NEXT_PUBLIC_NOTIFICATION_TIMEOUT=4000              # Toast notification timeout (ms)
+
+
+11. INTERNATIONALIZATION (i18n) - If Implemented
+================================================================================
+
+# Language Configuration
+NEXT_PUBLIC_DEFAULT_LANGUAGE=en                    # Default language code
+NEXT_PUBLIC_SUPPORTED_LANGUAGES=en,es,fr,de       # Comma-separated language codes
+
+
+12. RATE LIMITING & PERFORMANCE
+================================================================================
+
+# API Rate Limiting (Client-side tracking)
+NEXT_PUBLIC_API_RATE_LIMIT_REQUESTS=100            # Max requests per interval
+NEXT_PUBLIC_API_RATE_LIMIT_INTERVAL_MS=60000       # Rate limit interval (1 minute)
+
+# Request Queuing
+NEXT_PUBLIC_MAX_CONCURRENT_REQUESTS=5              # Max simultaneous API requests
+
+
+13. DATA & CHARTS CONFIGURATION
+================================================================================
+
+# Chart/Visualization Settings
+NEXT_PUBLIC_CHART_ANIMATION_DURATION=300           # Chart animation duration (ms)
+NEXT_PUBLIC_MAX_DATAPOINTS_PER_CHART=500           # Max data points before pagination
+NEXT_PUBLIC_REFRESH_INTERVAL_SECONDS=30            # Auto-refresh interval for charts
+
+
+================================================================================
+RECOMMENDED MINIMAL ADDITIONS FOR LOCAL DEVELOPMENT
+================================================================================
+
+Add these for better development experience:
+
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000    # (Already set)
+NODE_ENV=development                               # (Already set)
+NEXT_PUBLIC_DEBUG_MODE=false
+NEXT_PUBLIC_DEBUG_API_CALLS=false
+NEXT_PUBLIC_SHOW_DEBUG_TOASTS=false
+SKIP_PAGES_ANALYTICS=true
+NEXT_TELEMETRY_DISABLED=1
+PORT=3000
+
+
+================================================================================
+RECOMMENDED FOR PRODUCTION/STAGING
+================================================================================
+
+# Environment-specific overrides
+NEXT_PUBLIC_API_BASE_URL=https://api.ontora.com    # Production backend URL
+NODE_ENV=production                                # Set to production
+NEXT_PUBLIC_DEBUG_MODE=false
+NEXT_PUBLIC_DEBUG_API_CALLS=false
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here       # Error tracking
+NEXT_PUBLIC_GA_ID=your_ga_id_here                 # Analytics
+LOG_LEVEL=warn
+
+
+================================================================================
+CONFIGURATION CATEGORIES SUMMARY
+================================================================================
+
+✓ API & Connectivity (3 new)
+✓ Feature Flags (8 new)
+✓ Authentication (2 new)
+✓ Debugging (4 new)
+✓ Monitoring & Analytics (4 new)
+✓ External Services (4 new)
+✓ Logging (2 new)
+✓ Caching & Storage (4 new)
+✓ UI/UX (6 new)
+✓ i18n/Language (2 new)
+✓ Rate Limiting (2 new)
+✓ Data & Charts (3 new)
+
+Total: ~44 optional variables you can add
+
+
+================================================================================
+HOW TO USE THIS GUIDE
+================================================================================
+
+1. Copy variables from above that match your needs
+2. Paste into .env.local file
+3. Update values as needed for your environment
+4. Variables prefixed with NEXT_PUBLIC_ are exposed to browser (use for non-sensitive data)
+5. Other variables are server-side only (more secure for sensitive data)
+6. Restart Next.js dev server after modifying .env.local to apply changes
+7. For missing critical vars, backend will use fallback values
+
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+• NEXT_PUBLIC_ prefix: These variables are exposed to the browser. Never put secrets here.
+• Non-public variables: Safe for server-side secrets (backend URLs, API keys, etc.)
+• Case-sensitive: Environment variable names are case-sensitive
+• Restart required: Changes to .env.local require dev server restart
+• .env.local overrides: Takes precedence over .env and .env.example
+• Boolean values: Use "true"/"false" strings, or "0"/"1"
+
+================================================================================

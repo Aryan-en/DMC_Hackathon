@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  /* Core palette — deep obsidian with gold */
+  /* Core palette — deep navy with cyan accents */
   --background: #030810;
   --foreground: #c4cdd8;
   --sidebar-bg: #060d1a;
   --card-bg: #0a1525;
-  --border-color: rgba(200, 168, 74, 0.1);
+  --border-color: rgba(0, 212, 255, 0.14);
   --border-subtle: rgba(255, 255, 255, 0.05);
 
   /* Accents */
-  --accent-gold: #c8a84a;
-  --accent-gold-light: #e8c97d;
-  --accent-gold-dim: rgba(200, 168, 74, 0.15);
+  --accent-gold: #00d4ff;
+  --accent-gold-light: #67e8f9;
+  --accent-gold-dim: rgba(0, 212, 255, 0.15);
   --accent-steel: #5b8db8;
   --accent-emerald: #3eb87a;
   --accent-amber: #c8822a;
@@ -54,16 +54,16 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(200, 168, 74, 0.2);
+  background: rgba(0, 212, 255, 0.24);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(200, 168, 74, 0.4);
+  background: rgba(0, 212, 255, 0.42);
 }
 
 /* ── Glow effects ─────────────────────────────────── */
 .glow-cyan {
-  box-shadow: 0 4px 24px rgba(200, 168, 74, 0.12), 0 1px 4px rgba(200, 168, 74, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 212, 255, 0.14), 0 1px 4px rgba(0, 212, 255, 0.08);
 }
 .glow-green {
   box-shadow: 0 4px 24px rgba(62, 184, 122, 0.12);
@@ -115,9 +115,9 @@ body {
 /* ── Background ───────────────────────────────────── */
 .grid-bg {
   background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200, 168, 74, 0.04) 0%, transparent 60%),
-    linear-gradient(rgba(200, 168, 74, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(200, 168, 74, 0.015) 1px, transparent 1px);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 255, 0.05) 0%, transparent 60%),
+    linear-gradient(rgba(0, 212, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.018) 1px, transparent 1px);
   background-size: 100% 100%, 60px 60px, 60px 60px;
 }
 
@@ -125,16 +125,16 @@ body {
 .glass-card {
   background: linear-gradient(135deg, rgba(10, 21, 37, 0.95) 0%, rgba(8, 16, 30, 0.98) 100%);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(200, 168, 74, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.12);
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
               0 8px 32px rgba(0, 0, 0, 0.4),
               0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Gold divider line ────────────────────────────── */
+/* ── Accent divider line ─────────────────────────── */
 .gold-line {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(200, 168, 74, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.45), transparent);
 }
 
 /* ── Sidebar nav link ─────────────────────────────── */
@@ -204,7 +204,7 @@ body {
   text-transform: uppercase;
   font-weight: 600;
   padding: 0.7rem 1rem;
-  border-bottom: 1px solid rgba(200, 168, 74, 0.1);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.12);
 }
 .data-table td {
   padding: 0.7rem 1rem;
@@ -214,7 +214,7 @@ body {
   transition: background 0.15s;
 }
 .data-table tr:hover td {
-  background: rgba(200, 168, 74, 0.025);
+  background: rgba(0, 212, 255, 0.04);
 }
 .data-table tr:last-child td {
   border-bottom: none;
@@ -242,5 +242,50 @@ body {
 /* ── Page transition ──────────────────────────────── */
 main {
   animation: count-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Bill analysis mobile contrast ────────────────── */
+@media (max-width: 768px) {
+  .mobile-contrast-card {
+    border-color: rgba(103, 232, 249, 0.34) !important;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(103, 232, 249, 0.14) inset;
+  }
+
+  .mobile-contrast-panel {
+    background: rgba(5, 14, 26, 0.9) !important;
+    border-color: rgba(148, 163, 184, 0.42) !important;
+  }
+
+  .mobile-contrast-panel p,
+  .mobile-contrast-panel li,
+  .mobile-contrast-panel span {
+    color: #d8e4f0 !important;
+  }
+}
+
+/* ── Print/PDF policy brief styles ────────────────── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-family: "Segoe UI", Arial, sans-serif !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .grid-bg,
+  .glass-card {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .policy-brief-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 

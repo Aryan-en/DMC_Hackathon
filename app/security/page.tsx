@@ -6,6 +6,7 @@ import { useSecurityMetrics } from '@/app/hooks/useSecurityMetrics';
 export default function SecurityPage() {
   const { data, loading, error } = useSecurityMetrics();
   const denies = data.logs.filter((l) => l.status === 'DENY').length;
+  const loginEvents = data.logs.filter((l) => l.action === 'LOGIN');
 
   return (
     <div className="flex flex-col min-h-screen grid-bg">
@@ -17,8 +18,9 @@ export default function SecurityPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Audit Entries</div><div className="text-2xl font-bold" style={{ color: '#00d4ff' }}>{data.logs.length}</div></div>
+          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Login Events</div><div className="text-2xl font-bold" style={{ color: '#c8a84a' }}>{loginEvents.length}</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Denied Actions</div><div className="text-2xl font-bold" style={{ color: '#ef4444' }}>{denies}</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Trend Points</div><div className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{data.trend.length}</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Access Check</div><div className="text-2xl font-bold" style={{ color: data.accessCheck.allowed ? '#00ff88' : '#ef4444' }}>{data.accessCheck.allowed ? 'ALLOW' : 'DENY'}</div></div>
@@ -53,6 +55,33 @@ export default function SecurityPage() {
             </table>
           </div>
           {!loading && data.logs.length === 0 && <p className="text-xs mt-3" style={{ color: '#64748b' }}>No live audit logs returned by API.</p>}
+        </div>
+
+        <div className="glass-card rounded-xl p-5">
+          <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Recent Authentication Activity</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full data-table">
+              <thead>
+                <tr>
+                  <th className="text-left">Timestamp</th>
+                  <th className="text-left">User</th>
+                  <th className="text-left">Action</th>
+                  <th className="text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginEvents.slice(0, 12).map((l) => (
+                  <tr key={`${l.timestamp}-${l.user_id}-${l.status}`}>
+                    <td style={{ color: '#64748b' }}>{l.timestamp}</td>
+                    <td style={{ color: '#e2e8f0' }}>{l.user_id}</td>
+                    <td style={{ color: '#c8a84a' }}>{l.action}</td>
+                    <td style={{ color: l.status === 'ALLOW' ? '#00ff88' : '#ef4444' }}>{l.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!loading && loginEvents.length === 0 && <p className="text-xs mt-3" style={{ color: '#64748b' }}>No login activity captured yet.</p>}
         </div>
 
         <div className="glass-card rounded-xl p-5">

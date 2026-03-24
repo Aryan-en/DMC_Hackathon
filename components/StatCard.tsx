@@ -18,7 +18,7 @@ export default function StatCard({
   change,
   changeLabel,
   icon: Icon,
-  accentColor = '#c8a84a',
+  accentColor = '#00d4ff',
   glowClass = 'glow-cyan',
 }: StatCardProps) {
   const isPositive = change !== undefined && change > 0;
@@ -81,7 +81,7 @@ export default function StatCard({
       {change !== undefined && (
         <div
           className="flex items-center gap-1.5 mt-3 pt-3"
-          style={{ borderTop: '1px solid rgba(200,168,74,0.08)' }}
+          style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}
         >
           <TrendIcon
             size={12}

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Globe, LayoutDashboard, Share2, Map, Brain,
-  Database, Shield, Layers, Activity, Zap, FileText
+  Database, Shield, Layers, Activity, Zap, FileText, Settings
 } from 'lucide-react';
 
 const navItems = [
@@ -13,9 +13,11 @@ const navItems = [
   { href: '/bill-analysis', label: 'Bill Amendment', icon: FileText, group: 'COMMAND' },
   { href: '/knowledge-graph', label: 'Knowledge Graph', icon: Share2, group: 'ANALYSIS' },
   { href: '/geospatial', label: 'Geospatial Intel', icon: Map, group: 'ANALYSIS' },
+  { href: '/heatmap', label: 'Heatmap', icon: Layers, group: 'ANALYSIS' },
   { href: '/predictions', label: 'Predictions Engine', icon: Zap, group: 'ANALYSIS' },
   { href: '/data-streams', label: 'Data Streams', icon: Activity, group: 'INFRASTRUCTURE' },
   { href: '/data-lake', label: 'Data Lake', icon: Database, group: 'INFRASTRUCTURE' },
+  { href: '/control-panel', label: 'Control Panel', icon: Settings, group: 'INFRASTRUCTURE' },
   { href: '/security', label: 'Security & Governance', icon: Shield, group: 'INFRASTRUCTURE' },
 ];
 
@@ -28,25 +30,25 @@ export default function Sidebar() {
     <aside
       className="fixed left-0 top-0 h-screen w-64 flex flex-col z-40"
       style={{
-        background: 'linear-gradient(180deg, #070e1c 0%, #050b17 100%)',
-        borderRight: '1px solid rgba(200,168,74,0.1)',
+        background: 'linear-gradient(180deg, #080c14 0%, #0a111b 68%, #111a27 100%)',
+        borderRight: '1px solid rgba(201,168,106,0.16)',
         boxShadow: '4px 0 32px rgba(0,0,0,0.5)',
       }}
     >
       {/* Logo */}
       <div
         className="flex items-center gap-4 px-5 py-5"
-        style={{ borderBottom: '1px solid rgba(200,168,74,0.08)' }}
+        style={{ borderBottom: '1px solid rgba(201,168,106,0.12)' }}
       >
         <div
           className="relative flex items-center justify-center w-10 h-10 rounded-xl"
           style={{
             background: 'linear-gradient(135deg, rgba(200,168,74,0.18) 0%, rgba(200,168,74,0.06) 100%)',
-            border: '1px solid rgba(200,168,74,0.25)',
-            boxShadow: '0 0 16px rgba(200,168,74,0.08)',
+            border: '1px solid rgba(201,168,106,0.30)',
+            boxShadow: '0 0 20px rgba(201,168,106,0.12)',
           }}
         >
-          <Globe size={18} style={{ color: '#c8a84a' }} />
+          <Globe size={18} style={{ color: '#d6b985' }} />
           <span
             className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full live-indicator"
             style={{ background: '#3eb87a' }}
@@ -55,35 +57,13 @@ export default function Sidebar() {
         <div>
           <div
             className="font-bold tracking-widest"
-            style={{ color: '#c8a84a', fontSize: '0.75rem', letterSpacing: '0.22em' }}
+            style={{ color: '#d6b985', fontSize: '0.75rem', letterSpacing: '0.22em' }}
           >
             ONTORA
           </div>
           <div style={{ color: '#3a4e62', fontSize: '0.65rem', letterSpacing: '0.04em' }}>
             Global Ontology Engine
           </div>
-        </div>
-      </div>
-
-      {/* Clearance badge */}
-      <div
-        className="mx-4 mt-4 mb-2 px-3 py-2 rounded-lg"
-        style={{
-          background: 'rgba(184,74,74,0.06)',
-          border: '1px solid rgba(184,74,74,0.18)',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <Shield size={10} style={{ color: '#b84a4a' }} />
-          <span
-            className="font-bold tracking-widest"
-            style={{ color: '#b84a4a', fontSize: '0.6rem', letterSpacing: '0.18em' }}
-          >
-            TOP SECRET // SCI
-          </span>
-        </div>
-        <div style={{ color: '#3a4e62', fontSize: '0.6rem', marginTop: '2px' }}>
-          Authorized Personnel Only
         </div>
       </div>
 
@@ -110,14 +90,14 @@ export default function Sidebar() {
                       className={`sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'active' : ''}`}
                       style={{
                         background: isActive
-                          ? 'linear-gradient(90deg, rgba(200,168,74,0.1) 0%, rgba(200,168,74,0.03) 100%)'
+                          ? 'linear-gradient(90deg, rgba(201,168,106,0.16) 0%, rgba(201,168,106,0.05) 100%)'
                           : 'transparent',
-                        color: isActive ? '#e8c97d' : '#4a6070',
+                        color: isActive ? '#ead5a4' : '#6f8096',
                       }}
                     >
                       <Icon
                         size={15}
-                        style={{ color: isActive ? '#c8a84a' : '#3a4e62', flexShrink: 0 }}
+                        style={{ color: isActive ? '#d6b985' : '#4f6178', flexShrink: 0 }}
                       />
                       <span
                         style={{
@@ -132,7 +112,7 @@ export default function Sidebar() {
                       {isActive && (
                         <span
                           className="w-1.5 h-1.5 rounded-full"
-                          style={{ background: '#c8a84a', opacity: 0.8 }}
+                          style={{ background: '#d6b985', opacity: 0.9 }}
                         />
                       )}
                     </Link>
@@ -147,7 +127,7 @@ export default function Sidebar() {
       {/* System status */}
       <div
         className="px-4 py-4"
-        style={{ borderTop: '1px solid rgba(200,168,74,0.08)' }}
+        style={{ borderTop: '1px solid rgba(201,168,106,0.12)' }}
       >
         <div
           className="mb-3 font-semibold tracking-widest"
@@ -158,7 +138,7 @@ export default function Sidebar() {
         {[
           { label: 'Data Ingestion', status: 'ONLINE', color: '#3eb87a' },
           { label: 'ML Pipeline', status: 'ONLINE', color: '#3eb87a' },
-          { label: 'Neo4j Cluster', status: 'SYNC', color: '#c8822a' },
+          { label: 'Neo4j Cluster', status: 'SYNC', color: '#c9a86a' },
         ].map(s => (
           <div key={s.label} className="flex items-center justify-between py-1.5">
             <span style={{ color: '#3a4e62', fontSize: '0.68rem' }}>{s.label}</span>

@@ -1,0 +1,568 @@
+'use client';
+
+// START OF ENHANCED HEATMAP WITH COUNTRY LABELS AND ANALYSIS
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Layers, Flame, Users, LineChart, SlidersHorizontal } from 'lucide-react';
+
+type Hotspot = {
+  name: string;
+  lat: number;
+  lng: number;
+  severity: string;
+  value: number;
+  region?: string;
+};
+
+type ClimateRegion = {
+  region: string;
+  drought: string;
+  flood: string;
+  cropRisk: number;
+};
+
+type EconomicRegion = {
+  name: string;
+  gdp_usd_trillion: number;
+  gdp_growth_percent: number;
+  population_billion: number;
+  employment_rate: number;
+  unemployment_rate: number;
+};
+
+type HeatPoint = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  populationScore: number;
+  climateScore: number;
+  economyScore: number;
+};
+
+type HoverInfo = {
+  x: number;
+  y: number;
+  point: HeatPoint;
+};
+
+type Props = {
+  hotspots: Hotspot[];
+  climateRegions: ClimateRegion[];
+  economicRegions?: EconomicRegion[];
+};
+
+const severityWeight: Record<string, number> = {
+  low: 35,
+  medium: 55,
+  high: 75,
+  critical: 95,
+};
+
+function clamp(v: number): number {
+  return Math.max(0, Math.min(100, v));
+}
+
+function normalizeRiskLabel(label: string): number {
+  const upper = label.toUpperCase();
+  if (upper === 'CRITICAL') return 95;
+  if (upper === 'HIGH') return 75;
+  if (upper === 'MODERATE') return 55;
+  return 35;
+}
+
+function getCoordByLabel(label: string): { lat: number; lng: number } {
+  const v = label.toLowerCase();
+  if (v.includes('north america')) return { lat: 45, lng: -100 };
+  if (v.includes('south america')) return { lat: -15, lng: -60 };
+  if (v.includes('europe') || v.includes('balkan') || v.includes('mediterranean')) return { lat: 50, lng: 12 };
+  if (v.includes('africa') || v.includes('sahel') || v.includes('sahara') || v.includes('nile')) return { lat: 8, lng: 20 };
+  if (v.includes('middle east') || v.includes('persian') || v.includes('arab')) return { lat: 26, lng: 46 };
+  if (v.includes('asia') || v.includes('india') || v.includes('china') || v.includes('himalaya') || v.includes('korean') || v.includes('japan')) return { lat: 31, lng: 100 };
+  if (v.includes('australia') || v.includes('oceania') || v.includes('pacific') || v.includes('new zealand')) return { lat: -24, lng: 135 };
+  if (v.includes('central america') || v.includes('caribbean')) return { lat: 17, lng: -83 };
+  if (v.includes('amazon') || v.includes('andes') || v.includes('pampas')) return { lat: -9, lng: -63 };
+  if (v.includes('central asia') || v.includes('caspian')) return { lat: 43, lng: 66 };
+  return { lat: 10, lng: 10 };
+}
+
+function latLngToCanvas(lat: number, lng: number, width: number, height: number): { x: number; y: number } {
+  const x = ((lng + 180) / 360) * width;
+  const y = ((90 - lat) / 180) * height;
+  return { x, y };
+}
+
+function drawWorldGuides(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.lineWidth = 1;
+
+  [30, 60, 90, 120, 150].forEach((segment) => {
+    const x = (segment / 180) * (width / 2);
+    ctx.beginPath();
+    ctx.moveTo(width / 2 + x, 0);
+    ctx.lineTo(width / 2 + x, height);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(width / 2 - x, 0);
+    ctx.lineTo(width / 2 - x, height);
+    ctx.stroke();
+  });
+
+  [30, 60].forEach((segment) => {
+    const y = (segment / 90) * (height / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2 + y);
+    ctx.lineTo(width, height / 2 + y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2 - y);
+    ctx.lineTo(width, height / 2 - y);
+    ctx.stroke();
+  });
+
+  ctx.strokeStyle = 'rgba(200, 168, 74, 0.28)';
+  ctx.beginPath();
+  ctx.moveTo(0, height / 2);
+  ctx.lineTo(width, height / 2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawHeatLayer(
+  ctx: CanvasRenderingContext2D,
+  points: HeatPoint[],
+  width: number,
+  height: number,
+  scoreAccessor: (p: HeatPoint) => number,
+  color: { r: number; g: number; b: number },
+  opacity: number,
+  radius: number,
+): void {
+  points.forEach((point) => {
+    const score = clamp(scoreAccessor(point));
+    if (score <= 0) return;
+
+    const { x, y } = latLngToCanvas(point.lat, point.lng, width, height);
+    const influence = radius * (0.45 + score / 140);
+
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, influence);
+    gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${Math.min(0.75, opacity * (score / 100))})`);
+    gradient.addColorStop(0.45, `rgba(${color.r}, ${color.g}, ${color.b}, ${Math.min(0.45, opacity * 0.7)})`);
+    gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, influence, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function buildHeatPoints(hotspots: Hotspot[], climateRegions: ClimateRegion[], economicRegions: EconomicRegion[] = []): HeatPoint[] {
+  const byKey = new Map<string, HeatPoint>();
+
+  hotspots.forEach((h, idx) => {
+    const key = `${(h.region || h.name).toLowerCase()}-${idx}`;
+    const scoreFromSeverity = severityWeight[(h.severity || '').toLowerCase()] || 50;
+    byKey.set(key, {
+      id: `h-${idx}`,
+      name: h.region || h.name,
+      lat: h.lat,
+      lng: h.lng,
+      populationScore: clamp((h.value * 0.6 + scoreFromSeverity * 0.4)),
+      climateScore: 0,
+      economyScore: 0,
+    });
+  });
+
+  climateRegions.forEach((c, idx) => {
+    const coord = getCoordByLabel(c.region);
+    const key = `c-${c.region.toLowerCase()}-${idx}`;
+    const climate = clamp(c.cropRisk * 0.62 + normalizeRiskLabel(c.drought) * 0.22 + normalizeRiskLabel(c.flood) * 0.16);
+    byKey.set(key, {
+      id: `c-${idx}`,
+      name: c.region,
+      lat: coord.lat,
+      lng: coord.lng,
+      populationScore: 0,
+      climateScore: climate,
+      economyScore: 0,
+    });
+  });
+
+  economicRegions.forEach((e, idx) => {
+    const coord = getCoordByLabel(e.name);
+    const key = `e-${e.name.toLowerCase()}-${idx}`;
+    const population = clamp(e.population_billion * 55 + (100 - e.unemployment_rate * 4));
+    const economy = clamp(e.gdp_usd_trillion * 8 + e.gdp_growth_percent * 7 + e.employment_rate * 0.45);
+
+    byKey.set(key, {
+      id: `e-${idx}`,
+      name: e.name,
+      lat: coord.lat,
+      lng: coord.lng,
+      populationScore: population,
+      climateScore: 0,
+      economyScore: economy,
+    });
+  });
+
+  return Array.from(byKey.values());
+}
+
+const continentLabels = [
+  { name: 'North America', x: 0.15, y: 0.25 },
+  { name: 'South America', x: 0.25, y: 0.65 },
+  { name: 'Europe', x: 0.5, y: 0.2 },
+  { name: 'Africa', x: 0.55, y: 0.55 },
+  { name: 'Middle East', x: 0.63, y: 0.38 },
+  { name: 'Asia', x: 0.72, y: 0.35 },
+  { name: 'Australia', x: 0.75, y: 0.75 },
+];
+
+export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economicRegions }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const mapImageRef = useRef<HTMLImageElement | null>(null);
+
+  const [size, setSize] = useState({ width: 1000, height: 420 });
+  const [showPopulation, setShowPopulation] = useState(true);
+  const [showClimate, setShowClimate] = useState(true);
+  const [showEconomy, setShowEconomy] = useState(true);
+  const [radius, setRadius] = useState(50);
+  const [opacity, setOpacity] = useState(0.52);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  const points = useMemo(
+    () => buildHeatPoints(hotspots, climateRegions, economicRegions),
+    [hotspots, climateRegions, economicRegions],
+  );
+
+  const strongest = useMemo(() => {
+    return [...points]
+      .map((p) => ({
+        ...p,
+        composite: clamp(p.populationScore * 0.34 + p.climateScore * 0.33 + p.economyScore * 0.33),
+      }))
+      .sort((a, b) => b.composite - a.composite)
+      .slice(0, 8);
+  }, [points]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    const resize = () => {
+      const width = Math.max(640, host.clientWidth - 2);
+      const height = Math.max(360, Math.round(width * 0.42));
+      setSize({ width, height });
+    };
+
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = '/WorldMap.png';
+    img.onload = () => {
+      mapImageRef.current = img;
+      setMapLoaded(true);
+    };
+    img.onerror = () => {
+      console.warn('Failed to load WorldMap.png');
+      setMapLoaded(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = size.width;
+    canvas.height = size.height;
+
+    ctx.clearRect(0, 0, size.width, size.height);
+
+    // Draw world map background or gradient
+    if (mapLoaded && mapImageRef.current) {
+      ctx.drawImage(mapImageRef.current, 0, 0, size.width, size.height);
+    } else {
+      const bgGradient = ctx.createLinearGradient(0, 0, 0, size.height);
+      bgGradient.addColorStop(0, 'rgba(3, 8, 16, 0.95)');
+      bgGradient.addColorStop(1, 'rgba(7, 19, 37, 0.95)');
+      ctx.fillStyle = bgGradient;
+      ctx.fillRect(0, 0, size.width, size.height);
+    }
+
+    // Draw continent labels
+    continentLabels.forEach((label) => {
+      const x = label.x * size.width;
+      const y = label.y * size.height;
+      
+      ctx.save();
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(230, 224, 176, 0.7)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Add subtle text shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillText(label.name, x + 1, y + 1);
+      
+      ctx.fillStyle = 'rgba(230, 224, 176, 0.8)';
+      ctx.fillText(label.name, x, y);
+      ctx.restore();
+    });
+
+    drawWorldGuides(ctx, size.width, size.height);
+
+    if (showPopulation) {
+      drawHeatLayer(
+        ctx,
+        points,
+        size.width,
+        size.height,
+        (p) => p.populationScore,
+        { r: 34, g: 197, b: 94 },
+        opacity,
+        radius,
+      );
+    }
+
+    if (showClimate) {
+      drawHeatLayer(
+        ctx,
+        points,
+        size.width,
+        size.height,
+        (p) => p.climateScore,
+        { r: 56, g: 189, b: 248 },
+        opacity,
+        radius,
+      );
+    }
+
+    if (showEconomy) {
+      drawHeatLayer(
+        ctx,
+        points,
+        size.width,
+        size.height,
+        (p) => p.economyScore,
+        { r: 245, g: 158, b: 11 },
+        opacity,
+        radius,
+      );
+    }
+
+    ctx.save();
+    points.forEach((point) => {
+      const { x, y } = latLngToCanvas(point.lat, point.lng, size.width, size.height);
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
+      ctx.beginPath();
+      ctx.arc(x, y, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }, [points, opacity, radius, showClimate, showEconomy, showPopulation, size.height, size.width, mapLoaded]);
+
+  function findClosestPoint(mouseX: number, mouseY: number): HeatPoint | null {
+    let best: HeatPoint | null = null;
+    let bestDistance = Number.MAX_VALUE;
+
+    points.forEach((point) => {
+      const { x, y } = latLngToCanvas(point.lat, point.lng, size.width, size.height);
+      const dx = mouseX - x;
+      const dy = mouseY - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        best = point;
+      }
+    });
+
+    return bestDistance <= 20 ? best : null;
+  }
+
+  function handleMouseMove(event: React.MouseEvent<HTMLCanvasElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const point = findClosestPoint(x, y);
+    setHoverInfo(point ? { x, y, point } : null);
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-5" ref={hostRef}>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+        <div>
+          <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Multi-Layer Geospatial Heatmap</h3>
+          <p style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '0.2rem' }}>
+            Population pressure, climate stress, and economic activity blended on one operational map.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2" style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+          <Layers size={13} />
+          <span>{points.length} geo-points fused</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
+        <div>
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(2,8,23,0.45)', border: '1px solid rgba(30,58,95,0.45)' }}>
+            <div className="flex items-center gap-4 flex-wrap">
+              <button
+                onClick={() => setShowPopulation((v) => !v)}
+                className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                style={{
+                  border: '1px solid rgba(34,197,94,0.3)',
+                  background: showPopulation ? 'rgba(34,197,94,0.18)' : 'rgba(15,23,42,0.7)',
+                  color: '#22c55e',
+                  fontSize: '0.7rem',
+                }}
+              >
+                <Users size={13} /> Population
+              </button>
+
+              <button
+                onClick={() => setShowClimate((v) => !v)}
+                className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                style={{
+                  border: '1px solid rgba(56,189,248,0.3)',
+                  background: showClimate ? 'rgba(56,189,248,0.18)' : 'rgba(15,23,42,0.7)',
+                  color: '#38bdf8',
+                  fontSize: '0.7rem',
+                }}
+              >
+                <Flame size={13} /> Climate
+              </button>
+
+              <button
+                onClick={() => setShowEconomy((v) => !v)}
+                className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                style={{
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  background: showEconomy ? 'rgba(245,158,11,0.18)' : 'rgba(15,23,42,0.7)',
+                  color: '#f59e0b',
+                  fontSize: '0.7rem',
+                }}
+              >
+                <LineChart size={13} /> Economy
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="flex items-center gap-3" style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+                <SlidersHorizontal size={13} style={{ color: '#c8a84a' }} />
+                Radius
+                <input
+                  value={radius}
+                  onChange={(e) => setRadius(Number(e.target.value))}
+                  type="range"
+                  min={24}
+                  max={100}
+                  className="flex-1"
+                />
+                <span style={{ color: '#e2e8f0' }}>{radius}</span>
+              </label>
+
+              <label className="flex items-center gap-3" style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+                Blend
+                <input
+                  value={opacity}
+                  onChange={(e) => setOpacity(Number(e.target.value))}
+                  type="range"
+                  min={0.2}
+                  max={0.8}
+                  step={0.02}
+                  className="flex-1"
+                />
+                <span style={{ color: '#e2e8f0' }}>{Math.round(opacity * 100)}%</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
+            <canvas
+              ref={canvasRef}
+              width={size.width}
+              height={size.height}
+              style={{ width: '100%', height: 'auto', display: 'block', cursor: 'crosshair' }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setHoverInfo(null)}
+            />
+
+            {hoverInfo && (
+              <div
+                className="absolute rounded-lg px-3 py-2"
+                style={{
+                  left: Math.min(hoverInfo.x + 12, size.width - 220),
+                  top: Math.max(hoverInfo.y - 12, 8),
+                  width: 210,
+                  background: 'rgba(2,8,23,0.9)',
+                  border: '1px solid rgba(200,168,74,0.25)',
+                  pointerEvents: 'none',
+                }}
+              >
+                <div style={{ color: '#e2e8f0', fontSize: '0.74rem', fontWeight: 700 }}>{hoverInfo.point.name}</div>
+                <div style={{ color: '#22c55e', fontSize: '0.67rem' }}>Population: {Math.round(hoverInfo.point.populationScore)}</div>
+                <div style={{ color: '#38bdf8', fontSize: '0.67rem' }}>Climate: {Math.round(hoverInfo.point.climateScore)}</div>
+                <div style={{ color: '#f59e0b', fontSize: '0.67rem' }}>Economy: {Math.round(hoverInfo.point.economyScore)}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="rounded-xl p-4" style={{ background: 'rgba(2,8,23,0.45)', border: '1px solid rgba(30,58,95,0.45)' }}>
+          <h4 style={{ color: '#e2e8f0', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+            Composite Intensity Ranking
+          </h4>
+
+          <div className="space-y-2">
+            {strongest.map((point, index) => (
+              <div key={point.id} className="rounded-lg p-2" style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(148,163,184,0.12)' }}>
+                <div className="flex items-center justify-between">
+                  <div style={{ color: '#e2e8f0', fontSize: '0.7rem', fontWeight: 600 }}>
+                    #{index + 1} {point.name}
+                  </div>
+                  <div style={{ color: '#c8a84a', fontSize: '0.7rem', fontWeight: 700 }}>
+                    {Math.round((point.populationScore * 0.34 + point.climateScore * 0.33 + point.economyScore * 0.33))}
+                  </div>
+                </div>
+                <div className="mt-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(148,163,184,0.2)' }}>
+                  <div
+                    style={{
+                      width: `${Math.round((point.populationScore * 0.34 + point.climateScore * 0.33 + point.economyScore * 0.33))}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, #22c55e 0%, #38bdf8 50%, #f59e0b 100%)',
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(148,163,184,0.15)' }}>
+            <div style={{ color: '#94a3b8', fontSize: '0.67rem', marginBottom: '0.4rem' }}>Legend</div>
+            <div className="space-y-1.5">
+              <div style={{ color: '#22c55e', fontSize: '0.67rem' }}>Population layer</div>
+              <div style={{ color: '#38bdf8', fontSize: '0.67rem' }}>Climate stress layer</div>
+              <div style={{ color: '#f59e0b', fontSize: '0.67rem' }}>Economic activity layer</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}

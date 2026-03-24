@@ -7,13 +7,32 @@ import asyncio
 import asyncpg
 import json
 from uuid import uuid4
-from datetime import datetime, timedelta
+from datetime import datetime
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / 'backend'))
 
 from config import settings
+
+
+def infer_continent(region: str) -> str:
+    """Infer continent from region labels used in seed rows."""
+    mapping = {
+        "South Asia": "Asia",
+        "East Asia": "Asia",
+        "Central Asia": "Asia",
+        "West Asia": "Asia",
+        "Southeast Asia": "Asia",
+        "North America": "North America",
+        "Europe": "Europe",
+        "Europe/Asia": "Europe",
+        "North Africa": "Africa",
+        "Africa": "Africa",
+        "South America": "South America",
+        "Oceania": "Oceania",
+    }
+    return mapping.get(region, "Global")
 
 async def seed_all():
     """Master seed function - populates entire database"""
@@ -37,50 +56,54 @@ async def seed_all():
         print("[STEP 1/6] Seeding Countries and Geospatial Data")
         countries_data = [
             # Asia (Primary Focus)
-            ("IND", "India", "South Asia", 20.5937, 78.9629),
-            ("CHN", "China", "East Asia", 35.8617, 104.1954),
-            ("PAK", "Pakistan", "South Asia", 30.3753, 69.3451),
-            ("AFG", "Afghanistan", "Central Asia", 33.9391, 67.3100),
-            ("IRN", "Iran", "West Asia", 32.4279, 53.6880),
-            ("JPN", "Japan", "East Asia", 36.2048, 138.2529),
-            ("KOR", "South Korea", "East Asia", 35.9078, 127.7669),
-            ("VTN", "Vietnam", "Southeast Asia", 14.0583, 108.2772),
-            ("THA", "Thailand", "Southeast Asia", 15.8700, 100.9925),
-            ("RUS", "Russia", "Europe/Asia", 61.5240, 105.3188),
-            ("USA", "United States", "North America", 37.0902, -95.7129),
-            ("GBR", "United Kingdom", "Europe", 55.3781, -3.4360),
-            ("FRA", "France", "Europe", 46.2276, 2.2137),
-            ("DEU", "Germany", "Europe", 51.1657, 10.4515),
-            ("EU", "European Union", "Europe", 50.0, 10.0),
-            ("UKR", "Ukraine", "Europe", 48.3794, 31.1656),
-            ("ISR", "Israel", "West Asia", 31.0461, 34.8516),
-            ("SAU", "Saudi Arabia", "West Asia", 23.8859, 45.0792),
-            ("IRQ", "Iraq", "West Asia", 33.2232, 43.6793),
-            ("SYR", "Syria", "West Asia", 34.8021, 38.9968),
-            ("EGY", "Egypt", "North Africa", 26.8206, 30.8025),
-            ("ZAF", "South Africa", "Africa", -30.5595, 22.9375),
-            ("NGA", "Nigeria", "Africa", 9.0820, 8.6753),
-            ("BRA", "Brazil", "South America", -14.2350, -51.9253),
-            ("ARG", "Argentina", "South America", -38.4161, -63.6167),
-            ("AUS", "Australia", "Oceania", -25.2744, 133.7751),
-            ("NZL", "New Zealand", "Oceania", -40.9006, 174.8860),
-            ("POL", "Poland", "Europe", 51.9194, 19.1451),
+            ("IND", "India", "South Asia"),
+            ("CHN", "China", "East Asia"),
+            ("PAK", "Pakistan", "South Asia"),
+            ("AFG", "Afghanistan", "Central Asia"),
+            ("IRN", "Iran", "West Asia"),
+            ("JPN", "Japan", "East Asia"),
+            ("KOR", "South Korea", "East Asia"),
+            ("VTN", "Vietnam", "Southeast Asia"),
+            ("THA", "Thailand", "Southeast Asia"),
+            ("RUS", "Russia", "Europe/Asia"),
+            ("USA", "United States", "North America"),
+            ("GBR", "United Kingdom", "Europe"),
+            ("FRA", "France", "Europe"),
+            ("DEU", "Germany", "Europe"),
+            ("EU", "European Union", "Europe"),
+            ("UKR", "Ukraine", "Europe"),
+            ("ISR", "Israel", "West Asia"),
+            ("SAU", "Saudi Arabia", "West Asia"),
+            ("IRQ", "Iraq", "West Asia"),
+            ("SYR", "Syria", "West Asia"),
+            ("EGY", "Egypt", "North Africa"),
+            ("ZAF", "South Africa", "Africa"),
+            ("NGA", "Nigeria", "Africa"),
+            ("BRA", "Brazil", "South America"),
+            ("ARG", "Argentina", "South America"),
+            ("AUS", "Australia", "Oceania"),
+            ("NZL", "New Zealand", "Oceania"),
+            ("POL", "Poland", "Europe"),
         ]
         
         countries_map = {}
-        for code, name, region, lat, lon in countries_data:
+        for code, name, region in countries_data:
             country_id = str(uuid4())
-            countries_map[code] = country_id
             try:
                 await conn.execute("""
-                    INSERT INTO countries (id, iso_code, name, region, latitude, longitude, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                    INSERT INTO countries (id, iso_code, name, region, continent, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
                     ON CONFLICT (iso_code) DO NOTHING
-                """, country_id, code, name, region, lat, lon)
+                """, country_id, code, name, region, infer_continent(region))
             except Exception as e:
                 print(f"  [WARN] {name}: {str(e)[:50]}")
+
+        # Resolve canonical IDs from DB to avoid FK failures on ON CONFLICT inserts.
+        rows = await conn.fetch("SELECT id, iso_code FROM countries")
+        for row in rows:
+            countries_map[row["iso_code"]] = str(row["id"])
         
-        print(f"[OK] Seeded {len(countries_data)} countries with geospatial coordinates")
+        print(f"[OK] Seeded countries catalog ({len(countries_map)} available)")
         
         # ===== COUNTRY RELATIONSHIPS =====
         print("[STEP 2/6] Seeding Geopolitical Relationships")
@@ -114,10 +137,14 @@ async def seed_all():
                 try:
                     await conn.execute("""
                         INSERT INTO country_relations 
-                        (id, country_a_id, country_b_id, relation_type, status, trade_volume, last_updated, source)
-                        VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'MASTER_SEED')
+                        (id, country_a_id, country_b_id, relation_type, status, trade_volume, sentiment, confidence_score, agreements, key_issues, last_updated, source)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, NOW(), 'MASTER_SEED')
                         ON CONFLICT DO NOTHING
-                    """, relation_id, countries_map[code_a], countries_map[code_b], rel_type, status, strength * 1000)
+                    """, relation_id, countries_map[code_a], countries_map[code_b], rel_type, status, strength * 1000,
+                         "negative" if status in {"conflict", "active_dispute", "tense"} else "positive",
+                         strength,
+                         json.dumps([]),
+                         json.dumps([]))
                     rel_inserted += 1
                 except Exception as e:
                     print(f"  [WARN] {code_a}-{code_b}: {str(e)[:40]}")
@@ -133,6 +160,15 @@ async def seed_all():
             "OPEC": ("ORG", "Oil cartel", 0.95),
             "WTO": ("ORG", "World Trade Organization", 0.95),
             "SCO": ("ORG", "Shanghai Cooperation Organization", 0.92),
+
+            # Countries/Geopolitical Actors
+            "USA": ("GPE", "United States", 0.97),
+            "Russia": ("GPE", "Russian Federation", 0.97),
+            "Ukraine": ("GPE", "Ukraine", 0.96),
+            "China": ("GPE", "People's Republic of China", 0.97),
+            "India": ("GPE", "Republic of India", 0.97),
+            "Pakistan": ("GPE", "Islamic Republic of Pakistan", 0.96),
+            "Iran": ("GPE", "Islamic Republic of Iran", 0.96),
             
             # People
             "Modi": ("PERSON", "Indian PM", 0.99),
@@ -155,7 +191,6 @@ async def seed_all():
         kg_entity_map = {}
         for name, (etype, desc, conf) in kg_entities.items():
             entity_id = str(uuid4())
-            kg_entity_map[name] = entity_id
             try:
                 await conn.execute("""
                     INSERT INTO entities (id, name, entity_type, description, confidence_score, mention_count, created_at, updated_at)
@@ -164,6 +199,10 @@ async def seed_all():
                 """, entity_id, name, etype, desc, conf)
             except:
                 pass
+
+        entity_rows = await conn.fetch("SELECT id, name FROM entities")
+        for row in entity_rows:
+            kg_entity_map[row["name"]] = str(row["id"])
         
         print(f"[OK] Seeded {len(kg_entities)} knowledge graph entities")
         
@@ -210,20 +249,26 @@ async def seed_all():
             ("POLITICAL_INSTABILITY", "Domestic tensions", "MEDIUM", 0.70),
         ]
         
+        alerts_table_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'intelligence_alerts'
+            )
+        """)
+
         alerts_inserted = 0
-        for alert_type, description, severity, confidence in alert_types:
-            alert_id = str(uuid4())
-            try:
-                # Insert into alerts table if it exists
-                result = await conn.execute("""
-                    INSERT INTO intelligence_alerts (id, alert_type, description, severity, confidence_score, created_at, status)
-                    VALUES ($1, $2, $3, $4, $5, NOW(), 'ACTIVE')
-                    ON CONFLICT DO NOTHING
-                """, alert_id, alert_type, description, severity, confidence)
-                alerts_inserted += 1
-            except Exception as e:
-                # Table might not exist, skip silently
-                pass
+        if alerts_table_exists:
+            for alert_type, description, severity, confidence in alert_types:
+                alert_id = str(uuid4())
+                try:
+                    await conn.execute("""
+                        INSERT INTO intelligence_alerts (id, alert_type, description, severity, confidence_score, created_at, status)
+                        VALUES ($1, $2, $3, $4, $5, NOW(), 'ACTIVE')
+                        ON CONFLICT DO NOTHING
+                    """, alert_id, alert_type, description, severity, confidence)
+                    alerts_inserted += 1
+                except Exception:
+                    pass
         
         if alerts_inserted > 0:
             print(f"[OK] Seeded {alerts_inserted} intelligence alerts")
@@ -243,19 +288,27 @@ async def seed_all():
             ("FRONTEND", "Next.js Frontend", "HEALTHY", 0.98),
         ]
         
+        metrics_table_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'infrastructure_metrics'
+            )
+        """)
+
         metrics_inserted = 0
-        for comp_name, comp_desc, status, health in components:
-            metric_id = str(uuid4())
-            timestamp = datetime.utcnow()
-            try:
-                await conn.execute("""
-                    INSERT INTO infrastructure_metrics (id, component, description, status, health_score, timestamp)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT DO NOTHING
-                """, metric_id, comp_name, comp_desc, status, health, timestamp)
-                metrics_inserted += 1
-            except:
-                pass
+        if metrics_table_exists:
+            for comp_name, comp_desc, status, health in components:
+                metric_id = str(uuid4())
+                timestamp = datetime.now()
+                try:
+                    await conn.execute("""
+                        INSERT INTO infrastructure_metrics (id, component, description, status, health_score, timestamp)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT DO NOTHING
+                    """, metric_id, comp_name, comp_desc, status, health, timestamp)
+                    metrics_inserted += 1
+                except Exception:
+                    pass
         
         if metrics_inserted > 0:
             print(f"[OK] Seeded {metrics_inserted} infrastructure metrics")

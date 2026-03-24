@@ -42,7 +42,7 @@ export default function AlertFeed() {
     <div className="glass-card rounded-xl overflow-hidden">
       <div
         className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: '1px solid rgba(200,168,74,0.08)' }}
+        style={{ borderBottom: '1px solid rgba(0,212,255,0.08)' }}
       >
         <div className="flex items-center gap-3">
           <span style={{ color: '#c4cdd8', fontSize: '0.82rem', fontWeight: 600 }}>Intelligence Alerts</span>
@@ -76,10 +76,10 @@ export default function AlertFeed() {
             key={alert.id}
             className="flex items-start gap-4 px-5 py-3 transition-colors cursor-pointer"
             style={{
-              borderBottom: i < alerts.length - 1 ? '1px solid rgba(200,168,74,0.05)' : 'none',
+              borderBottom: i < alerts.length - 1 ? '1px solid rgba(0,212,255,0.05)' : 'none',
               borderLeft: `2px solid ${SEVERITY_COLORS[alert.severity]}`,
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.02)')}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.02)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             <div className="shrink-0 pt-0.5">
@@ -105,7 +105,7 @@ export default function AlertFeed() {
                 </span>
                 <span
                   className="px-1.5 py-0.5 rounded font-mono"
-                  style={{ background: 'rgba(200,168,74,0.05)', color: 'rgba(200,168,74,0.4)', fontSize: '0.58rem' }}
+                  style={{ background: 'rgba(0,212,255,0.05)', color: 'rgba(0,212,255,0.4)', fontSize: '0.58rem' }}
                 >
                   {alert.region}
                 </span>
@@ -126,11 +126,11 @@ export default function AlertFeed() {
 
       <div
         className="px-5 py-3 text-center"
-        style={{ borderTop: '1px solid rgba(200,168,74,0.07)' }}
+        style={{ borderTop: '1px solid rgba(0,212,255,0.07)' }}
       >
         <button 
           onClick={() => setShowAllAlerts(!showAllAlerts)}
-          style={{ color: showAllAlerts ? 'rgba(200,168,74,0.6)' : 'rgba(200,168,74,0.3)', fontSize: '0.68rem', transition: 'color 0.2s' }} 
+          style={{ color: showAllAlerts ? 'rgba(0,212,255,0.6)' : 'rgba(0,212,255,0.3)', fontSize: '0.68rem', transition: 'color 0.2s' }} 
           className="hover:underline"
         >
           {showAllAlerts ? 'Collapse alerts' : 'View all 2,847 alerts'} →

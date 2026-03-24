@@ -18,6 +18,11 @@ class GrokBillAnalyzer:
     """
     
     def __init__(self, settings: Settings):
+        self.settings = settings
+        self.gemini_api_key = settings.GEMINI_API_KEY
+        self.gemini_api_base_url = settings.GEMINI_API_BASE_URL
+        self.gemini_model = settings.GEMINI_MODEL
+
         self.api_key = settings.GROK_API_KEY
         self.api_base_url = settings.GROK_API_BASE_URL
         self.model = settings.GROK_MODEL
@@ -27,8 +32,10 @@ class GrokBillAnalyzer:
         self.max_retries = settings.GROK_MAX_RETRIES
         self.timeout = settings.GROK_TIMEOUT_SEC
         
-        if not self.api_key:
-            logger.warning("GROK_API_KEY not configured. Using mock analysis mode.")
+        self.provider = "gemini" if self.gemini_api_key else "grok" if self.api_key else "mock"
+
+        if self.provider == "mock":
+            logger.warning("No LLM API key configured (GEMINI_API_KEY/GROK_API_KEY). Using mock analysis mode.")
             self.enabled = False
         else:
             self.enabled = True
@@ -42,7 +49,7 @@ class GrokBillAnalyzer:
         """
         
         if not self.enabled:
-            logs.append("⚠ Grok API disabled - using mock analysis")
+            logs.append("⚠ AI provider disabled - using mock analysis")
             return await self._mock_analysis(text, logs)
         
         try:
@@ -78,12 +85,15 @@ class GrokBillAnalyzer:
             # Step 5: Synthesize results
             final_analysis = self._synthesize_results(metadata, results, logs)
             logs.append("✓ Analysis complete!")
+
+            final_analysis["analysis_provider"] = self.provider
+            final_analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else self.model
             
             return final_analysis, logs
             
         except Exception as e:
-            logger.error(f"Grok analysis error: {str(e)}")
-            logs.append(f"✗ Grok API error: {str(e)}")
+            logger.error(f"Bill analysis provider error: {str(e)}")
+            logs.append(f"✗ Provider error: {str(e)}")
             return await self._mock_analysis(text, logs)
     
     async def _extract_metadata(self, text: str, logs: list) -> dict:
@@ -106,7 +116,7 @@ Return ONLY valid JSON with these fields:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             metadata = self._extract_json(response)
             logs.append(f"✓ Extracted metadata: {metadata.get('bill_title', 'Unknown')}")
             return metadata
@@ -132,7 +142,7 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             return self._extract_json(response)
         except Exception as e:
             logger.warning(f"Summary analysis failed: {str(e)}")
@@ -158,7 +168,7 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             return self._extract_json(response)
         except Exception as e:
             logger.warning(f"Pros/cons analysis failed: {str(e)}")
@@ -186,7 +196,7 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             data = self._extract_json(response)
             return {"national_impact": data}
         except Exception as e:
@@ -211,7 +221,7 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             data = self._extract_json(response)
             return {"risk_assessment": data}
         except Exception as e:
@@ -236,7 +246,7 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             data = self._extract_json(response)
             return {"global_impact": data}
         except Exception as e:
@@ -262,13 +272,19 @@ Return ONLY valid JSON:
 }}"""
         
         try:
-            response = await self._call_grok_api(prompt)
+            response = await self._call_llm_api(prompt)
             data = self._extract_json(response)
             return {"stakeholder_analysis": data.get("stakeholders", [])}
         except Exception as e:
             logger.warning(f"Stakeholder analysis failed: {str(e)}")
             return {"stakeholder_analysis": []}
     
+    async def _call_llm_api(self, prompt: str) -> str:
+        """Call configured LLM provider (Gemini preferred, Grok fallback)."""
+        if self.provider == "gemini":
+            return await self._call_gemini_api(prompt)
+        return await self._call_grok_api(prompt)
+
     async def _call_grok_api(self, prompt: str) -> str:
         """Call Grok API with retry logic"""
         
@@ -313,6 +329,64 @@ Return ONLY valid JSON:
                 else:
                     raise
         
+        raise Exception("Max retries exceeded")
+
+    async def _call_gemini_api(self, prompt: str) -> str:
+        """Call Gemini API with retry logic."""
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "You are a legislative analysis expert. Return ONLY valid JSON.\n\n" + prompt
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
+                "responseMimeType": "application/json"
+            }
+        }
+
+        url = f"{self.gemini_api_base_url}/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
+
+        for attempt in range(self.max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+                    response.raise_for_status()
+                    result = response.json()
+
+                    candidates = result.get("candidates", [])
+                    if not candidates:
+                        raise Exception("Gemini response has no candidates")
+
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if not parts:
+                        raise Exception("Gemini response has no content parts")
+
+                    text = "".join(part.get("text", "") for part in parts)
+                    if not text:
+                        raise Exception("Gemini response text is empty")
+
+                    return text
+
+            except httpx.TimeoutException:
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Gemini API timeout, retrying... (attempt {attempt + 1})")
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Gemini API error: {str(e)}, retrying...")
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise
+
         raise Exception("Max retries exceeded")
     
     def _create_smart_chunks(self, text: str) -> list[str]:
@@ -396,7 +470,10 @@ Return ONLY valid JSON:
             "risk_assessment": {},
             "stakeholder_analysis": [],
             "implementation_timeline": self._generate_timeline(),
-            "comparative_analysis": self._generate_comparatives()
+            "comparative_analysis": self._generate_comparatives(),
+            "india_impact": {},
+            "recommendations": [],
+            "policy_brief": {}
         }
         
         for result in results:
@@ -404,8 +481,137 @@ Return ONLY valid JSON:
                 continue
             if isinstance(result, dict):
                 analysis.update(result)
+
+        india_impact = self._build_india_impact(analysis)
+        recommendations = self._build_recommendations(analysis, india_impact)
+        policy_brief = self._build_policy_brief(analysis, india_impact, recommendations)
+
+        analysis["india_impact"] = india_impact
+        analysis["recommendations"] = recommendations
+        analysis["policy_brief"] = policy_brief
         
         return analysis
+
+    def _build_india_impact(self, analysis: dict) -> dict:
+        """Derive India-focused impact metrics from analysis output."""
+
+        insight_pool = " ".join([
+            analysis.get("bill_summary", "") or "",
+            *(analysis.get("pros", []) or []),
+            *(analysis.get("cons", []) or []),
+            *(analysis.get("global_impact", {}).get("trade_relations", []) or []),
+            *(analysis.get("global_impact", {}).get("affected_regions", []) or []),
+            *(analysis.get("risk_assessment", {}).get("mitigation_strategies", []) or []),
+            *[
+                f"{item.get('country', '')} {item.get('outcome', '')}" for item in (analysis.get("comparative_analysis", []) or [])
+                if isinstance(item, dict)
+            ],
+        ])
+
+        lower_text = insight_pool.lower()
+
+        india_mentions = lower_text.count("india")
+        south_asia_terms = ["pakistan", "bangladesh", "nepal", "sri lanka", "bhutan", "maldives"]
+        south_asia_mentions = sum(lower_text.count(term) for term in south_asia_terms)
+
+        national_impact = analysis.get("national_impact", {}) or {}
+        risk_assessment = analysis.get("risk_assessment", {}) or {}
+        global_impact = analysis.get("global_impact", {}) or {}
+
+        inflation_impact = float(national_impact.get("inflation_impact", 0) or 0)
+        employment_impact = float(national_impact.get("employment_impact", 0) or 0)
+        gdp_impact = float(national_impact.get("gdp_impact", 0) or 0)
+        risk_probability = float(risk_assessment.get("probability", 0) or 0)
+        geopolitical_influence = float(global_impact.get("geopolitical_influence", 0) or 0)
+        timeline_depth = len(analysis.get("implementation_timeline", []) or [])
+
+        regional_signal_strength = min(100, india_mentions * 18 + south_asia_mentions * 9)
+        inflation_pressure = min(100, abs(inflation_impact) * 22)
+        employment_momentum = max(0, min(100, 50 + employment_impact * 24))
+        readiness_score = max(
+            0,
+            min(100, 100 - risk_probability * 55 - abs(inflation_impact) * 7 + timeline_depth * 4)
+        )
+        opportunity_index = max(
+            0,
+            min(
+                100,
+                (len(analysis.get("pros", []) or []) * 6)
+                - (len(analysis.get("cons", []) or []) * 3)
+                + max(0, gdp_impact) * 18
+                + max(0, employment_impact) * 14
+                + geopolitical_influence * 12,
+            ),
+        )
+
+        return {
+            "regional_signal_strength": round(regional_signal_strength, 2),
+            "india_mentions": india_mentions,
+            "south_asia_mentions": south_asia_mentions,
+            "inflation_pressure": round(inflation_pressure, 2),
+            "employment_momentum": round(employment_momentum, 2),
+            "readiness_score": round(readiness_score, 2),
+            "opportunity_index": round(opportunity_index, 2),
+        }
+
+    def _build_recommendations(self, analysis: dict, india_impact: dict) -> list[dict]:
+        """Generate recommendation objects that frontend can render directly."""
+
+        risk_probability = float((analysis.get("risk_assessment", {}) or {}).get("probability", 0) or 0)
+        readiness_score = float(india_impact.get("readiness_score", 0) or 0)
+        inflation_pressure = float(india_impact.get("inflation_pressure", 0) or 0)
+        regional_signal_strength = float(india_impact.get("regional_signal_strength", 0) or 0)
+
+        recommendations = [
+            {
+                "title": "Run staged rollout before national adoption" if readiness_score < 45 else "Proceed with controlled phased rollout",
+                "detail": "High implementation volatility detected. Pilot first and enforce milestone gates." if readiness_score < 45 else "Execution profile is stable enough for phase-led national implementation.",
+                "confidence": round(max(0, min(100, 100 - risk_probability * 35)), 2),
+                "priority": "high" if readiness_score < 45 else "medium",
+            },
+            {
+                "title": "Add inflation guardrails in amendment language" if inflation_pressure > 45 else "Maintain monetary neutrality clauses",
+                "detail": "Current signal suggests inflation-side risk. Add time-bound subsidies or tax dampeners." if inflation_pressure > 45 else "Inflation pressure appears manageable; preserve stability provisions.",
+                "confidence": round(max(0, min(100, 70 + min(20, inflation_pressure / 3))), 2),
+                "priority": "high" if inflation_pressure > 45 else "low",
+            },
+            {
+                "title": "Prioritize India regional diplomacy track" if regional_signal_strength > 35 else "Keep regional engagement as a monitoring channel",
+                "detail": "Detected strong India/South Asia signal density across impact narrative and trade references." if regional_signal_strength > 35 else "Regional impact appears moderate; maintain strategic watch with periodic review.",
+                "confidence": round(max(0, min(100, 65 + min(30, regional_signal_strength / 3))), 2),
+                "priority": "medium",
+            },
+        ]
+
+        return recommendations
+
+    def _build_policy_brief(self, analysis: dict, india_impact: dict, recommendations: list[dict]) -> dict:
+        """Build a compact, PDF-ready policy brief payload."""
+
+        risk_assessment = analysis.get("risk_assessment", {}) or {}
+        national_impact = analysis.get("national_impact", {}) or {}
+        global_impact = analysis.get("global_impact", {}) or {}
+
+        top_recommendations = [item.get("title", "") for item in recommendations[:3] if isinstance(item, dict)]
+
+        return {
+            "executive_summary": analysis.get("bill_summary", ""),
+            "core_metrics": {
+                "gdp_impact": national_impact.get("gdp_impact", 0),
+                "employment_impact": national_impact.get("employment_impact", 0),
+                "inflation_impact": national_impact.get("inflation_impact", 0),
+                "risk_level": risk_assessment.get("risk_level", "MEDIUM"),
+                "risk_probability": risk_assessment.get("probability", 0),
+                "geopolitical_influence": global_impact.get("geopolitical_influence", 0),
+                "india_readiness": india_impact.get("readiness_score", 0),
+            },
+            "top_recommendations": top_recommendations,
+            "next_90_days": [
+                "Finalize implementation governance and ownership matrix",
+                "Launch pilot execution in high-readiness sectors",
+                "Publish inflation and employment monitoring cadence",
+            ],
+        }
     
     def _generate_timeline(self) -> list:
         """Generate implementation timeline"""
@@ -443,10 +649,12 @@ Return ONLY valid JSON:
         logs.append("✓ Using fallback analysis mode")
         word_count = len(text.split())
         
-        return {
+        analysis = {
             "bill_title": "Legislative Analysis",
             "country": "Unknown",
-            "bill_summary": f"This document contains approximately {word_count} words. Full AI-powered analysis requires Grok API configuration.",
+            "bill_summary": f"This document contains approximately {word_count} words. Full AI-powered analysis requires GEMINI_API_KEY or GROK_API_KEY configuration.",
+            "analysis_provider": "mock",
+            "analysis_model": "none",
             "pros": ["Comprehensive coverage", "Detailed provisions"],
             "cons": ["Implementation complexity"],
             "national_impact": {
@@ -468,4 +676,14 @@ Return ONLY valid JSON:
             "stakeholder_analysis": [],
             "implementation_timeline": self._generate_timeline(),
             "comparative_analysis": self._generate_comparatives()
-        }, logs
+        }
+
+        india_impact = self._build_india_impact(analysis)
+        recommendations = self._build_recommendations(analysis, india_impact)
+        policy_brief = self._build_policy_brief(analysis, india_impact, recommendations)
+
+        analysis["india_impact"] = india_impact
+        analysis["recommendations"] = recommendations
+        analysis["policy_brief"] = policy_brief
+
+        return analysis, logs

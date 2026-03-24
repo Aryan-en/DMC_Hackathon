@@ -79,10 +79,17 @@ class Settings(BaseSettings):
     GROK_CHUNK_SIZE: int = int(os.getenv("GROK_CHUNK_SIZE", "8000"))  # Words per chunk for large documents
     GROK_MAX_RETRIES: int = int(os.getenv("GROK_MAX_RETRIES", "3"))
     GROK_TIMEOUT_SEC: int = int(os.getenv("GROK_TIMEOUT_SEC", "60"))
+
+    # Gemini API for Bill Analysis (Preferred provider)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_API_BASE_URL: str = os.getenv("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
     
     # Data Sources
     MEA_BASE_URL: str = "https://www.mea.gov.in"
     WORLDBANK_API_BASE: str = "https://api.worldbank.org/v2"
+    API_NINJAS_BASE_URL: str = os.getenv("API_NINJAS_BASE_URL", "https://api.api-ninjas.com/v1")
+    API_NINJAS_COUNTRY_API_KEY: str = os.getenv("API_NINJAS_COUNTRY_API_KEY", "")
     
     # Security
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")

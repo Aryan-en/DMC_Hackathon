@@ -1,9 +1,14 @@
 """Geospatial API Endpoints - Week 12: PostGIS Integration, Heatmaps, Region Analysis."""
 
+import asyncio
+from datetime import datetime, timedelta
+
+import httpx
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from db.postgres import get_db_session
 from db.schemas import Country, CountryRelation, EconomicIndicator
 from utils.response import build_error
@@ -11,6 +16,174 @@ from utils.response import build_success
 from utils.sanitize import sanitize_identifier
 
 router = APIRouter()
+
+API_NINJAS_CACHE_TTL = timedelta(hours=6)
+API_NINJAS_COUNTRY_CACHE: dict[str, object] = {
+    "updated_at": None,
+    "profiles": {},
+}
+
+COUNTRY_API_ALIASES = {
+    "USA": "United States",
+    "DRC Congo": "Democratic Republic of the Congo",
+    "Ivory Coast": "Cote d'Ivoire",
+    "South Korea": "Korea, South",
+    "North Korea": "Korea, North",
+    "Syria": "Syrian Arab Republic",
+    "Russia": "Russian Federation",
+    "Palestine": "Palestinian Territory",
+    "Laos": "Lao People's Democratic Republic",
+    "East Timor": "Timor-Leste",
+    "Czech Republic": "Czechia",
+    "Moldova": "Moldova, Republic of",
+    "Bosnia and Herzegovina": "Bosnia and Herz.",
+    "Vatican City": "Holy See (Vatican City State)",
+}
+
+MACRO_REGION_MAP = {
+    "Asia": "Asia-Pacific",
+    "Oceania": "Asia-Pacific",
+    "Europe": "Europe",
+    "Middle East": "Middle East & Africa",
+    "Caucasus": "Middle East & Africa",
+    "Central Asia": "Middle East & Africa",
+    "North Africa": "Middle East & Africa",
+    "West Africa": "Middle East & Africa",
+    "East Africa": "Middle East & Africa",
+    "Central Africa": "Middle East & Africa",
+    "Southern Africa": "Middle East & Africa",
+    "North America": "Americas",
+    "South America": "Americas",
+    "Central America": "Americas",
+    "Caribbean": "Americas",
+}
+
+
+def _country_to_api_name(name: str) -> str:
+    return COUNTRY_API_ALIASES.get(name, name)
+
+
+def _to_trillion(gdp_value: float) -> float:
+    # API sources differ by scale; if value looks like billions, convert to trillions.
+    if gdp_value > 100:
+        return gdp_value / 1000.0
+    return gdp_value
+
+
+def _region_bucket(region: str) -> str:
+    return MACRO_REGION_MAP.get(region, "Middle East & Africa")
+
+
+async def _fetch_country_profile(client: httpx.AsyncClient, country_name: str) -> dict | None:
+    api_key = settings.API_NINJAS_COUNTRY_API_KEY
+    if not api_key:
+        return None
+
+    try:
+        resp = await client.get(
+            f"{settings.API_NINJAS_BASE_URL}/country",
+            params={"name": _country_to_api_name(country_name)},
+            headers={"X-Api-Key": api_key},
+            timeout=20.0,
+        )
+        if resp.status_code != 200:
+            return None
+
+        payload = resp.json()
+        if not payload:
+            return None
+
+        row = payload[0]
+        gdp = float(row.get("gdp") or 0)
+        gdp_growth = float(row.get("gdp_growth") or 0)
+        unemployment = float(row.get("unemployment") or 0)
+        population = float(row.get("population") or 0)
+
+        return {
+            "country": country_name,
+            "gdp_usd_trillion": max(0.01, _to_trillion(gdp)),
+            "gdp_growth_percent": gdp_growth,
+            "population_billion": max(0.001, population / 1_000_000_000.0),
+            "unemployment_rate": max(0.0, unemployment),
+            "employment_rate": max(0.0, min(100.0, 100.0 - unemployment)),
+        }
+    except Exception:
+        return None
+
+
+async def _get_country_profiles(limit: int = 120, refresh: bool = False) -> dict[str, dict]:
+    now = datetime.utcnow()
+    updated_at = API_NINJAS_COUNTRY_CACHE.get("updated_at")
+    cached_profiles = API_NINJAS_COUNTRY_CACHE.get("profiles") or {}
+
+    if not refresh and updated_at and isinstance(updated_at, datetime) and now - updated_at < API_NINJAS_CACHE_TTL:
+        return cached_profiles
+
+    if not settings.API_NINJAS_COUNTRY_API_KEY:
+        return cached_profiles
+
+    country_names = list(POSTGIS_COORDINATES.keys())[: max(1, limit)]
+    profiles: dict[str, dict] = {}
+    semaphore = asyncio.Semaphore(8)
+
+    async with httpx.AsyncClient() as client:
+        async def worker(country_name: str):
+            async with semaphore:
+                profile = await _fetch_country_profile(client, country_name)
+                if profile:
+                    profiles[country_name] = profile
+
+        await asyncio.gather(*(worker(name) for name in country_names))
+
+    if profiles:
+        API_NINJAS_COUNTRY_CACHE["updated_at"] = now
+        API_NINJAS_COUNTRY_CACHE["profiles"] = profiles
+        return profiles
+
+    return cached_profiles
+
+
+def _aggregate_profiles_to_regions(country_profiles: dict[str, dict], fallback_regions: list[dict]) -> list[dict]:
+    if not country_profiles:
+        return fallback_regions
+
+    buckets: dict[str, dict] = {
+        "Asia-Pacific": {"gdp": 0.0, "growth": 0.0, "pop": 0.0, "employment": 0.0, "unemployment": 0.0, "count": 0},
+        "Europe": {"gdp": 0.0, "growth": 0.0, "pop": 0.0, "employment": 0.0, "unemployment": 0.0, "count": 0},
+        "Middle East & Africa": {"gdp": 0.0, "growth": 0.0, "pop": 0.0, "employment": 0.0, "unemployment": 0.0, "count": 0},
+        "Americas": {"gdp": 0.0, "growth": 0.0, "pop": 0.0, "employment": 0.0, "unemployment": 0.0, "count": 0},
+    }
+
+    for country_name, profile in country_profiles.items():
+        coords = POSTGIS_COORDINATES.get(country_name)
+        if not coords:
+            continue
+        bucket_name = _region_bucket(coords.get("region", ""))
+        bucket = buckets[bucket_name]
+        bucket["gdp"] += profile["gdp_usd_trillion"]
+        bucket["growth"] += profile["gdp_growth_percent"]
+        bucket["pop"] += profile["population_billion"]
+        bucket["employment"] += profile["employment_rate"]
+        bucket["unemployment"] += profile["unemployment_rate"]
+        bucket["count"] += 1
+
+    merged: list[dict] = []
+    for region in fallback_regions:
+        bucket = buckets.get(region["name"])
+        if not bucket or bucket["count"] == 0:
+            merged.append(region)
+            continue
+
+        merged.append({
+            **region,
+            "gdp_usd_trillion": round(bucket["gdp"], 3),
+            "gdp_growth_percent": round(bucket["growth"] / bucket["count"], 3),
+            "population_billion": round(bucket["pop"], 3),
+            "employment_rate": round(bucket["employment"] / bucket["count"], 3),
+            "unemployment_rate": round(bucket["unemployment"] / bucket["count"], 3),
+        })
+
+    return merged
 
 # Week 12: PostGIS coordinate data (100+ countries for comprehensive geospatial coverage)
 POSTGIS_COORDINATES = {
@@ -1684,7 +1857,12 @@ async def get_coordinate_index(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/economic-activity")
-async def get_economic_activity(db: AsyncSession = Depends(get_db_session)):
+async def get_economic_activity(
+    db: AsyncSession = Depends(get_db_session),
+    sync_live: bool = Query(default=True, description="Use API Ninjas country data if API key is configured"),
+    refresh_cache: bool = Query(default=False, description="Force refresh API Ninjas cache"),
+    limit: int = Query(default=120, ge=1, le=220, description="Max countries to sync from API Ninjas"),
+):
     """GET /api/geospatial/economic-activity - Economic activity mapping (GDP, industries, employment, agriculture)"""
     try:
         # Economic activity data by region and country
@@ -1830,12 +2008,20 @@ async def get_economic_activity(db: AsyncSession = Depends(get_db_session)):
                 },
             ]
         }
+
+        synced_count = 0
+        if sync_live and settings.API_NINJAS_COUNTRY_API_KEY:
+            profiles = await _get_country_profiles(limit=limit, refresh=refresh_cache)
+            synced_count = len(profiles)
+            economic_data["regions"] = _aggregate_profiles_to_regions(profiles, economic_data["regions"])
         
         return build_success(economic_data, meta={
-            "source": "Economic Intelligence Network",
+            "source": "API Ninjas Country API + Economic Intelligence Network",
             "update_frequency": "quarterly",
             "coverage": "170+ countries",
-            "metrics": ["GDP", "Employment", "Industries", "Agriculture"]
+            "metrics": ["GDP", "Employment", "Industries", "Agriculture"],
+            "live_sync_enabled": bool(settings.API_NINJAS_COUNTRY_API_KEY and sync_live),
+            "synced_countries": synced_count,
         })
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch economic activity data: {exc}")
