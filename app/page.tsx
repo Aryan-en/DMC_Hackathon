@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import TopBar from '@/components/TopBar';
 import StatCard from '@/components/StatCard';
 import AlertFeed from '@/components/AlertFeed';
@@ -7,7 +8,6 @@ import { GlobalRiskChart, EntityBarChart, SentimentChart } from '@/components/Ch
 import { useStrategicMetrics } from '@/app/hooks/useStrategicMetrics';
 import { useProcessingLog } from '@/app/hooks/useProcessingLog';
 import { useRelativeTime } from '@/app/hooks/useRelativeTime';
-import { useState } from 'react';
 import {
   Globe, Activity, Share2, Brain, AlertTriangle,
   Database, Shield, Zap, Radio, Server
@@ -32,7 +32,7 @@ function RelativeTimestamp({ timestamp }: { timestamp: string }) {
 export default function Home() {
   const { data, loading, error } = useStrategicMetrics();
   const { events } = useProcessingLog();
-  const [showBriefing, setShowBriefing] = useState(false);
+  const [showBriefing, setShowBriefing] = React.useState(false);
 
   return (
     <div className="flex flex-col min-h-screen grid-bg">
@@ -60,19 +60,51 @@ export default function Home() {
               Ontora operating at 99.7% uptime — 216 nations monitored, 48 active threat threads, 3 critical assessments pending review
             </span>
           </div>
-          <button
-            onClick={() => setShowBriefing(!showBriefing)}
-            className="px-3 py-1.5 rounded-xl transition-colors"
-            style={{
-              background: showBriefing ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.08)',
-              border: '1px solid rgba(0,212,255,0.2)',
-              color: '#00d4ff',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-            }}
-          >
-            {showBriefing ? 'Hide Briefing' : 'View Briefing'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              disabled={loading}
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                const originalText = btn.innerText;
+                btn.innerText = 'SYNCING...';
+                try {
+                  await fetch('/api/tasks/full-ingestion', { method: 'POST' });
+                  await fetch('/api/tasks/simulate-metrics', { method: 'POST' });
+                  alert('Global Re-Ingestion & Metrics Simulation Triggered. The dashboard will update shortly.');
+                  window.location.reload();
+                } catch(err) {
+                  alert('Failed to trigger re-ingestion.');
+                } finally {
+                  btn.innerText = originalText;
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl transition-all hover:scale-105 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, rgba(184,74,74,0.1) 0%, rgba(184,74,74,0.2) 100%)',
+                border: '1px solid rgba(184,74,74,0.3)',
+                color: '#ef4444',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                boxShadow: '0 0 15px rgba(239, 68, 68, 0.1)'
+              }}
+            >
+              FORCE GLOBAL RE-SYNC
+            </button>
+            <button
+              onClick={() => setShowBriefing(!showBriefing)}
+              className="px-3 py-1.5 rounded-xl transition-colors"
+              style={{
+                background: showBriefing ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.08)',
+                border: '1px solid rgba(0,212,255,0.2)',
+                color: '#00d4ff',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+              }}
+            >
+              {showBriefing ? 'Hide Briefing' : 'View Briefing'}
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}
@@ -86,6 +118,7 @@ export default function Home() {
             icon={Share2}
             accentColor="#00d4ff"
             glowClass="glow-cyan"
+            loading={loading}
           />
           <StatCard
             label="Active Threat Threads"
@@ -96,6 +129,7 @@ export default function Home() {
             icon={AlertTriangle}
             accentColor="#b84a4a"
             glowClass="glow-red"
+            loading={loading}
           />
           <StatCard
             label="Daily Data Ingested"
@@ -106,6 +140,7 @@ export default function Home() {
             icon={Database}
             accentColor="#3eb87a"
             glowClass="glow-green"
+            loading={loading}
           />
           <StatCard
             label="Prediction Accuracy"
@@ -116,33 +151,46 @@ export default function Home() {
             icon={Zap}
             accentColor="#c8822a"
             glowClass="glow-amber"
+            loading={loading}
           />
         </div>
 
         {/* Sub-stats row */}
         <div className="grid grid-cols-4 gap-4">
-          {[
-            { label: 'Knowledge Graph Nodes', value: data.globalEntities.total.toLocaleString(), icon: Share2, color: '#8a78c8' },
-            { label: 'Kafka Events/sec', value: '142K', icon: Activity, color: '#5b8db8' },
-            { label: 'Model Inferences Today', value: '8.4M', icon: Brain, color: '#3eb87a' },
-            { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: Globe, color: '#00d4ff' },
-          ].map(s => (
-            <div key={s.label} className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: `linear-gradient(135deg, ${s.color}18 0%, ${s.color}08 100%)`,
-                  border: `1px solid ${s.color}28`,
-                }}
-              >
-                <s.icon size={17} style={{ color: s.color }} />
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl skeleton-box" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-5 w-24 skeleton-box" />
+                  <div className="h-3 w-16 skeleton-box" />
+                </div>
               </div>
-              <div>
-                <div style={{ color: '#dce4ee', fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{s.value}</div>
-                <div style={{ color: '#3a4e62', fontSize: '0.67rem' }}>{s.label}</div>
+            ))
+          ) : (
+            [
+              { label: 'Knowledge Graph Nodes', value: data.globalEntities.total.toLocaleString(), icon: Share2, color: '#8a78c8' },
+              { label: 'Kafka Events/sec', value: '142K', icon: Activity, color: '#5b8db8' },
+              { label: 'Model Inferences Today', value: '8.4M', icon: Brain, color: '#3eb87a' },
+              { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: Globe, color: '#00d4ff' },
+            ].map(s => (
+              <div key={s.label} className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    background: `linear-gradient(135deg, ${s.color}18 0%, ${s.color}08 100%)`,
+                    border: `1px solid ${s.color}28`,
+                  }}
+                >
+                  <s.icon size={17} style={{ color: s.color }} />
+                </div>
+                <div>
+                  <div style={{ color: '#dce4ee', fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{s.value}</div>
+                  <div style={{ color: '#3a4e62', fontSize: '0.67rem' }}>{s.label}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-6">
@@ -169,25 +217,37 @@ export default function Home() {
           <div className="glass-card rounded-2xl p-5">
             <h3 style={{ color: '#c4cdd8', fontWeight: 600, fontSize: '0.85rem', marginBottom: '16px' }}>Regional Risk Matrix</h3>
             <div className="space-y-3">
-              {data.regions.map(r => (
-                <div key={r.name}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span style={{ color: '#7a8fa8', fontSize: '0.71rem' }}>{r.name}</span>
-                    <span
-                      className="font-mono font-bold"
-                      style={{ color: r.color, background: `${r.color}12`, fontSize: '0.62rem', padding: '1px 6px', borderRadius: '4px' }}
-                    >
-                      {r.risk}
-                    </span>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="flex justify-between">
+                      <div className="h-3 w-24 skeleton-box" />
+                      <div className="h-3 w-8 skeleton-box" />
+                    </div>
+                    <div className="h-1 w-full skeleton-box" />
                   </div>
-                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,212,255,0.06)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${r.risk}%`, background: `linear-gradient(90deg, ${r.color}90, ${r.color}60)` }}
-                    />
+                ))
+              ) : (
+                data.regions.map(r => (
+                  <div key={r.name}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span style={{ color: '#7a8fa8', fontSize: '0.71rem' }}>{r.name}</span>
+                      <span
+                        className="font-mono font-bold"
+                        style={{ color: r.color, background: `${r.color}12`, fontSize: '0.62rem', padding: '1px 6px', borderRadius: '4px' }}
+                      >
+                        {r.risk}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,212,255,0.06)' }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${r.risk}%`, background: `linear-gradient(90deg, ${r.color}90, ${r.color}60)` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -202,17 +262,29 @@ export default function Home() {
             <div className="glass-card rounded-2xl p-5">
               <h3 style={{ color: '#c4cdd8', fontWeight: 600, fontSize: '0.85rem', marginBottom: '16px' }}>Infrastructure Health</h3>
               <div className="space-y-3">
-                {data.infraHealth.components.map(s => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span style={{ color: '#4a6070', fontSize: '0.7rem' }}>{s.label}</span>
-                      <span style={{ color: s.color, fontSize: '0.68rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 700 }}>{s.value}%</span>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-3 w-20 skeleton-box" />
+                        <div className="h-3 w-8 skeleton-box" />
+                      </div>
+                      <div className="h-1 w-full skeleton-box" />
                     </div>
-                    <div className="h-1 rounded-full" style={{ background: 'rgba(0,212,255,0.05)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${s.value}%`, background: `linear-gradient(90deg, ${s.color}90, ${s.color}60)` }} />
+                  ))
+                ) : (
+                  data.infraHealth.components.map(s => (
+                    <div key={s.label}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span style={{ color: '#4a6070', fontSize: '0.7rem' }}>{s.label}</span>
+                        <span style={{ color: s.color, fontSize: '0.68rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 700 }}>{s.value}%</span>
+                      </div>
+                      <div className="h-1 rounded-full" style={{ background: 'rgba(0,212,255,0.05)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${s.value}%`, background: `linear-gradient(90deg, ${s.color}90, ${s.color}60)` }} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

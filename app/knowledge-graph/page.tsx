@@ -46,24 +46,77 @@ function GraphCanvas({
       nodeMap.get(edge.target)!.degree += 1;
     }
 
-    const nodes = Array.from(nodeMap.values()).slice(0, 40);
+    const nodes = Array.from(nodeMap.values()).slice(0, 50);
     const nodeIds = new Set(nodes.map((n) => n.id));
-    const edges = relationships.filter((r) => nodeIds.has(r.source) && nodeIds.has(r.target)).slice(0, 120);
+    const edges = relationships.filter((r) => nodeIds.has(r.source) && nodeIds.has(r.target)).slice(0, 150);
 
     const w = 900;
     const h = 420;
     const cx = w / 2;
     const cy = h / 2;
-    const radius = 150;
 
-    const positioned = nodes.map((n, idx) => {
-      const theta = (idx / Math.max(1, nodes.length)) * Math.PI * 2;
-      return {
-        ...n,
-        x: cx + Math.cos(theta) * radius,
-        y: cy + Math.sin(theta) * radius,
-      };
+    // Simple Force-Directed Layout Simulation (Iterative)
+    const positions = new Map<string, { x: number; y: number }>();
+    
+    // Initial random positions
+    nodes.forEach((n, i) => {
+      const angle = (i / nodes.length) * Math.PI * 2;
+      positions.set(n.id, {
+        x: cx + Math.cos(angle) * 160 + (Math.random() - 0.5) * 40,
+        y: cy + Math.sin(angle) * 160 + (Math.random() - 0.5) * 40
+      });
     });
+
+    // Run 50 iterations of basic attraction/repulsion
+    for (let iter = 0; iter < 50; iter++) {
+      // 1. Repulsion between all nodes
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const n1 = nodes[i];
+          const n2 = nodes[j];
+          const p1 = positions.get(n1.id)!;
+          const p2 = positions.get(n2.id)!;
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const distSq = dx * dx + dy * dy || 1;
+          const force = 4000 / distSq;
+          const fx = (dx / Math.sqrt(distSq)) * force;
+          const fy = (dy / Math.sqrt(distSq)) * force;
+          
+          positions.set(n1.id, { x: p1.x + fx, y: p1.y + fy });
+          positions.set(n2.id, { x: p2.x - fx, y: p2.y - fy });
+        }
+      }
+
+      // 2. Attraction along edges
+      for (const edge of edges) {
+        const p1 = positions.get(edge.source)!;
+        const p2 = positions.get(edge.target)!;
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - 100) * 0.08;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+
+        positions.set(edge.source, { x: p1.x - fx, y: p1.y - fy });
+        positions.set(edge.target, { x: p2.x + fx, y: p2.y + fy });
+      }
+
+      // 3. Gravity center
+      for (const n of nodes) {
+        const p = positions.get(n.id)!;
+        positions.set(n.id, {
+          x: p.x + (cx - p.x) * 0.05,
+          y: p.y + (cy - p.y) * 0.05
+        });
+      }
+    }
+
+    const positioned = nodes.map((n) => ({
+      ...n,
+      ...(positions.get(n.id) || { x: cx, y: cy })
+    }));
 
     const lookup = new Map(positioned.map((n) => [n.id, n]));
     return { positioned, edges, lookup };

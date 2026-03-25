@@ -1,7 +1,7 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import MultiLayerGeoHeatmap from '@/app/components/MultiLayerGeoHeatmap';
+import MultiLayerGeoHeatmap from '@/components/app/MultiLayerGeoHeatmap';
 import { Upload, AlertCircle, TrendingUp, TrendingDown, Sparkles, Gauge, ShieldCheck, Flag, Lightbulb, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 import { useState, useRef, useEffect } from 'react';

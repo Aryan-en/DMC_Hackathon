@@ -1,6 +1,6 @@
 """Download spaCy model used by Phase-1 NLP pipeline."""
 
-from config import settings
+from core.config import settings
 
 
 def main() -> int:

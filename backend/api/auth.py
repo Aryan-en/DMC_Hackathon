@@ -10,10 +10,10 @@ from sqlalchemy import select
 from db.postgres import get_db_session
 from db.schemas import AuditLog, User
 from services.auth import (
-    UserCredentials, UserRegistration, Token,
     hash_password, verify_password,
     create_access_token, create_refresh_token, verify_token, verify_refresh_token
 )
+from schemas.auth import UserCredentials, UserRegistration, Token, TokenResponse, UserResponse
 from services.rbac import UserRole, ClearanceLevel, RBACContext
 from utils.response import build_success, build_error
 
@@ -39,25 +39,6 @@ async def _record_login_audit(
             details={"reason": reason},
         )
     )
-
-
-class UserResponse(BaseModel):
-    """User response model (no password)."""
-    id: str
-    username: str
-    email: str
-    roles: list[str]
-    clearance_level: str
-    is_active: bool
-
-
-class TokenResponse(BaseModel):
-    """Token response model."""
-    access_token: str
-    refresh_token: Optional[str] = None
-    token_type: str = "bearer"
-    expires_in: int
-    user: UserResponse
 
 
 # Dependency: Get current user from token

@@ -9,6 +9,7 @@ interface StatCardProps {
   icon: LucideIcon;
   accentColor?: string;
   glowClass?: string;
+  loading?: boolean;
 }
 
 export default function StatCard({
@@ -20,6 +21,7 @@ export default function StatCard({
   icon: Icon,
   accentColor = '#00d4ff',
   glowClass = 'glow-cyan',
+  loading = false,
 }: StatCardProps) {
   const isPositive = change !== undefined && change > 0;
   const isNegative = change !== undefined && change < 0;
@@ -68,13 +70,15 @@ export default function StatCard({
 
       {/* Value */}
       <div
-        className="font-bold count-up"
+        className={`font-bold count-up ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
         style={{ color: '#dce4ee', lineHeight: 1, fontSize: '1.85rem', letterSpacing: '-0.02em' }}
       >
-        {value}
+        {!loading && value}
       </div>
       {subValue && (
-        <div style={{ color: '#4a6070', fontSize: '0.7rem', marginTop: '4px' }}>{subValue}</div>
+        <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: '#4a6070', fontSize: '0.7rem', marginTop: '4px' }}>
+          {!loading && subValue}
+        </div>
       )}
 
       {/* Change */}
@@ -83,19 +87,25 @@ export default function StatCard({
           className="flex items-center gap-1.5 mt-3 pt-3"
           style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}
         >
-          <TrendIcon
-            size={12}
-            style={{ color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62' }}
-          />
-          <span
-            style={{
-              fontSize: '0.68rem',
-              fontWeight: 500,
-              color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62',
-            }}
-          >
-            {Math.abs(change)}% {changeLabel || (isPositive ? 'increase' : 'decrease')}
-          </span>
+          {loading ? (
+            <div className="skeleton-box h-3 w-1/4" />
+          ) : (
+            <>
+              <TrendIcon
+                size={12}
+                style={{ color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62' }}
+              />
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 500,
+                  color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62',
+                }}
+              >
+                {Math.abs(change)}% {changeLabel || (isPositive ? 'increase' : 'decrease')}
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>

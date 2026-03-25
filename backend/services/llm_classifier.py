@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from config import settings
+from core.config import settings
 
 
 @dataclass

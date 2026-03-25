@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Optional
 import requests
-from config import settings
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

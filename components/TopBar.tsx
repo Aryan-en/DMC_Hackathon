@@ -3,6 +3,7 @@
 import { Search, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/app/lib/api';
+import CommandPalette from './CommandPalette';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [time, setTime] = useState<string | null>(null);
@@ -10,6 +11,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
   const [activeUser, setActiveUser] = useState('Operator');
   const [loggedIn, setLoggedIn] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -77,7 +79,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
   return (
     <header
-      className="h-16 flex items-center justify-between px-6 sticky top-0 z-30"
+      className="h-16 flex items-center justify-between px-6 sticky top-0 z-30 flex-shrink-0"
       style={{
         background: 'rgba(3, 8, 16, 0.97)',
         borderBottom: '1px solid rgba(200,168,74,0.1)',
@@ -104,14 +106,14 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
       {/* Center: search */}
       <div
-        className="flex items-center gap-2.5 px-4 py-2 rounded-xl"
+        className="flex items-center gap-2.5 px-4 py-2 rounded-xl group hover:border-[#c8a84a]/30 cursor-pointer"
         style={{
           background: 'rgba(10, 21, 37, 0.8)',
           border: '1px solid rgba(200,168,74,0.1)',
           width: '340px',
-          transition: 'border-color 0.2s',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
-        onFocus={() => {}}
+        onClick={() => setShowSearch(true)}
       >
         <Search size={12} style={{ color: '#3a4e62' }} />
         <input
@@ -121,7 +123,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
           style={{ color: '#7a8fa8', fontSize: '0.75rem', letterSpacing: '0.01em' }}
         />
         <kbd
-          className="px-1.5 py-0.5 rounded"
+          className="px-1.5 py-0.5 rounded group-hover:border-[#c8a84a]/40 group-hover:bg-[#c8a84a]/10"
           style={{
             background: 'rgba(200,168,74,0.06)',
             border: '1px solid rgba(200,168,74,0.14)',
@@ -129,10 +131,12 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
             fontSize: '0.58rem',
             fontFamily: 'var(--font-geist-mono)',
             letterSpacing: '0.05em',
+            transition: 'all 0.2s',
           }}
         >
           ⌘K
         </kbd>
+        <CommandPalette />
       </div>
 
       {/* Right: status + clock */}

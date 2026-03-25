@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
+from core.config import settings
 from db.postgres import get_db_session
 from db.schemas import Country, CountryRelation, EconomicIndicator
 from utils.response import build_error
@@ -421,34 +421,47 @@ POSTGIS_COORDINATES = {
 
 @router.get("/hotspots")
 async def get_hotspots(region: str | None = Query(default=None), db: AsyncSession = Depends(get_db_session)):
-    """GET /api/geospatial/hotspots - Global conflict hotspots (100+ countries)"""
+    """GET /api/geospatial/hotspots - Global conflict hotspots driven by real DB telemetry."""
     try:
-        # Generate hotspots from expanded POSTGIS_COORDINATES (100+ countries)
+        from db.schemas import Document
+        # Fetch counts of documents (events/conflicts) per country from DB
+        doc_counts_query = (
+            select(Document.source, func.count(Document.id))
+            .where(Document.content.ilike("%conflict%") | Document.content.ilike("%war%") | Document.content.ilike("%incident%"))
+            .group_by(Document.source)
+        )
+        results = (await db.execute(doc_counts_query)).all()
+        doc_stats = {source: count for source, count in results}
+
         hotspots = []
-        
-        # Severity patterns based on geopolitical regions
-        critical_zones = {"Ukraine", "Taiwan", "Syria", "Yemen", "Myanmar", "DRC Congo", "Afghanistan", "Pakistan", "Sudan"}
-        high_risk_zones = {"Iran", "North Korea", "Russia", "Iraq", "Israel", "Turkey", "Mexico", "Venezuela", "Somalia", "Nigeria"}
-        
         for country_name, coords in POSTGIS_COORDINATES.items():
             if region and (coords["region"] or "").lower() != region.lower():
                 continue
             
-            # Assign severity based on geopolitical hotspot status
-            if country_name in critical_zones:
+            # Map doc counts to severity
+            count = doc_stats.get(country_name, 0)
+            if count > 50:
                 severity = "critical"
-                base_value = 85
-            elif country_name in high_risk_zones:
+                base_val = 85
+            elif count > 20:
                 severity = "high"
-                base_value = 70
-            elif coords["region"] in ["Middle East", "Central Africa", "East Africa", "South Asia"]:
-                severity = "high"
-                base_value = 65
-            else:
+                base_val = 70
+            elif count > 5:
                 severity = "medium"
-                base_value = 45
+                base_val = 45
+            else:
+                # Fallback to region-based baseline if no recent docs found
+                if country_name in {"Ukraine", "Taiwan", "Syria", "Yemen", "Myanmar", "DRC Congo", "Sudan"}:
+                    severity = "critical"
+                    base_val = 80
+                elif coords["region"] in ["Middle East", "Central Africa"]:
+                    severity = "high"
+                    base_val = 65
+                else:
+                    severity = "low"
+                    base_val = 20
             
-            value = min(99, base_value + (hash(country_name) % 15))
+            value = min(99, base_val + (count % 15))
             
             hotspots.append({
                 "name": country_name,
@@ -458,14 +471,15 @@ async def get_hotspots(region: str | None = Query(default=None), db: AsyncSessio
                 "severity": severity,
                 "value": value,
                 "region": coords["region"],
+                "telemetry_count": count
             })
 
-        # Sort by critical status first, then by value
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         hotspots.sort(key=lambda x: (severity_order.get(x["severity"], 4), -x["value"]))
         
-        return build_success({"hotspots": hotspots}, meta={"update_frequency": "6 hours", "total_countries": len(hotspots)})
+        return build_success({"hotspots": hotspots}, meta={"source": "Postgres Data Lake", "total_countries": len(hotspots)})
     except Exception as exc:
+        logger.error(f"Failed to fetch hotspots: {exc}")
         return build_error("QUERY_ERROR", f"Failed to fetch hotspots: {exc}")
 
 

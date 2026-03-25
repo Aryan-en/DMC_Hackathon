@@ -200,17 +200,17 @@ export function usePredictionsMetrics(pollInterval = 5000) {
           ? (riskRes as any).data
           : riskRes;
 
-        setData({
-          region: riskData.region || 'Global',
-          forecast: riskData.forecast || SAMPLE_FORECAST,
-          modelPerformance: perfRes,
-          modelDrift: driftRes,
-          trainingStatus: trainingRes,
-          servingHealth: servingRes,
-          dashboardOverview: overviewRes,
-          pygModelStatus: pygRes,
-          abSummary: abRes,
-        });
+        setData(prev => ({
+          region: riskData.region || prev.region,
+          forecast: riskData.forecast && riskData.forecast.length > 0 ? riskData.forecast : prev.forecast,
+          modelPerformance: perfRes && Object.keys(perfRes).length > 0 && Object.values(perfRes).some(v => v !== 0) ? perfRes : prev.modelPerformance,
+          modelDrift: driftRes && driftRes.drift_score !== 0 ? driftRes : prev.modelDrift,
+          trainingStatus: trainingRes && trainingRes.dataset_size > 0 ? trainingRes : prev.trainingStatus,
+          servingHealth: servingRes && servingRes.requests_per_min > 0 ? servingRes : prev.servingHealth,
+          dashboardOverview: overviewRes && overviewRes.model_accuracy > 0 ? overviewRes : prev.dashboardOverview,
+          pygModelStatus: pygRes && pygRes.precision > 0 ? pygRes : prev.pygModelStatus,
+          abSummary: abRes && abRes.variant_a.precision > 0 ? abRes : prev.abSummary,
+        }));
         setError(null);
       } catch (err) {
         if (!active) return;

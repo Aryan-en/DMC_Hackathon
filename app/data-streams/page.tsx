@@ -10,7 +10,7 @@ export default function DataStreamsPage() {
 
   useEffect(() => {
     const updateTime = () => {
-      setRefreshTime(new Date().toLocaleTimeString());
+      setRefreshTime(new Date().toLocaleTimeString('en-US'));
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -89,8 +89,9 @@ export default function DataStreamsPage() {
             <div
               className="text-2xl font-bold"
               style={{ color: totalLag > 1000 ? '#ef4444' : totalLag > 500 ? '#f59e0b' : '#00ff88' }}
+              suppressHydrationWarning
             >
-              {totalLag.toLocaleString()}
+              {totalLag.toLocaleString('en-US')}
             </div>
             <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
               messages
@@ -164,8 +165,9 @@ export default function DataStreamsPage() {
                         fontSize: '0.75rem',
                         padding: '0.75rem',
                       }}
+                      suppressHydrationWarning
                     >
-                      {t.lag.toLocaleString()}
+                      {t.lag.toLocaleString('en-US')}
                     </td>
                     <td style={{ color: '#00d4ff', fontSize: '0.75rem', padding: '0.75rem' }}>
                       {(t.throughput / 1000).toFixed(1)}K msg/s

@@ -107,9 +107,14 @@ body {
   animation: dash-flow 1.4s linear infinite;
 }
 
-@keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+@keyframes skeleton-loading {
+  0% { background-color: rgba(255, 255, 255, 0.03); }
+  50% { background-color: rgba(255, 255, 255, 0.07); }
+  100% { background-color: rgba(255, 255, 255, 0.03); }
+}
+.skeleton-box {
+  animation: skeleton-loading 1.5s infinite ease-in-out;
+  border-radius: 4px;
 }
 
 /* ── Background ───────────────────────────────────── */

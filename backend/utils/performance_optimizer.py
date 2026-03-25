@@ -61,7 +61,7 @@ def cache_async(ttl: int = CacheTTL.MEDIUM.value, key_builder: Optional[Callable
             redis_client = None
             
             try:
-                from config import settings
+                from core.config import settings
                 redis_client = Redis(
                     host=settings.REDIS_HOST,
                     port=settings.REDIS_PORT,

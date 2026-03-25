@@ -48,17 +48,20 @@ const SAMPLE_INFRA_HEALTH = {
   ],
 };
 
+const INITIAL_DATA: StrategicMetrics = {
+  regions: [],
+  globalEntities: { total: 0, breakdown: {} },
+  threatThreads: { critical: 0, high: 0, monitor: 0, total: 0 },
+  dailyIngestion: { total_gb: 0, realtime_processed_gb: 0 },
+  predictionAccuracy: { accuracy: 0 },
+  infraHealth: { components: [] },
+};
+
 export function useStrategicMetrics() {
-  const [data, setData] = useState<StrategicMetrics>({
-    regions: SAMPLE_REGIONS,
-    globalEntities: SAMPLE_GLOBAL_ENTITIES,
-    threatThreads: SAMPLE_THREAT_THREADS,
-    dailyIngestion: SAMPLE_DAILY_INGESTION,
-    predictionAccuracy: SAMPLE_PREDICTION_ACCURACY,
-    infraHealth: SAMPLE_INFRA_HEALTH,
-  });
+  const [data, setData] = useState<StrategicMetrics>(INITIAL_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     let active = true;

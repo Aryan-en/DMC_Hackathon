@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: ontora_password
       POSTGRES_DB: ontora_prod
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ontora_user"]
+      test: [ "CMD-SHELL", "pg_isready -U ontora_user -d ontora_prod" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,7 +34,7 @@ services:
     volumes:
       - neo4j_data:/var/lib/neo4j/data
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "neo4j_password", "RETURN 1"]
+      test: [ "CMD", "cypher-shell", "-u", "neo4j", "-p", "neo4j_password", "RETURN 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,7 +50,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -130,7 +130,7 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: ./backend
+      context: ../../backend
       dockerfile: Dockerfile
     container_name: ontora-backend
     environment:
@@ -163,8 +163,64 @@ services:
       kafka-1:
         condition: service_started
     volumes:
-      - ./backend:/app
+      - ../../backend:/app
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - ontora-network
+
+  # Celery Worker (Task Ingestion)
+  celery-worker:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: ontora-celery-worker
+    environment:
+      DEBUG: "True"
+      ENVIRONMENT: "development"
+      LOG_LEVEL: "INFO"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: "ontora_user"
+      POSTGRES_PASSWORD: "ontora_password"
+      POSTGRES_DB: "ontora_prod"
+      NEO4J_HOST: "neo4j"
+      NEO4J_PORT: "7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "neo4j_password"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      KAFKA_BROKERS: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+    volumes:
+      - ../../backend:/app
+    command: celery -A core.celery_app worker --loglevel=info
+    networks:
+      - ontora-network
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: ontora-celery-beat
+    environment:
+      DEBUG: "True"
+      ENVIRONMENT: "development"
+      LOG_LEVEL: "INFO"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../backend:/app
+    command: celery -A core.celery_app beat --loglevel=info
     networks:
       - ontora-network
 
@@ -186,7 +242,7 @@ services:
       - ontora-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -209,7 +265,7 @@ services:
       - prometheus
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -220,6 +276,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
 
 networks:
   ontora-network:

@@ -17,6 +17,7 @@ const navItems = [
   { href: '/predictions', label: 'Predictions Engine', icon: Zap, group: 'ANALYSIS' },
   { href: '/data-streams', label: 'Data Streams', icon: Activity, group: 'INFRASTRUCTURE' },
   { href: '/data-lake', label: 'Data Lake', icon: Database, group: 'INFRASTRUCTURE' },
+  { href: '/data-sources', label: 'Data Sources', icon: FileText, group: 'INFRASTRUCTURE' },
   { href: '/control-panel', label: 'Control Panel', icon: Settings, group: 'INFRASTRUCTURE' },
   { href: '/security', label: 'Security & Governance', icon: Shield, group: 'INFRASTRUCTURE' },
 ];

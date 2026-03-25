@@ -12,7 +12,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from config import settings
+from core.config import settings
 from utils.sanitize import sanitize_string
 
 logger = logging.getLogger(__name__)

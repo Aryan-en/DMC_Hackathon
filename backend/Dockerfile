@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel || pip install --no-cache-dir --retries 3 --upgrade pip setuptools wheel
 
 # Copy ONLY requirements and install (better caching)
-COPY requirements-docker.txt requirements.txt ./
+COPY requirements/requirements-docker.txt requirements.txt ./
 
 # Install with multiple retries and longer timeout
 RUN pip install --no-cache-dir --retries 5 --default-timeout=100 -r requirements-docker.txt || \

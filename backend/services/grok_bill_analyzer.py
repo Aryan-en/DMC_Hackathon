@@ -6,7 +6,7 @@ import asyncio
 from typing import Optional
 from datetime import datetime
 import httpx
-from config import Settings
+from core.config import Settings
 
 logger = logging.getLogger(__name__)
 

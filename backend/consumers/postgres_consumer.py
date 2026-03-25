@@ -25,7 +25,7 @@ from kafka.errors import KafkaError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
 
-from config import Settings
+from core.config import Settings
 from db.postgres import AsyncSessionLocal
 from db.schemas import CountryRelation, EconomicIndicator, Document, Country
 

@@ -3,10 +3,11 @@ Neo4j Graph Database Connection and Initialization
 """
 
 import logging
-from neo4j import AsyncGraphDatabase, AsyncDriver
+from neo4j import AsyncGraphDatabase, AsyncDriver, GraphDatabase, Driver
 from neo4j.exceptions import ServiceUnavailable
+from contextlib import contextmanager
 
-from config import settings
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -90,3 +91,20 @@ async def verify_connection():
     except Exception as e:
         logger.error(f"Neo4j connection verification failed: {e}")
         return False
+
+@contextmanager
+def get_neo4j_session():
+    """Context manager for synchronous Neo4j sessions"""
+    # Create a separate sync driver for synchronous usage if needed
+    # (Or use the global async driver if it supports it, but usually better to be explicit)
+    sync_driver = GraphDatabase.driver(
+        settings.NEO4J_URL,
+        auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+        encrypted=False
+    )
+    session = sync_driver.session()
+    try:
+        yield session
+    finally:
+        session.close()
+        sync_driver.close()

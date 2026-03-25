@@ -7,7 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from config import settings
+from core.config import settings
+from utils.entity_resolution import resolve_entity
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +82,10 @@ class MEAScraper:
             key_issues = self._extract_key_issues(soup)
             sentiment = self._analyze_sentiment(soup.get_text())
             
-            return {
+            raw_data = {
                 "country": country_name,
                 "relation_type": "bilateral",
-                "status": "stable",  # This would be determined from content
+                "status": "stable",
                 "trade_volume": trade_volume,
                 "agreements": agreements,
                 "key_issues": key_issues,
@@ -93,6 +94,8 @@ class MEAScraper:
                 "last_updated": datetime.utcnow().isoformat(),
                 "source": "MEA"
             }
+            
+            return resolve_entity(raw_data, entity_type="country")
             
         except requests.RequestException as e:
             logger.error(f"Error scraping {country_name}: {e}")

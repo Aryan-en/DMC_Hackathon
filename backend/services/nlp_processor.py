@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from config import settings
+from core.config import settings
 
 try:
     import spacy  # type: ignore

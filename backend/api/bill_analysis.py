@@ -12,7 +12,7 @@ import logging
 
 from db.postgres import get_db_session
 from utils.response import build_error, build_success
-from config import Settings
+from core.config import Settings
 from services.grok_bill_analyzer import GrokBillAnalyzer
 
 router = APIRouter()
