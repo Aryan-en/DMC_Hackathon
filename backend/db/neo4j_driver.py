@@ -24,6 +24,8 @@ def init_driver():
             settings.NEO4J_URL,
             auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
             encrypted=False,
+            connection_timeout=5.0,
+            max_connection_lifetime=60,
         )
         
         logger.info("Neo4j driver initialized")
@@ -84,7 +86,7 @@ async def verify_connection():
     driver = get_driver()
     try:
         async with driver.session() as session:
-            result = await session.run("RETURN 1 as num")
+            result = await session.run("RETURN 1 as num", timeout=3.0)
             await result.single()
         logger.info("Neo4j connection verified")
         return True

@@ -76,15 +76,24 @@ class GrokBillAnalyzer:
                 self._analyze_economic_impact(chunks, logs),
                 self._analyze_risk_assessment(chunks, logs),
                 self._analyze_global_impact(chunks, logs),
-                self._analyze_stakeholders(chunks, logs)
+                self._analyze_stakeholders(chunks, logs),
+                self._analyze_esg_impact(chunks, logs),
+                self._analyze_compliance_burden(chunks, logs),
+                self._analyze_legal_precedents(chunks, logs)
             ]
             
             results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
-            logs.append("✓ Aggregating analysis results...")
+            logs.append("✓ Aggregating and synthesizing results...")
             
-            # Step 5: Synthesize results
-            final_analysis = self._synthesize_results(metadata, results, logs)
-            logs.append("✓ Analysis complete!")
+            # Step 5: Parallel analysis for deep sections
+            timeline_task = self._analyze_timeline(chunks, metadata, logs)
+            comparative_task = self._analyze_comparatives(chunks, metadata, logs)
+            
+            deep_results = await asyncio.gather(timeline_task, comparative_task, return_exceptions=True)
+            
+            # Step 6: Synthesize final results
+            final_analysis = self._synthesize_results(metadata, results, deep_results, logs)
+            logs.append("✓ Final synthesis complete!")
 
             final_analysis["analysis_provider"] = self.provider
             final_analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else self.model
@@ -279,6 +288,110 @@ Return ONLY valid JSON:
             logger.warning(f"Stakeholder analysis failed: {str(e)}")
             return {"stakeholder_analysis": []}
     
+    async def _analyze_timeline(self, chunks: list, metadata: dict, logs: list) -> list:
+        """Analyze and generate a realistic implementation timeline"""
+        
+        prompt = f"""Based on the provisions in this bill ({metadata.get('bill_title')}), generate a realistic implementation timeline.
+        
+        Return ONLY valid JSON:
+        {{
+            "timeline": [
+                {{"phase": "string", "duration": "string", "milestones": ["string", ...]}},
+                ...
+            ]
+        }}"""
+        
+        try:
+            response = await self._call_llm_api(prompt)
+            data = self._extract_json(response)
+            return data.get("timeline", [])
+        except Exception as e:
+            logger.warning(f"Timeline analysis failed: {str(e)}")
+            return self._generate_timeline()
+
+    async def _analyze_comparatives(self, chunks: list, metadata: dict, logs: list) -> list:
+        """Analyze and identify similar global legislation for comparative analysis"""
+        
+        prompt = f"""Compare this bill ({metadata.get('bill_title')}) with similar legislation in other countries.
+        
+        Return ONLY valid JSON:
+        {{
+            "comparatively": [
+                {{"country": "string", "similar_bill": "string", "outcome": "string"}},
+                ...
+            ]
+        }}"""
+        
+        try:
+            response = await self._call_llm_api(prompt)
+            data = self._extract_json(response)
+            return data.get("comparatively", [])
+        except Exception as e:
+            logger.warning(f"Comparative analysis failed: {str(e)}")
+            return self._generate_comparatives()
+
+    async def _analyze_esg_impact(self, chunks: list, logs: list) -> dict:
+        """Analyze Environmental, Social, and Governance impact"""
+        analysis_chunks = chunks[::max(1, len(chunks)//4)]
+        chunk_text = "\n---\n".join(analysis_chunks)
+        
+        prompt = f"""Assess the ESG (Environmental, Social, and Governance) impact of this legislation:
+        {chunk_text[:5000]}
+        
+        Return ONLY valid JSON:
+        {{
+            "esg_score": float 0-100,
+            "environmental": "string summary",
+            "social": "string summary",
+            "governance": "string summary",
+            "sustainability_metrics": ["string", ...]
+        }}"""
+        try:
+            response = await self._call_llm_api(prompt)
+            return {"esg_impact": self._extract_json(response)}
+        except: return {"esg_impact": {}}
+
+    async def _analyze_compliance_burden(self, chunks: list, logs: list) -> dict:
+        """Analyze compliance burden and implementation costs"""
+        analysis_chunks = chunks[len(chunks)//4:len(chunks)//2]
+        chunk_text = "\n---\n".join(analysis_chunks)
+        
+        prompt = f"""Estimate the compliance burden and cost of this legislation:
+        {chunk_text[:5000]}
+        
+        Return ONLY valid JSON:
+        {{
+            "complexity_score": float 0-1,
+            "estimated_cost_level": "LOW|MEDIUM|HIGH",
+            "burdensome_provisions": ["string", ...],
+            "required_resources": ["string", ...]
+        }}"""
+        try:
+            response = await self._call_llm_api(prompt)
+            return {"compliance_burden": self._extract_json(response)}
+        except: return {"compliance_burden": {}}
+
+    async def _analyze_legal_precedents(self, chunks: list, logs: list) -> dict:
+        """Search for similar legal precedents or similar acts"""
+        analysis_chunks = chunks[:min(3, len(chunks))]
+        chunk_text = "\n---\n".join(analysis_chunks)
+        
+        prompt = f"""Research legal precedents or similar existing acts for this bill:
+        {chunk_text[:5000]}
+        
+        Return ONLY valid JSON:
+        {{
+            "precedents": [
+                {{"act_name": "string", "outcome": "string", "relevance": "string"}},
+                ...
+            ],
+            "legal_challenges_risk": "string"
+        }}"""
+        try:
+            response = await self._call_llm_api(prompt)
+            return {"legal_precedents": self._extract_json(response)}
+        except: return {"legal_precedents": []}
+
     async def _call_llm_api(self, prompt: str) -> str:
         """Call configured LLM provider (Gemini preferred, Grok fallback)."""
         if self.provider == "gemini":
@@ -456,7 +569,7 @@ Return ONLY valid JSON:
         
         return {}
     
-    def _synthesize_results(self, metadata: dict, results: list, logs: list) -> dict:
+    def _synthesize_results(self, metadata: dict, results: list, deep_results: list, logs: list) -> dict:
         """Combine all analysis results into final output"""
         
         analysis = {
@@ -469,18 +582,34 @@ Return ONLY valid JSON:
             "global_impact": {},
             "risk_assessment": {},
             "stakeholder_analysis": [],
-            "implementation_timeline": self._generate_timeline(),
-            "comparative_analysis": self._generate_comparatives(),
+            "implementation_timeline": [],
+            "comparative_analysis": [],
             "india_impact": {},
             "recommendations": [],
-            "policy_brief": {}
+            "policy_brief": {},
+            "esg_impact": {},
+            "compliance_burden": {},
+            "legal_precedents": {}
         }
         
+        # Merge basic parallel results
         for result in results:
             if isinstance(result, Exception):
                 continue
             if isinstance(result, dict):
                 analysis.update(result)
+        
+        # Merge deep results (timeline, comparatives)
+        if len(deep_results) >= 2:
+            if not isinstance(deep_results[0], Exception):
+                analysis["implementation_timeline"] = deep_results[0]
+            if not isinstance(deep_results[1], Exception):
+                analysis["comparative_analysis"] = deep_results[1]
+        
+        if not analysis["implementation_timeline"]:
+            analysis["implementation_timeline"] = self._generate_timeline()
+        if not analysis["comparative_analysis"]:
+            analysis["comparative_analysis"] = self._generate_comparatives()
 
         india_impact = self._build_india_impact(analysis)
         recommendations = self._build_recommendations(analysis, india_impact)

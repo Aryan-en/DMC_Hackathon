@@ -1,333 +1,409 @@
 'use client';
 
+import * as React from 'react';
 import TopBar from '@/components/TopBar';
 import { useStreamsMetrics } from '@/app/hooks/useStreamsMetrics';
-import { useEffect, useState } from 'react';
+import { 
+  Activity, 
+  Database, 
+  Search, 
+  ShieldCheck, 
+  Calendar, 
+  Clock, 
+  ExternalLink, 
+  FileText, 
+  Link as LinkIcon, 
+  Zap, 
+  Layers, 
+  BarChart3,
+  RefreshCw,
+  Server,
+  Filter
+} from 'lucide-react';
+import { API_BASE_URL } from '@/app/lib/api';
 
-export default function DataStreamsPage() {
-  const { data, loading, error } = useStreamsMetrics(5000);
-  const [refreshTime, setRefreshTime] = useState<string | null>(null);
+type Document = {
+  id: string;
+  title: string;
+  source: string;
+  url: string | null;
+  published_date: string | null;
+  created_at: string | null;
+  content_preview: string;
+  metadata: any;
+};
 
-  useEffect(() => {
-    const updateTime = () => {
-      setRefreshTime(new Date().toLocaleTimeString('en-US'));
-    };
+type TabType = 'infrastructure' | 'intelligence';
+
+export default function CombinedDataStreamsPage() {
+  // Streams Data
+  const { data: streamData, loading: streamsLoading, error: streamsError } = useStreamsMetrics(5000);
+  const [refreshTime, setRefreshTime] = React.useState<string | null>(null);
+  const [activeTab, setActiveTab] = React.useState<TabType>('infrastructure');
+
+  // Documents Data
+  const [documents, setDocuments] = React.useState<Document[]>([]);
+  const [docsLoading, setDocsLoading] = React.useState(false);
+  const [docsError, setDocsError] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  // Clock effect
+  React.useEffect(() => {
+    const updateTime = () => setRefreshTime(new Date().toLocaleTimeString('en-US'));
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const totalLag = data.topics.reduce((acc, t) => acc + (t.lag || 0), 0);
-  const healthyTopics = data.topics.filter((t) => t.status === 'healthy').length;
-  const totalThroughput = data.topics.reduce((acc, t) => acc + (t.throughput || 0), 0);
-  const avgLatency = data.pipelines.length > 0
-    ? data.pipelines.reduce((acc, p) => {
-        const ms = parseFloat(p.latency);
-        return Number.isNaN(ms) ? acc : acc + ms;
-      }, 0) / data.pipelines.length
-    : 0;
+  const fetchDocuments = async () => {
+    setDocsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/data-lake/documents?limit=50`);
+      const data = await res.json();
+      if (data?.status === 'success') {
+        setDocuments(data.data.documents || []);
+      } else {
+        throw new Error(data?.error?.message || 'Failed to fetch documents');
+      }
+    } catch (err) {
+      console.error(err);
+      setDocsError(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'intelligence' && documents.length === 0) {
+      fetchDocuments();
+    }
+  }, [activeTab]);
+
+  const filteredDocs = documents.filter(doc => 
+    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    doc.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    doc.content_preview.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Stats Calculations
+  const totalLag = streamData.topics.reduce((acc, t) => acc + (t.lag || 0), 0);
+  const totalThroughput = streamData.topics.reduce((acc, t) => acc + (t.throughput || 0), 0);
 
   return (
     <div className="flex flex-col min-h-screen grid-bg">
-      <TopBar
-        title="Data Streams"
-        subtitle="Live Kafka/Flink streaming infrastructure & real-time metrics"
+      <TopBar 
+        title="Data Streams & Intelligence" 
+        subtitle="Unified tactical ingestion and data lake ecosystem" 
       />
+
       <main className="flex-1 px-6 py-6 space-y-6">
-        {error && (
-          <div
-            className="px-4 py-2 rounded-xl text-xs"
-            style={{
-              background: 'rgba(184,74,74,0.08)',
-              border: '1px solid rgba(184,74,74,0.2)',
-              color: '#b84a4a',
-            }}
-          >
-            {error}
+        {/* Header Summary Cards - Slimmer & Integrated */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="glass-card rounded-xl p-4 border-l-2 border-l-cyan-500/50">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Active Streams</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{streamData.topics.length + streamData.pipelines.length}</h3>
+              </div>
+              <Activity size={16} className="text-cyan-500/70" />
+            </div>
           </div>
-        )}
+          <div className="glass-card rounded-xl p-4 border-l-2 border-l-emerald-500/50">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Throughput</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{(totalThroughput / 1000).toFixed(1)}K<span className="text-xs text-[var(--text-muted)] ml-1">msg/s</span></h3>
+              </div>
+              <Zap size={16} className="text-emerald-500/70" />
+            </div>
+          </div>
+          <div className="glass-card rounded-xl p-4 border-l-2 border-l-amber-500/50">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">System Lag</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{totalLag.toLocaleString()}</h3>
+              </div>
+              <Layers size={16} className="text-amber-500/70" />
+            </div>
+          </div>
+          <div className="glass-card rounded-xl p-4 border-l-2 border-l-[#d6b985]/50">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Intelligence Lake</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{documents.length || '---'} <span className="text-xs text-[var(--text-muted)] ml-1">Docs</span></h3>
+              </div>
+              <Database size={16} className="text-[#d6b985]/70" />
+            </div>
+          </div>
+        </div>
 
-        {/* Header Stats */}
-        <div className="grid grid-cols-5 gap-4">
-          <div className="glass-card rounded-xl p-4">
-            <div className="text-xs" style={{ color: '#94a3b8' }}>
-              Topics
-            </div>
-            <div className="text-2xl font-bold" style={{ color: '#00d4ff' }}>
-              {data.topics.length}
-            </div>
-            <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              {healthyTopics} healthy
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <div className="text-xs" style={{ color: '#94a3b8' }}>
-              Pipelines
-            </div>
-            <div className="text-2xl font-bold" style={{ color: '#00ff88' }}>
-              {data.pipelines.length}
-            </div>
-            <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              Running
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <div className="text-xs" style={{ color: '#94a3b8' }}>
-              Total Throughput
-            </div>
-            <div className="text-2xl font-bold" style={{ color: '#f59e0b' }}>
-              {(totalThroughput / 1000).toFixed(0)}K
-            </div>
-            <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              msg/sec
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <div className="text-xs" style={{ color: '#94a3b8' }}>
-              Aggregate Lag
-            </div>
-            <div
-              className="text-2xl font-bold"
-              style={{ color: totalLag > 1000 ? '#ef4444' : totalLag > 500 ? '#f59e0b' : '#00ff88' }}
-              suppressHydrationWarning
+        {/* Tab Selection */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex p-1 bg-slate-200/50 dark:bg-slate-900/50 backdrop-blur border border-slate-300 dark:border-slate-800 rounded-xl">
+            <button 
+              onClick={() => setActiveTab('infrastructure')}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'infrastructure' 
+                  ? 'bg-[#d6b985] text-white dark:text-black shadow-lg shadow-[#d6b985]/20' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
             >
-              {totalLag.toLocaleString('en-US')}
-            </div>
-            <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              messages
-            </div>
+              <Server size={14} />
+              TACTICAL INFRASTRUCTURE
+            </button>
+            <button 
+              onClick={() => setActiveTab('intelligence')}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'intelligence' 
+                  ? 'bg-[#d6b985] text-white dark:text-black shadow-lg shadow-[#d6b985]/20' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <FileText size={14} />
+              INTELLIGENCE FEED
+            </button>
           </div>
-          <div className="glass-card rounded-xl p-4">
-            <div className="text-xs" style={{ color: '#94a3b8' }}>
-              Avg Latency
-            </div>
-            <div className="text-2xl font-bold" style={{ color: '#a78bfa' }}>
-              {avgLatency.toFixed(0)}ms
-            </div>
-            <div className="text-2xs mt-2" style={{ color: '#64748b' }}>
-              {refreshTime ? `updated ${refreshTime}` : 'updating...'}
-            </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE UPDATE: {refreshTime}
+            </span>
+            <button 
+              onClick={activeTab === 'intelligence' ? fetchDocuments : () => window.location.reload()}
+              className="p-2 bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700/50 rounded-lg text-[var(--text-muted)] hover:text-[#d6b985] transition-colors"
+            >
+              <RefreshCw size={14} className={streamsLoading || docsLoading ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
 
-        {/* Topics Table */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>
-              Kafka Topics
-            </h3>
-            <span className="text-2xs" style={{ color: '#64748b' }}>
-              {loading ? 'Loading...' : 'Live'}
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full data-table">
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(30,58,95,0.5)' }}>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Topic
-                  </th>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Partitions
-                  </th>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Lag
-                  </th>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Throughput
-                  </th>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Status
-                  </th>
-                  <th className="text-left py-2 px-3" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                    Health
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topics.map((t) => (
-                  <tr
-                    key={t.topic}
-                    style={{
-                      borderBottom: '1px solid rgba(30,58,95,0.3)',
-                      background: t.status === 'degraded' ? 'rgba(184,74,74,0.05)' : 'transparent',
-                    }}
-                  >
-                    <td style={{ color: '#e2e8f0', fontSize: '0.75rem', padding: '0.75rem' }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{t.topic}</span>
-                    </td>
-                    <td style={{ color: '#94a3b8', fontSize: '0.75rem', padding: '0.75rem' }}>
-                      {t.partitions}
-                    </td>
-                    <td
-                      style={{
-                        color: t.lag > 1000 ? '#ef4444' : t.lag > 500 ? '#f59e0b' : '#00ff88',
-                        fontSize: '0.75rem',
-                        padding: '0.75rem',
-                      }}
-                      suppressHydrationWarning
-                    >
-                      {t.lag.toLocaleString('en-US')}
-                    </td>
-                    <td style={{ color: '#00d4ff', fontSize: '0.75rem', padding: '0.75rem' }}>
-                      {(t.throughput / 1000).toFixed(1)}K msg/s
-                    </td>
-                    <td style={{ padding: '0.5rem 0.75rem' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '0.25rem',
-                          fontSize: '0.65rem',
-                          fontWeight: '600',
-                          background:
-                            t.status === 'healthy'
-                              ? 'rgba(0,255,136,0.2)'
-                              : t.status === 'warning'
-                              ? 'rgba(245,158,11,0.2)'
-                              : 'rgba(239,68,68,0.2)',
-                          color:
-                            t.status === 'healthy'
-                              ? '#00ff88'
-                              : t.status === 'warning'
-                              ? '#f59e0b'
-                              : '#ef4444',
-                        }}
-                      >
-                        {t.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '6px',
-                          background: 'rgba(30,58,95,0.5)',
-                          borderRadius: '3px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${Math.min(100, (100 - (t.lag / 2000) * 100))}%`,
-                            height: '100%',
-                            background:
-                              t.lag > 1000 ? '#ef4444' : t.lag > 500 ? '#f59e0b' : '#00ff88',
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!loading && data.topics.length === 0 && (
-            <p className="text-xs mt-3" style={{ color: '#64748b' }}>
-              No topics available
-            </p>
-          )}
-        </div>
-
-        {/* Pipelines */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>
-              ⚙️ Flink Pipelines
-            </h3>
-            <span className="text-2xs" style={{ color: '#64748b' }}>
-              Real-time aggregations
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-3">
-            {data.pipelines.map((p) => (
-              <div
-                key={p.name}
-                className="p-4 rounded-lg"
-                style={{
-                  background: 'rgba(2,8,23,0.5)',
-                  border: '1px solid rgba(30,58,95,0.4)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <span style={{ color: '#e2e8f0', fontSize: '0.875rem', fontWeight: '600' }}>
-                      {p.name}
-                    </span>
-                    <div style={{ color: '#64748b', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                      {p.throughput} · latency {p.latency}
+        {/* Dynamic Content */}
+        <div className="min-h-[60vh]">
+          {activeTab === 'infrastructure' ? (
+            <div className="space-y-6">
+              {/* Streams Section */}
+              <div className="glass-card rounded-2xl overflow-hidden border border-[var(--border-color)] shadow-2xl">
+                <div className="bg-slate-200/20 dark:bg-slate-900/30 px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg">
+                      <BarChart3 size={18} className="text-cyan-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">Kafka Streaming Topics</h3>
+                      <p className="text-[10px] text-[var(--text-muted)] font-medium">REAL-TIME DATA BUS</p>
                     </div>
                   </div>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '0.25rem 0.75rem',
-                      borderRadius: '0.25rem',
-                      fontSize: '0.65rem',
-                      fontWeight: '600',
-                      background:
-                        p.status === 'healthy'
-                          ? 'rgba(0,212,255,0.2)'
-                          : p.status === 'warning'
-                          ? 'rgba(245,158,11,0.2)'
-                          : 'rgba(239,68,68,0.2)',
-                      color:
-                        p.status === 'healthy'
-                          ? '#00d4ff'
-                          : p.status === 'warning'
-                          ? '#f59e0b'
-                          : '#ef4444',
-                    }}
-                  >
-                    {p.status.toUpperCase()}
-                  </span>
+                  {streamsError && (
+                    <span className="text-2xs text-amber-500/80 bg-amber-500/5 px-3 py-1 rounded-full border border-amber-500/10">
+                      {streamsError}
+                    </span>
+                  )}
                 </div>
-                {(() => {
-                  const healthScore =
-                    typeof p.health_score === 'number'
-                      ? Math.max(0, Math.min(100, p.health_score))
-                      : p.status === 'healthy'
-                      ? 96
-                      : p.status === 'warning'
-                      ? 70
-                      : 38;
-                  const healthColor =
-                    healthScore >= 85 ? '#00ff88' : healthScore >= 60 ? '#f59e0b' : '#ef4444';
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-100/50 dark:bg-slate-900/20 text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest border-b border-slate-200 dark:border-slate-800/40">
+                        <th className="px-6 py-4">Topic Path</th>
+                        <th className="px-6 py-4 text-center">Nodes</th>
+                        <th className="px-6 py-4 text-center">Lag</th>
+                        <th className="px-6 py-4">Throughput</th>
+                        <th className="px-6 py-4">State</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border-subtle)]">
+                      {streamData.topics.map((t) => (
+                        <tr key={t.topic} className="hover:bg-slate-100/30 dark:hover:bg-slate-800/20 transition-colors group">
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-xs text-[var(--text-secondary)] group-hover:text-cyan-400 transition-colors">{t.topic}</span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="text-xs text-[var(--text-muted)] font-mono">{t.partitions}</span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`text-xs font-mono font-bold ${
+                              t.lag > 1000 ? 'text-red-400' : t.lag > 500 ? 'text-amber-400' : 'text-emerald-400'
+                            }`}>
+                              {t.lag.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1 flex-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden max-w-[80px]">
+                                <div 
+                                  className="h-full bg-cyan-500/50 dark:bg-cyan-500/50" 
+                                  style={{ width: `${Math.min(100, (t.throughput / 10000) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">{(t.throughput / 1000).toFixed(1)}K msg/s</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold tracking-tighter uppercase ${
+                              t.status === 'healthy' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                              t.status === 'warning' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                              'bg-red-500/10 text-red-500 border border-red-500/20'
+                            }`}>
+                              ● {t.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-                  return (
-                    <>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '4px',
-                          background: 'rgba(30,58,95,0.6)',
-                          borderRadius: '2px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${healthScore}%`,
-                            height: '100%',
-                            background: healthColor,
-                            transition: 'width 0.3s ease',
-                          }}
+              {/* Flink Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {streamData.pipelines.map((p) => (
+                  <div key={p.name} className="glass-card rounded-xl p-5 border border-[var(--border-color)] hover:border-cyan-500/30 transition-all flex flex-col gap-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex gap-3">
+                        <div className="p-2.5 bg-cyan-500/5 rounded-lg border border-cyan-500/10">
+                          <Zap size={18} className="text-cyan-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[var(--text-primary)]">{p.name}</h4>
+                          <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">{p.throughput} @ {p.latency}</p>
+                        </div>
+                      </div>
+                      <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                        p.status === 'healthy' ? 'text-emerald-500' : p.status === 'warning' ? 'text-amber-400' : 'text-red-500'
+                      }`}>
+                         {p.status}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] font-bold text-[var(--text-muted)] mb-1.5 uppercase tracking-widest">
+                        <span>Cluster Health</span>
+                        <span>{p.health_score || 98}%</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-800/50 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-1000 shadow-[0_0_8px_rgba(0,0,0,0.5)] ${
+                            (p.health_score || 98) > 80 ? 'bg-emerald-500' : (p.health_score || 98) > 50 ? 'bg-amber-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${p.health_score || 98}%` }}
                         />
                       </div>
-                      <div className="mt-1 text-2xs" style={{ color: '#64748b' }}>
-                        health {healthScore.toFixed(0)}%
-                      </div>
-                    </>
-                  );
-                })()}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {!loading && data.pipelines.length === 0 && (
-            <p className="text-xs mt-3" style={{ color: '#64748b' }}>
-              No pipelines available
-            </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Filters & Search */}
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="relative flex-1 group w-full">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-[var(--accent-gold)] transition-colors" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Filter global intelligence documents, diplomatic reports, news feeds..."
+                    className="w-full bg-slate-100/60 dark:bg-slate-900/60 border border-[var(--border-color)] rounded-xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]/50 transition-all placeholder:text-[var(--text-dim)]"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button className="flex items-center gap-2 px-4 py-3 bg-slate-200/40 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50 rounded-xl text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+                    <Filter size={14} />
+                    ALL SOURCES
+                  </button>
+                </div>
+              </div>
+
+              {docsError && (
+                <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-red-400 text-xs flex items-center gap-3">
+                  <ShieldCheck size={16} />
+                  System Alert: {docsError} - Sync engine connection interrupted.
+                </div>
+              )}
+
+              {/* Documents List */}
+              <div className="grid grid-cols-1 gap-4">
+                {docsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-32 gap-6 glass-card rounded-2xl border-dashed">
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping" />
+                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#d6b985] relative" />
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-[var(--text-primary)] text-sm font-bold tracking-widest uppercase">Deep Scanning Data Lake</p>
+                      <p className="text-[var(--text-muted)] text-2xs font-mono">RETRIEVING ENCRYPTED ASSETS...</p>
+                    </div>
+                  </div>
+                ) : filteredDocs.length === 0 ? (
+                  <div className="glass-card p-20 rounded-2xl text-center space-y-4 border-dashed bg-transparent">
+                    <div className="mx-auto w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-800">
+                      <Database size={32} className="text-slate-700" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-[var(--text-secondary)] font-bold">Zero Intelligence Matches</h3>
+                      <p className="text-[var(--text-muted)] text-xs max-w-sm mx-auto font-medium">
+                        Your query returned no segments from the classified data lake. Try broadening your filter parameters.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  filteredDocs.map((doc) => (
+                    <div key={doc.id} className="glass-card hover:bg-slate-100/50 dark:hover:bg-slate-900/30 hover:border-[#d6b985]/30 transition-all group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800/60 p-5 flex flex-col gap-4 relative">
+                      <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <div className="w-1.5 h-1.5 rounded-full bg-[#d6b985] shadow-[0_0_8px_#d6b985]" />
+                      </div>
+                      
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${doc.url?.endsWith('.pdf') ? 'bg-red-500/10 text-red-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
+                              {doc.url?.endsWith('.pdf') ? <FileText size={16} /> : <LinkIcon size={16} />}
+                            </div>
+                            <h3 className="text-[var(--text-primary)] font-bold text-base leading-tight group-hover:text-[#d6b985] transition-colors">
+                              {doc.title}
+                            </h3>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] pl-11">
+                            <span className="flex items-center gap-1.5"><ShieldCheck size={12} className="text-[#d6b985]" /> {doc.source}</span>
+                            <span className="flex items-center gap-1.5"><Calendar size={12} /> {doc.published_date ? new Date(doc.published_date).toLocaleDateString('en-US') : 'INDETERMINATE'}</span>
+                            <span className="flex items-center gap-1.5"><Clock size={12} /> {doc.created_at ? new Date(doc.created_at).toLocaleTimeString('en-US') : 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pl-11 md:pl-0">
+                          {doc.url && (
+                            <a 
+                              href={doc.url} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="px-4 py-2 bg-slate-200/50 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/60 rounded-xl hover:bg-[#d6b985]/10 hover:border-[#d6b985]/30 transition-all text-[var(--text-muted)] hover:text-[#d6b985] flex items-center gap-2 text-[10px] font-bold"
+                            >
+                              SOURCE INTEL
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="pl-11 pr-2">
+                        <p className="text-[var(--text-secondary)] text-[13px] leading-relaxed italic font-serif opacity-80 group-hover:opacity-100 transition-opacity line-clamp-2">
+                          "{doc.content_preview}"
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2 pt-1 pl-11">
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[var(--text-muted)] font-bold tracking-tighter uppercase group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">RANK: CLASSIFIED_S1</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-cyan-950/20 border border-cyan-800/30 text-cyan-500 font-bold tracking-tighter uppercase">VECTORIZED</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-emerald-950/20 border border-emerald-800/30 text-emerald-500 font-bold tracking-tighter uppercase">KG_LINKED</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-[#d6b985]/10 border border-[#d6b985]/20 text-[#d6b985] font-bold tracking-tighter uppercase">READY</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </div>
       </main>

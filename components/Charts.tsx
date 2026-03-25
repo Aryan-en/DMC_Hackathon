@@ -16,22 +16,23 @@ const globalRiskData = [
 ];
 
 const tooltipStyle = {
-  backgroundColor: 'rgba(8, 16, 30, 0.97)',
-  border: '1px solid rgba(200, 168, 74, 0.15)',
-  borderRadius: '10px',
-  padding: '10px 14px',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+  backgroundColor: 'var(--card-bg)',
+  backdropFilter: 'blur(16px)',
+  border: '1px solid var(--border-color)',
+  borderRadius: '12px',
+  padding: '12px 16px',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
 };
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload) return null;
   return (
     <div style={tooltipStyle}>
-      <p style={{ color: '#7a8fa8', fontSize: '0.7rem', fontWeight: 600, marginBottom: '8px', letterSpacing: '0.06em' }}>{label}</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600, marginBottom: '8px', letterSpacing: '0.06em' }}>{label}</p>
       {payload.map((entry: any) => (
         <div key={entry.name} className="flex items-center gap-2" style={{ marginBottom: '4px' }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: entry.color, flexShrink: 0 }} />
-          <span style={{ color: '#3a4e62', fontSize: '0.68rem' }}>{entry.name}:</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.68rem' }}>{entry.name}:</span>
           <span style={{ color: entry.color, fontSize: '0.68rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 700 }}>{entry.value}</span>
         </div>
       ))}
@@ -39,10 +40,10 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
-export function GlobalRiskChart() {
+export function GlobalRiskChart({ data = globalRiskData }: { data?: any[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={globalRiskData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+      <AreaChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
         <defs>
           <linearGradient id="geo" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#b84a4a" stopOpacity={0.25} />
@@ -61,9 +62,9 @@ export function GlobalRiskChart() {
             <stop offset="95%" stopColor="#8a78c8" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" />
-        <XAxis dataKey="month" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+        <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip content={<CustomTooltip />} />
         <Area type="monotone" dataKey="geopolitical" stroke="#b84a4a" strokeWidth={1.5} fill="url(#geo)" name="Geopolitical" />
         <Area type="monotone" dataKey="economic" stroke="#00d4ff" strokeWidth={1.5} fill="url(#eco)" name="Economic" />
@@ -83,14 +84,14 @@ const entityData = [
   { name: 'Persons', value: 3892 },
 ];
 
-export function EntityBarChart() {
+export function EntityBarChart({ data = entityData }: { data?: any[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <BarChart data={entityData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" vertical={false} />
-        <XAxis dataKey="name" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#7a8fa8', fontSize: 11 }} itemStyle={{ color: '#00d4ff', fontSize: 11 }} />
+      <BarChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+        <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: 'var(--text-muted)', fontSize: 11 }} itemStyle={{ color: 'var(--accent-gold)', fontSize: 11 }} />
         <Bar dataKey="value" fill="#00d4ff" radius={[3, 3, 0, 0]} opacity={0.75} name="Entities" />
       </BarChart>
     </ResponsiveContainer>
@@ -107,16 +108,16 @@ const sentimentData = [
   { date: '03/12', positive: 28, neutral: 32, negative: 40 },
 ];
 
-export function SentimentChart() {
+export function SentimentChart({ data = sentimentData }: { data?: any[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <BarChart data={sentimentData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }} stackOffset="expand">
-        <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,212,255,0.07)" vertical={false} />
-        <XAxis dataKey="date" tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#3a4e62', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+      <BarChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -20 }} stackOffset="expand">
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+        <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
         <Tooltip
           contentStyle={tooltipStyle}
-          labelStyle={{ color: '#7a8fa8', fontSize: 11 }}
+          labelStyle={{ color: 'var(--text-muted)', fontSize: 11 }}
           formatter={(v: any, name: any) => [`${(v * 100).toFixed(1)}%`, name]}
         />
         <Bar dataKey="positive" stackId="a" fill="#3eb87a" opacity={0.75} name="Positive" />

@@ -1,19 +1,25 @@
 'use client';
 
-import { Search, User } from 'lucide-react';
+import { Search, User, Sun, Moon, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
+import { useUI } from './UIContext';
 import { API_BASE_URL } from '@/app/lib/api';
 import CommandPalette from './CommandPalette';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
+  const { toggleSidebar } = useUI();
   const [time, setTime] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const [activeUser, setActiveUser] = useState('Operator');
   const [loggedIn, setLoggedIn] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const update = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -47,9 +53,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
   async function handleLogout() {
     if (logoutLoading) return;
-
     setLogoutLoading(true);
-
     try {
       const localSessionRaw = localStorage.getItem('ontora.auth.session');
       const tempSessionRaw = sessionStorage.getItem('ontora.auth.session');
@@ -66,7 +70,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         });
       }
     } catch {
-      // Logout should always clear local session even if API call fails
+      // Ignore failures
     } finally {
       localStorage.removeItem('ontora.auth.session');
       localStorage.removeItem('ontora.auth.user');
@@ -79,146 +83,110 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
   return (
     <header
-      className="h-16 flex items-center justify-between px-6 sticky top-0 z-30 flex-shrink-0"
+      className="h-16 flex items-center justify-between px-4 md:px-6 sticky top-0 z-30 flex-shrink-0 transition-all duration-300"
       style={{
-        background: 'rgba(3, 8, 16, 0.97)',
-        borderBottom: '1px solid rgba(200,168,74,0.1)',
+        background: 'var(--background)',
+        borderBottom: '1px solid var(--border-color)',
         backdropFilter: 'blur(20px)',
-        boxShadow: '0 1px 0 rgba(200,168,74,0.05)',
       }}
     >
-      {/* Left: breadcrumb */}
-      <div>
-        <div
-          className="flex items-center gap-2 mb-0.5"
-          style={{ fontSize: '0.7rem' }}
+      {/* Left: Hamburger + Breadcrumb */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggleSidebar}
+          className="lg:hidden p-2 rounded-xl hover:bg-white/5 transition-colors"
+          style={{ border: '1px solid var(--border-color)' }}
         >
-          <span style={{ color: '#3a4e62', letterSpacing: '0.08em' }}>Ontora</span>
-          <span style={{ color: 'rgba(200,168,74,0.25)', fontSize: '0.6rem' }}>›</span>
-          <span style={{ color: '#8a9aaa', letterSpacing: '0.04em' }}>{title}</span>
-        </div>
-        {subtitle && (
-          <div style={{ color: '#2a3d52', fontSize: '0.6rem', maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {subtitle}
+          <Menu size={18} style={{ color: 'var(--accent-gold)' }} />
+        </button>
+        
+        <div>
+          <div
+            className="flex items-center gap-2 mb-0.5"
+            style={{ fontSize: '0.7rem' }}
+          >
+            <span style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>Ontora</span>
+            <span style={{ color: 'var(--accent-gold)', opacity: 0.25, fontSize: '0.6rem' }}>›</span>
+            <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>{title}</span>
           </div>
-        )}
+          {subtitle && (
+            <div className="hidden sm:block" style={{ color: 'var(--text-dim)', fontSize: '0.6rem', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Center: search */}
+      {/* Center: Search (Desktop only) */}
       <div
-        className="flex items-center gap-2.5 px-4 py-2 rounded-xl group hover:border-[#c8a84a]/30 cursor-pointer"
+        className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-xl group hover:border-[#c8a84a]/30 cursor-pointer"
         style={{
-          background: 'rgba(10, 21, 37, 0.8)',
-          border: '1px solid rgba(200,168,74,0.1)',
-          width: '340px',
+          background: 'var(--accent-gold-dim)',
+          border: '1px solid var(--border-color)',
+          width: '280px',
           transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
         onClick={() => setShowSearch(true)}
       >
-        <Search size={12} style={{ color: '#3a4e62' }} />
+        <Search size={12} style={{ color: 'var(--text-dim)' }} />
         <input
           type="text"
-          placeholder="Search entities, events, intelligence..."
+          placeholder="Search..."
           className="flex-1 bg-transparent outline-none"
-          style={{ color: '#7a8fa8', fontSize: '0.75rem', letterSpacing: '0.01em' }}
+          style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.01em' }}
         />
-        <kbd
-          className="px-1.5 py-0.5 rounded group-hover:border-[#c8a84a]/40 group-hover:bg-[#c8a84a]/10"
-          style={{
-            background: 'rgba(200,168,74,0.06)',
-            border: '1px solid rgba(200,168,74,0.14)',
-            color: '#4a6070',
-            fontSize: '0.58rem',
-            fontFamily: 'var(--font-geist-mono)',
-            letterSpacing: '0.05em',
-            transition: 'all 0.2s',
-          }}
-        >
-          ⌘K
-        </kbd>
         <CommandPalette />
       </div>
 
-      {/* Right: status + clock */}
-      <div className="flex items-center gap-5">
-        {/* Live indicator */}
+      {/* Right: Actions */}
+      <div className="flex items-center gap-3 md:gap-5">
+        {/* Theme Toggle */}
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-xl transition-all hover:bg-[var(--accent-gold-dim)]"
+          style={{ border: '1px solid var(--border-color)' }}
+        >
+          {mounted ? (
+            theme === 'dark' ? <Sun size={14} style={{ color: 'var(--accent-gold)' }} /> : <Moon size={14} style={{ color: 'var(--accent-gold)' }} />
+          ) : (
+            <div className="w-[14px] h-[14px]" />
+          )}
+        </button>
+
+        {/* Live Indicator (Icon only on mobile) */}
         <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full live-indicator" style={{ background: '#3eb87a' }} />
+          <span className="w-1.5 h-1.5 rounded-full live-indicator" style={{ background: 'var(--accent-emerald)' }} />
           <span
-            className="font-mono"
-            style={{ color: '#3eb87a', fontSize: '0.65rem', letterSpacing: '0.1em', fontWeight: 700 }}
+            className="hidden sm:inline font-mono"
+            style={{ color: 'var(--accent-emerald)', fontSize: '0.65rem', letterSpacing: '0.1em', fontWeight: 700 }}
           >
             LIVE
           </span>
         </div>
 
-        {/* Thin divider */}
-        <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
-
-        {/* Clock */}
+        {/* Clock (Hidden on very small mobile) */}
         {time && date && (
-          <div className="text-right">
+          <div className="hidden md:block text-right">
             <div
               className="font-mono font-bold"
-              style={{ color: '#c8a84a', fontSize: '0.82rem', letterSpacing: '0.08em' }}
+              style={{ color: 'var(--accent-gold)', fontSize: '0.82rem', letterSpacing: '0.08em' }}
             >
               {time}
             </div>
-            <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
           </div>
         )}
-
-        {/* Thin divider */}
-        <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
 
         {/* User */}
         <button
-          onClick={() => {
-            window.location.href = 'http://localhost:3002';
-          }}
-          className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
-          style={{ border: '1px solid rgba(200,168,74,0.1)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.04)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          onClick={() => { window.location.href = 'http://localhost:3002'; }}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-[var(--border-color)] hover:bg-[var(--accent-gold-dim)] transition-colors"
         >
-          <div
-            className="w-6 h-6 rounded-lg flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, rgba(200,168,74,0.2) 0%, rgba(200,168,74,0.08) 100%)',
-              border: '1px solid rgba(200,168,74,0.2)',
-            }}
-          >
-            <User size={11} style={{ color: '#c8a84a' }} />
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[var(--accent-gold-dim)] border border-[var(--accent-gold-dim)]">
+            <User size={11} style={{ color: 'var(--accent-gold)' }} />
           </div>
-          <div>
-            <div
-              style={{ color: '#8a9aaa', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.04em' }}
-            >
-              {activeUser}
-            </div>
-            <div style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.08em' }}>{loggedIn ? 'Authenticated' : 'Sign in'}</div>
-          </div>
+          <span className="hidden sm:inline" style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', fontWeight: 600 }}>{activeUser}</span>
         </button>
-
-        {loggedIn && (
-          <button
-            onClick={handleLogout}
-            disabled={logoutLoading}
-            className="px-2.5 py-1.5 rounded-lg"
-            style={{
-              border: '1px solid rgba(184,74,74,0.28)',
-              background: 'rgba(184,74,74,0.1)',
-              color: '#ef4444',
-              fontSize: '0.62rem',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              cursor: logoutLoading ? 'not-allowed' : 'pointer',
-              opacity: logoutLoading ? 0.7 : 1,
-            }}
-          >
-            {logoutLoading ? 'SIGNING OUT...' : 'SIGN OUT'}
-          </button>
-        )}
       </div>
     </header>
   );

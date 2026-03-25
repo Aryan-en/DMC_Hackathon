@@ -16,6 +16,9 @@ type Relationship = {
   strength: number;
   date?: string;
   impact?: string;
+  url?: string;
+  subject_properties?: any;
+  object_properties?: any;
 };
 
 type Path = {

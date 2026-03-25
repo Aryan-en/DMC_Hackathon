@@ -5,7 +5,7 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.postgres import get_db_session
 from db.schemas import Document, SystemMetric
-from db.neo4j import get_neo4j_session
+from db.neo4j_driver import get_neo4j_session
 from utils.response import build_success, build_error
 
 router = APIRouter()

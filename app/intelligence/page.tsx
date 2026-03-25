@@ -1,35 +1,29 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import { Brain, MessageSquare, Tag, Search, Layers } from 'lucide-react';
+import { Brain, MessageSquare, Tag, Search, Layers, MapPin, Activity, Shield, Info, Link as LinkIcon, AlertTriangle, CloudRain, Thermometer, Globe } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useIntelligenceMetrics } from '@/app/hooks/useIntelligenceMetrics';
 import { useIntelligenceAlerts } from '@/app/hooks/useIntelligenceAlerts';
 import { apiPost } from '@/app/lib/api';
 import { useState } from 'react';
+import TacticalMarquee from '@/components/TacticalMarquee';
 
 const TYPE_C: Record<string, string> = {
   ECON: '#f59e0b', GEOPOL: '#ef4444', FIN: '#00d4ff', TECH: '#8b5cf6', MIL: '#ef4444', TRADE: '#f59e0b', ORG: '#00d4ff', PERSON: '#00ff88', LOC: '#ef4444',
 };
 
-const customTooltipStyle = {
-  backgroundColor: '#0d1e35',
-  border: '1px solid #1e3a5f',
-  borderRadius: '8px',
-  padding: '10px 14px',
-};
-
 const CLSF_COLORS: Record<string, string> = {
-  'SECRET': '#f59e0b',
-  'TOP SECRET': '#ef4444',
-  'SECRET//REL': '#8b5cf6',
-  'CONFIDENTIAL': '#00d4ff',
+  'SECRET': '#6b21a8',
+  'TOP SECRET': '#991b1b',
+  'SECRET//REL': '#b45309',
+  'CONFIDENTIAL': '#15803d',
 };
 
 export default function IntelligencePage() {
   const { data, loading, error, refresh } = useIntelligenceMetrics();
-  const { data: alertsData, loading: alertsLoading } = useIntelligenceAlerts();
-  const [isGeneratingBrief, setIsGeneratingBrief] = useState(false);
+  const { alerts: alertsList, loading: alertsLoading, error: alertsError } = useIntelligenceAlerts();
+  const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
   const [briefActionMessage, setBriefActionMessage] = useState<string | null>(null);
   const [briefActionError, setBriefActionError] = useState<string | null>(null);
 
@@ -61,200 +55,202 @@ export default function IntelligencePage() {
       ];
 
   const handleGenerateBrief = async () => {
-    setIsGeneratingBrief(true);
+    setIsGeneratingBriefing(true);
     setBriefActionError(null);
     setBriefActionMessage(null);
 
     try {
       const topKeyword = data.keywords[0]?.keyword;
-      const payload = {
-        focus: topKeyword ? `Strategic Update: ${topKeyword}` : 'Global Strategic Update',
-        classification: 'SECRET',
-      };
-
-      const endpointCandidates = [
-        '/api/intelligence/strategic-briefs/generate',
-        '/api/intelligence/generate-brief',
-        '/api/intelligence/briefs/generate',
-      ];
-
-      let generated = false;
-      let lastError: unknown = null;
-      for (const endpoint of endpointCandidates) {
-        try {
-          await apiPost<{ brief: { title: string } }>(endpoint, payload);
-          generated = true;
-          break;
-        } catch (endpointErr) {
-          lastError = endpointErr;
-          const message = endpointErr instanceof Error ? endpointErr.message : '';
-          if (!message.includes('404')) {
-            throw endpointErr;
-          }
-        }
-      }
-
-      if (!generated) {
-        throw lastError instanceof Error
-          ? new Error('Brief generation endpoint is unavailable on the running backend. Restart backend to load latest intelligence routes.')
-          : new Error('Brief generation endpoint is unavailable on the running backend. Restart backend to load latest intelligence routes.');
-      }
-
+      const payload = { focus: topKeyword ? `Strategic Update: ${topKeyword}` : 'Global Strategic Update', classification: 'SECRET' };
+      await apiPost<{ brief: { title: string } }>('/api/intelligence/strategic-briefs/generate', payload);
       await refresh();
-      setBriefActionMessage('New strategic brief generated and saved to the intelligence feed.');
+      setBriefActionMessage('New strategic brief generated.');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate brief';
-      setBriefActionError(message);
+      setBriefActionError(err instanceof Error ? err.message : 'Failed to generate brief');
     } finally {
-      setIsGeneratingBrief(false);
+      setIsGeneratingBriefing(false);
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen grid-bg">
       <TopBar title="AI Intelligence" subtitle="HuggingFace · spaCy · LLaMA · GPT · Pinecone Vector Search" />
-      <main className="flex-1 px-6 py-6 space-y-6">
-        {error && (
-          <div
-            className="px-4 py-2 rounded-xl"
-            style={{ background: 'rgba(184,74,74,0.08)', border: '1px solid rgba(184,74,74,0.2)', color: '#b84a4a', fontSize: '0.72rem' }}
-          >
-            Live intelligence metrics unavailable: {error}. Displaying latest available live-response state.
-          </div>
-        )}
-
-        {/* Intelligence Alerts */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Intelligence Alerts</h3>
-            <span className="text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '0.65rem' }}>
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
-              LIVE
-            </span>
-          </div>
-
-          {alertsLoading ? (
-            <div className="text-xs p-4 text-center" style={{ color: '#64748b' }}>Loading live alerts...</div>
-          ) : alertsData.alerts.length === 0 ? (
-            <div className="text-xs p-4 text-center" style={{ color: '#64748b' }}>No alerts at this time.</div>
-          ) : (
-            <div className="space-y-3">
-              {alertsData.alerts.map((alert, idx) => {
-                const severityColor = alert.severity === 'CRITICAL' ? '#ef4444' : alert.severity === 'HIGH' ? '#f59e0b' : alert.severity === 'MEDIUM' ? '#3b82f6' : '#64748b';
-                const severityBg = alert.severity === 'CRITICAL' ? 'rgba(239,68,68,0.1)' : alert.severity === 'HIGH' ? 'rgba(251,146,60,0.1)' : alert.severity === 'MEDIUM' ? 'rgba(59,130,246,0.1)' : 'rgba(100,116,139,0.1)';
-
-                return (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-lg flex items-start justify-between"
-                    style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${severityColor}20` }}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className="text-xs font-mono mt-0.5" style={{ color: '#94a3b8', minWidth: '60px' }}>
-                        {alert.timestamp}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span
-                            className="text-xs px-2 py-0.5 rounded font-bold"
-                            style={{ background: severityBg, color: severityColor, fontSize: '0.65rem' }}
-                          >
-                            {alert.severity}
-                          </span>
-                          <span
-                            className="text-xs px-2 py-0.5 rounded font-mono"
-                            style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', fontSize: '0.62rem' }}
-                          >
-                            {alert.region}
-                          </span>
-                        </div>
-                        <p className="text-xs" style={{ color: '#cbd5e1', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                          {alert.title}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <span className="text-xs font-mono" style={{ color: '#00ff88', fontSize: '0.7rem', fontWeight: 'bold' }}>
-                        {(alert.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {!alertsLoading && alertsData.total_count > alertsData.alerts.length && (
-            <div className="text-xs mt-3 text-center" style={{ color: '#64748b' }}>
-              View all {alertsData.total_count} alerts →
-            </div>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+      <main className="flex-1 px-4 py-3 space-y-3">
+        {/* Stats Grid - MOVED TO TOP */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Documents Processed Today', value: compact(totalDocs), sub: `${data.languages.length} languages`, color: '#00d4ff', icon: Layers },
-            { label: 'NER Entities Extracted', value: compact(totalMentions), sub: 'spaCy + custom models', color: '#8b5cf6', icon: Tag },
-            { label: 'Sentiment Analyses', value: compact(totalDocs * 6), sub: 'Global media & social', color: '#f59e0b', icon: MessageSquare },
-            { label: 'Vector Similarity Searches', value: compact(totalMentions * 4), sub: 'Pinecone / Qdrant', color: '#00ff88', icon: Search },
+            { label: 'Documents Processed Today', value: compact(totalDocs), sub: `${data.languages.length} languages`, bg: '#bfdbfe', text: '#1e3a8a', icon: Layers }, // Light Blue / Dark Blue
+            { label: 'NER Entities Extracted', value: compact(totalMentions), sub: 'spaCy + custom models', bg: '#ddd6fe', text: '#4c1d95', icon: Tag }, // Light Purple / Dark Purple
+            { label: 'Sentiment Analyses', value: compact(totalDocs * 6), sub: 'Global media & social', bg: '#fde68a', text: '#78350f', icon: MessageSquare }, // Light Amber / Dark Amber
+            { label: 'Vector Similarity Searches', value: compact(totalMentions * 4), sub: 'Pinecone / Qdrant', bg: '#a7f3d0', text: '#064e3b', icon: Search }, // Light Green / Dark Green
           ].map(s => (
-            <div key={s.label} className="glass-card rounded-xl px-5 py-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${s.color}15`, border: `1px solid ${s.color}30` }}>
-                <s.icon size={18} style={{ color: s.color }} />
+            <div key={s.label} className="rounded-2xl p-6 flex flex-col gap-4 shadow-lg relative overflow-hidden" 
+                 style={{ 
+                   background: s.bg, 
+                   border: `1px solid rgba(0,0,0,0.04)`,
+                 }}>
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" 
+                     style={{ background: 'rgba(0,0,0,0.08)' }}>
+                  <s.icon size={22} style={{ color: s.text }} />
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-widest" style={{ color: s.text, opacity: 0.7 }}>{s.sub}</div>
               </div>
-              <div>
-                <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
-                <div className="text-xs font-semibold" style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{s.label}</div>
-                <div className="text-xs" style={{ color: '#334155', fontSize: '0.65rem' }}>{s.sub}</div>
+              <div className="mt-2">
+                <div className="text-4xl font-black tracking-tighter leading-none" style={{ color: s.text }}>{s.value}</div>
+                <div className="text-[11px] font-black uppercase tracking-widest block mt-3 opacity-90" style={{ color: s.text }}>{s.label}</div>
               </div>
+              <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mb-16 blur-2xl" />
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          {/* Entity extraction table */}
-          <div className="col-span-2 glass-card rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Named Entity Recognition — Top Entities</h3>
+        {error && (
+          <div className="status-critical mb-2">
+            Live intelligence metrics unavailable: {error}.
+          </div>
+        )}
+
+        {/* Intelligence Alerts */}
+        <div className="glass-card rounded-xl p-0 overflow-hidden">
+          <div className="flex items-center justify-between p-4 bg-black/[0.02]">
+            <h3 className="font-bold text-sm text-primary uppercase tracking-wider">Intelligence Alerts</h3>
+            <span className="status-online flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-emerald-500" />
+              LIVE
+            </span>
+          </div>
+          <div className="table-scroll-container">
+            {alertsLoading ? (
+              <div className="flex flex-col gap-2 p-4 animate-pulse">
+                {[1, 2, 3].map(i => <div key={i} className="h-4 bg-black/5 dark:bg-white/5 rounded" />)}
+              </div>
+            ) : alertsError ? (
+              <div className="text-xs p-4 text-center text-crimson font-bold">Error: {alertsError}</div>
+            ) : !alertsList || alertsList.length === 0 ? (
+              <div className="text-xs p-4 text-center italic text-muted">No active threat threads detected in this sector.</div>
+            ) : (
+              <table className="w-full text-left border-collapse table-fixed">
+                <thead 
+                  className="text-[9px] font-bold uppercase tracking-[0.2em]"
+                  style={{ backgroundColor: 'var(--table-header-bg)', color: 'var(--table-header-text)' }}
+                >
+                  <tr>
+                    <th className="pl-4 py-3 font-mono w-[80px]">Timestamp</th>
+                    <th className="px-2 py-3 w-[60px]">Sev</th>
+                    <th className="px-2 py-3 w-[85px]">Region</th>
+                    <th className="px-4 py-3">Intelligence Assessment Summary</th>
+                    <th className="pr-4 py-3 text-right w-[90px]">Provenance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/[0.05] dark:divide-white/[0.03]">
+                  {alertsList.slice(0, 25).map((alert, idx) => {
+                    const s = alert.severity.toLowerCase();
+                    const severityColor = s === 'critical' ? 'var(--accent-crimson)' : s === 'high' ? 'var(--accent-amber)' : s === 'medium' ? 'var(--accent-steel)' : 'var(--text-muted)';
+                    
+                    return (
+                      <tr key={idx} className="group hover:bg-gold/5 transition-colors">
+                        <td className="pl-4 py-3 text-[10px] font-mono text-muted">
+                          {alert.time}
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: severityColor }} />
+                            <span className="text-[9px] font-black uppercase" style={{ color: severityColor }}>
+                              {alert.severity.substring(0, 3)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3">
+                          <span className="text-[10px] text-primary">
+                            {alert.region}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <TacticalMarquee>
+                            <p className="text-[11px] text-primary leading-normal">
+                              {alert.message}
+                            </p>
+                          </TacticalMarquee>
+                        </td>
+                        <td className="pr-4 py-3 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-mono font-black text-emerald">
+                              {(alert.confidence * 100).toFixed(0)}%
+                            </span>
+                            {alert.url ? (
+                              <a 
+                                href={alert.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-[10px] font-bold text-lavender hover:underline underline-offset-2"
+                              >
+                                Source ↗
+                              </a>
+                            ) : (
+                              <span className="text-[10px] font-mono text-muted uppercase">SYSTEM</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 rounded-xl p-0 overflow-hidden border shadow-xl" style={{ background: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
+            <div className="p-4 flex items-center justify-between bg-black/[0.04]">
+              <h3 className="font-bold text-sm text-primary uppercase">Named Entity Recognition</h3>
               <div className="flex items-center gap-2">
                 {['ORG', 'PERSON', 'LOC', 'CONCEPT'].map(t => (
-                  <span key={t} className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(30,58,95,0.5)', color: '#64748b', fontSize: '0.65rem' }}>{t}</span>
+                  <span key={t} className="text-[8px] font-black px-3 py-1 rounded-full bg-gold/10 text-gold border border-gold/20">{t}</span>
                 ))}
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="table-scroll-container">
               <table className="w-full data-table">
-                <thead>
+                <thead style={{ backgroundColor: 'var(--table-header-bg)', color: 'var(--table-header-text)' }}>
                   <tr>
-                    <th className="text-left">Entity</th>
-                    <th className="text-left">Type</th>
-                    <th className="text-left">Mentions</th>
-                    <th className="text-left">Confidence</th>
-                    <th className="text-left">Sentiment</th>
+                    <th className="text-left font-black py-2 pl-4">Entity</th>
+                    <th className="text-left font-black py-2">Type</th>
+                    <th className="text-left font-black py-2">Mentions</th>
+                    <th className="text-left font-black py-2">Confidence</th>
+                    <th className="text-left font-black py-2">Sentiment</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-black/5">
                   {data.entities.map(e => {
                     const sentiment = inferSentiment(e.type, e.mentions);
-                    const sentColor = sentiment === 'positive' ? '#00ff88' : sentiment === 'negative' ? '#ef4444' : '#64748b';
+                    const sentColor = sentiment === 'positive' ? 'var(--accent-emerald)' : sentiment === 'negative' ? 'var(--accent-crimson)' : 'var(--text-muted)';
                     return (
-                      <tr key={e.entity}>
-                        <td style={{ color: '#e2e8f0' }}>{e.entity}</td>
-                        <td>
-                          <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold"
-                            style={{ background: 'rgba(0,212,255,0.08)', color: '#00d4ff', fontSize: '0.65rem' }}
-                          >{e.type}</span>
+                      <tr key={e.entity} className="hover:bg-gold/5 transition-colors">
+                        <td className="text-primary font-bold">
+                          {e.url ? (
+                            <a href={e.url} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors flex items-center gap-1.5 underline-offset-4 hover:underline">
+                              {e.entity}
+                              <LinkIcon size={10} className="text-gold/60" />
+                            </a>
+                          ) : (
+                            e.entity
+                          )}
                         </td>
-                        <td className="font-mono" style={{ color: '#94a3b8' }}>{e.mentions.toLocaleString('en-US')}</td>
+                        <td>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase text-white shadow-sm" style={{ background: TYPE_C[e.type] || '#b2904f' }}>{e.type}</span>
+                        </td>
+                        <td className="font-mono text-secondary">{e.mentions.toLocaleString('en-US')}</td>
                         <td>
                           <div className="flex items-center gap-2">
-                            <div className="w-12 h-1 rounded-full" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                              <div className="h-full rounded-full" style={{ width: `${e.confidence * 100}%`, background: '#00ff88', opacity: 0.7 }} />
+                            <div className="w-12 h-1 bg-black/10 dark:bg-white/10 rounded-full">
+                              <div className="h-full rounded-full bg-emerald" style={{ width: `${e.confidence * 100}%` }} />
                             </div>
-                            <span className="font-mono text-xs" style={{ color: '#00ff88', fontSize: '0.68rem' }}>{(e.confidence * 100).toFixed(0)}%</span>
+                            <span className="font-mono text-[10px] text-emerald">{(e.confidence * 100).toFixed(0)}%</span>
                           </div>
                         </td>
-                        <td style={{ color: sentColor, fontSize: '0.72rem', textTransform: 'capitalize' }}>{sentiment}</td>
+                        <td style={{ color: sentColor }} className="text-[10px] font-black uppercase">{sentiment}</td>
                       </tr>
                     );
                   })}
@@ -263,43 +259,35 @@ export default function IntelligencePage() {
             </div>
           </div>
 
-          {/* Sentiment radar + language distribution */}
-          <div className="space-y-5">
-            <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Global Tension Radar</h3>
-                  <p className="text-xs mt-1" style={{ color: '#64748b', fontSize: '0.65rem' }}>
-                    6 dimensions: Geopolitical · Economic · Climate (IndiAPI) · Social · Cyber · Military
-                  </p>
-                </div>
-                <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.2)', color: '#f59e0b', fontSize: '0.65rem' }}>
-                  Climate: Live Risk Data
-                </span>
+          <div className="space-y-4">
+            <div className="rounded-xl p-5 border shadow-2xl" style={{ background: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-sm text-primary uppercase">Global Tactical Radar</h3>
+                <span className="status-online uppercase text-[8px] bg-emerald/10 text-emerald px-2 py-0.5 rounded-full border border-emerald/20">Live Intelligence</span>
               </div>
               <ResponsiveContainer width="100%" height={180}>
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#1e3a5f" strokeOpacity={0.6} />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#475569', fontSize: 10 }} />
-                  <Radar name="Tension" dataKey="score" stroke="#ef4444" fill="#ef4444" fillOpacity={0.1} strokeWidth={1.5} />
+                  <PolarGrid stroke="var(--border-color)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-primary)', fontSize: 10, fontWeight: 800 }} />
+                  <Radar name="Tension" dataKey="score" stroke="var(--accent-crimson)" fill="var(--accent-crimson)" fillOpacity={0.15} strokeWidth={2} />
                 </RadarChart>
               </ResponsiveContainer>
-              <div className="text-xs mt-2 p-2 rounded" style={{ background: 'rgba(30,58,95,0.3)', color: '#94a3b8', fontSize: '0.65rem', lineHeight: 1.5 }}>
-                ℹ️ Climate dimension now integrates <strong>IndiAPI regional climate intelligence</strong>: 3 CRITICAL regions, +2.8°C avg warming, 76% avg crop risk
+              <div className="text-[10px] mt-4 p-4 rounded-xl bg-[#b2904f]10 border border-[#b2904f]20 text-primary font-bold leading-relaxed shadow-inner" style={{ background: 'rgba(178, 144, 79, 0.08)' }}>
+                <span className="text-gold">ℹ️ DATA INTEGRITY:</span> All intelligence dimensions reflect <strong>Global Tactical Metrics</strong> across 216 monitored nodes.
               </div>
             </div>
 
-            <div className="glass-card rounded-xl p-5">
-              <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Doc Language Distribution</h3>
-              <div className="space-y-2">
+            <div className="glass-card rounded-xl p-4">
+              <h3 className="font-bold text-sm text-primary uppercase mb-4">Language Distribution</h3>
+              <div className="space-y-3">
                 {data.languages.map(l => (
                   <div key={l.lang}>
-                    <div className="flex justify-between mb-0.5">
-                      <span className="text-xs" style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{l.lang}</span>
-                      <span className="text-xs font-mono" style={{ color: '#00d4ff', fontSize: '0.68rem' }}>{l.percentage.toFixed(1)}%</span>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-[10px] font-black uppercase text-secondary">{l.lang}</span>
+                      <span className="text-[10px] font-mono font-black text-secondary">{l.percentage.toFixed(1)}%</span>
                     </div>
-                    <div className="h-1 rounded-full" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, l.percentage)}%`, background: '#00d4ff', opacity: 0.7 }} />
+                    <div className="h-1.5 bg-black/5 dark:bg-white/5 rounded-full">
+                      <div className="h-full rounded-full bg-gold" style={{ width: `${Math.min(100, l.percentage)}%` }} />
                     </div>
                   </div>
                 ))}
@@ -308,289 +296,168 @@ export default function IntelligencePage() {
           </div>
         </div>
 
-        {/* Trend keywords */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Emerging Trend Detection — Real-time NLP</h3>
-            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff60', fontSize: '0.65rem' }}>
-              {loading ? 'Syncing...' : 'Updated from live APIs'}
-            </span>
+        {/* Emerging Trends */}
+        <div className="rounded-xl p-5 border shadow-lg" style={{ background: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-bold text-[11px] text-primary uppercase tracking-widest border-l-4 border-gold pl-3">Emerging Strategic Trends</h3>
+            <span className="text-[9px] font-black text-muted uppercase tracking-widest leading-none bg-black/5 px-2 py-0.5 rounded-full">Real-time NLP Engine</span>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {data.keywords.map(kw => (
-              <div key={kw.keyword} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.5)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: `${(TYPE_C[kw.type] || '#00d4ff')}15`, color: TYPE_C[kw.type] || '#00d4ff', fontSize: '0.6rem' }}>{kw.type}</span>
-                  <span className="text-xs font-mono font-bold" style={{ color: '#00ff88', fontSize: '0.65rem' }}>{kw.delta}</span>
+              <div key={kw.keyword} className="p-4 rounded-xl border shadow-md flex flex-col" 
+                   style={{ background: TYPE_C[kw.type] || 'var(--accent-gold)', borderColor: 'rgba(0,0,0,0.05)' }}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-black uppercase bg-white/20 text-white backdrop-blur-sm">
+                    {kw.type}
+                  </span>
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10">
+                    <Activity size={10} className="text-white" />
+                    <span className="text-[9px] font-black text-white">{kw.delta}</span>
+                  </div>
                 </div>
-                <p className="text-xs font-medium mb-2" style={{ color: '#94a3b8', fontSize: '0.7rem', lineHeight: 1.4 }}>{kw.keyword}</p>
-                <div className="h-1 rounded-full" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${kw.velocity}%`, background: TYPE_C[kw.type] || '#00d4ff', opacity: 0.7 }} />
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-xs" style={{ color: '#334155', fontSize: '0.6rem' }}>velocity</span>
-                  <span className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem' }}>{kw.velocity}/100</span>
+                <h4 className="text-lg font-black text-white capitalize mb-4 tracking-tighter leading-tight">{kw.keyword}</h4>
+                <div className="mt-auto">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">Velocity</span>
+                    <span className="font-mono text-[10px] font-black text-white">{kw.velocity}/100</span>
+                  </div>
+                  <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-white rounded-full transition-all duration-1000" style={{ width: `${kw.velocity}%` }} />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* AI-generated strategic briefs */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-5">
+        {/* AI Briefs */}
+        <div className="glass-card rounded-xl p-0 overflow-hidden">
+          <div className="p-4 flex items-center justify-between bg-black/[0.02]">
             <div>
-              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>AI-Generated Strategic Briefs</h3>
-              <p className="text-xs mt-0.5" style={{ color: '#475569' }}>Generated by LLM ensemble — GPT-4o · LLaMA-3 · Mistral</p>
+              <h3 className="font-bold text-sm text-primary uppercase">Strategic Intelligence Briefs</h3>
+              <p className="text-[10px] font-bold text-muted mt-1 uppercase">LLM Ensemble Pipeline — GPT·LLaMA·Claude</p>
             </div>
             <button 
               onClick={handleGenerateBrief}
-              disabled={isGeneratingBrief}
-              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg" 
-              style={{ background: isGeneratingBrief ? 'rgba(0,212,255,0.05)' : 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff', cursor: isGeneratingBrief ? 'wait' : 'pointer', opacity: isGeneratingBrief ? 0.6 : 1 }}
+              disabled={isGeneratingBriefing}
+              className="px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-wider transition-all" 
+              style={{ 
+                background: isGeneratingBriefing ? 'var(--table-header-bg)' : 'var(--accent-gold)', 
+                color: isGeneratingBriefing ? 'var(--text-muted)' : '#fff',
+                boxShadow: isGeneratingBriefing ? 'none' : '0 10px 20px rgba(178, 144, 79, 0.4)'
+              }}
             >
-              <Brain size={13} />
-              {isGeneratingBrief ? 'Generating...' : 'Generate New Brief'}
+              {isGeneratingBriefing ? 'ANALYZING...' : 'Generate Strategic Brief'}
             </button>
           </div>
-          {briefActionMessage && (
-            <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}>
-              {briefActionMessage}
-            </div>
-          )}
-          {briefActionError && (
-            <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-              Brief generation failed: {briefActionError}
-            </div>
-          )}
-          <div className="space-y-4">
-            {data.briefs.length === 0 && (
-              <div className="p-4 rounded-xl text-xs" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.5)', color: '#64748b' }}>
-                No strategic briefs available yet. Briefs will appear after document ingestion.
-              </div>
-            )}
-            {data.briefs.map((brief) => (
-              <div key={`${brief.title}-${brief.dateGen ?? 'na'}`} className="p-4 rounded-xl" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.5)' }}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-xs px-2 py-0.5 rounded font-bold"
-                      style={{
-                        background: `${(CLSF_COLORS[brief.classification] || '#f59e0b')}15`,
-                        border: `1px solid ${(CLSF_COLORS[brief.classification] || '#f59e0b')}30`,
-                        color: CLSF_COLORS[brief.classification] || '#f59e0b',
-                        fontSize: '0.62rem',
-                      }}
-                    >
-                      {brief.classification}
-                    </span>
-                    <h4 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>{brief.title}</h4>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <span className="text-xs font-mono" style={{ color: '#334155', fontSize: '0.65rem' }}>{brief.dateGen ?? 'N/A'}</span>
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', fontSize: '0.65rem' }}>{brief.model}</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs" style={{ color: '#64748b', fontSize: '0.65rem' }}>Conf:</span>
-                      <span className="font-mono text-xs font-bold" style={{ color: brief.confidence > 85 ? '#00ff88' : '#f59e0b' }}>{brief.confidence}%</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: '#64748b', lineHeight: 1.7 }}>{brief.summary}</p>
-              </div>
-            ))}
+
+          <div className="table-scroll-container">
+            <table className="w-full text-left border-collapse table-fixed">
+              <thead 
+                className="text-[9px] font-bold uppercase tracking-[0.2em]"
+                style={{ backgroundColor: 'var(--table-header-bg)', color: 'var(--table-header-text)' }}
+              >
+                <tr>
+                  <th className="pl-4 py-3 w-[120px]">Classification</th>
+                  <th className="px-4 py-3">Intelligence Assessment Subject</th>
+                  <th className="px-2 py-3 text-center w-[80px]">Model</th>
+                  <th className="px-2 py-3 text-center w-[80px]">Conf</th>
+                  <th className="pr-4 py-3 text-right w-[100px]">Provenance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {data.briefs.map((brief, bidx) => (
+                  <tr key={bidx} className="group hover:bg-gold/5 transition-colors">
+                    <td className="pl-4 py-4">
+                      <span className="text-[9px] px-3 py-1 rounded-full font-black uppercase text-white shadow-sm"
+                        style={{ background: CLSF_COLORS[brief.classification] || '#6b21a8' }}
+                      >
+                        {brief.classification}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <TacticalMarquee>
+                        <span className="text-[11px] text-primary tracking-tight">{brief.title}</span>
+                      </TacticalMarquee>
+                      <p className="text-[10px] text-muted font-bold mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">{brief.summary}</p>
+                    </td>
+                    <td className="px-2 py-4 text-center">
+                      <span className="text-[9px] text-secondary">{brief.model}</span>
+                    </td>
+                    <td className="px-2 py-4 text-center">
+                      <span className="font-mono text-xs text-emerald-700">{(brief.confidence || 0).toFixed(0)}%</span>
+                    </td>
+                    <td className="pr-4 py-4 text-right">
+                      <a href={brief.url || undefined} target="_blank" className="text-[10px] font-bold text-lavender hover:underline">Source ↗</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Model pipeline status */}
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="font-semibold text-sm mb-4" style={{ color: '#e2e8f0' }}>NLP/AI Model Pipeline Status</h3>
-          <div className="grid grid-cols-5 gap-3">
-            {data.models.map(m => (
-              <div key={m.name} className="p-3 rounded-xl" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: m.status === 'RUNNING' ? '#00ff88' : '#475569' }} />
-                  <span className="text-xs font-bold" style={{ color: m.status === 'RUNNING' ? '#00ff88' : '#475569', fontSize: '0.62rem' }}>{m.status}</span>
-                </div>
-                <div className="font-semibold text-xs mb-1" style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{m.name}</div>
-                <div className="text-xs mb-2" style={{ color: '#334155', fontSize: '0.65rem' }}>{m.version}</div>
-                <div className="text-xs font-mono font-bold" style={{ color: '#00d4ff', fontSize: '0.68rem' }}>{m.infer}</div>
-                <div className="text-xs" style={{ color: '#334155', fontSize: '0.62rem' }}>{m.gpu}</div>
-              </div>
-            ))}
-            {data.models.length === 0 && (
-              <div className="col-span-5 p-3 rounded-xl text-xs" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.4)', color: '#64748b' }}>
-                Pipeline metrics are not yet emitted by the backend.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Climate Intelligence */}
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>
-                <span style={{ fontSize: '1.2rem' }}></span>
-              </div>
-              <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Climate Intelligence — IndiAPI Regional Risk Assessment</h3>
-            </div>
-            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.2)', color: '#f59e0b', fontSize: '0.65rem' }}>
-              {data.climateRegions.length} regions monitored
-            </span>
+        {/* Climate Radar */}
+        <div className="glass-card rounded-xl p-0 overflow-hidden">
+          <div className="p-4 flex items-center justify-between bg-black/[0.02]">
+            <h3 className="font-bold text-sm text-primary uppercase">Climate Intelligence Feed</h3>
+            <span className="status-warning uppercase text-[8px]">{data.climateRegions.length} Sectors Scanned</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2">
-            {data.climateRegions.map((region, idx) => {
-              const riskColor = region.risk_level === 'CRITICAL' ? '#ef4444' : '#f59e0b';
-              return (
-                <div key={`${region.region}-${idx}`} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${riskColor}30` }}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: `${riskColor}20`, color: riskColor, fontSize: '0.65rem' }}>
+          <div className="table-scroll-container">
+            <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
+              <thead 
+                className="text-[9px] font-bold uppercase tracking-[0.2em]"
+                style={{ backgroundColor: 'var(--table-header-bg)', color: 'var(--table-header-text)' }}
+              >
+                <tr>
+                  <th className="pl-4 py-3 w-[80px]">Risk</th>
+                  <th className="px-3 py-3 w-[120px]">Region</th>
+                  <th className="px-2 py-3 w-[65px]">Temp Δ</th>
+                  <th className="px-4 py-3">Strategic Impact Summary</th>
+                  <th className="px-2 py-3 w-[80px]">Drought</th>
+                  <th className="px-2 py-3 w-[80px]">Flood</th>
+                  <th className="pr-4 py-3 text-right w-[80px]">Crop</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {data.climateRegions.map((region, idx) => {
+                  const riskColor = region.risk_level === 'CRITICAL' ? 'var(--accent-crimson)' : 'var(--accent-amber)';
+                  return (
+                    <tr key={idx} className="group hover:bg-gold/5 transition-colors">
+                      <td className="pl-4 py-4">
+                        <span className="text-[9px] font-black px-2 py-1 rounded" style={{ background: `${riskColor}15`, color: riskColor, border: `1px solid ${riskColor}40` }}>
                           {region.risk_level}
                         </span>
-                        <span className="text-xs font-semibold" style={{ color: '#e2e8f0', fontSize: '0.72rem' }}>{region.region}</span>
-                        <span className="text-xs font-mono" style={{ color: '#94a3b8', fontSize: '0.65rem' }}>+{region.temp_change}°C</span>
-                      </div>
-                      <p className="text-xs mb-2" style={{ color: '#cbd5e1', fontSize: '0.7rem', lineHeight: 1.4 }}>
-                        {region.geopolitical_impact}
-                      </p>
-                      <p className="text-xs" style={{ color: '#94a3b8', fontSize: '0.68rem', lineHeight: 1.3 }}>
-                        <span style={{ color: '#f59e0b' }}>Strategic concern:</span> {region.strategic_concern}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-2 text-xs mt-2">
-                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
-                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Drought</div>
-                      <div className="font-bold" style={{ color: region.drought_threat === 'CRITICAL' ? '#ef4444' : region.drought_threat === 'HIGH' ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
-                        {region.drought_threat}
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
-                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Flood</div>
-                      <div className="font-bold" style={{ color: region.flood_threat === 'CRITICAL' ? '#ef4444' : region.flood_threat === 'HIGH' ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
-                        {region.flood_threat}
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
-                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Crop Risk</div>
-                      <div className="font-bold" style={{ color: region.crop_risk > 80 ? '#ef4444' : region.crop_risk > 70 ? '#f59e0b' : '#00d4ff', fontSize: '0.7rem' }}>
-                        {region.crop_risk}%
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded" style={{ background: 'rgba(30,58,95,0.3)' }}>
-                      <div className="text-xs font-mono" style={{ color: '#64748b', fontSize: '0.6rem', marginBottom: '0.25rem' }}>Temp Δ</div>
-                      <div className="font-bold" style={{ color: '#f59e0b', fontSize: '0.7rem' }}>
-                        +{region.temp_change}°
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="px-3 py-4 text-[11px] text-primary">
+                        {region.region}
+                      </td>
+                      <td className="px-2 py-4 font-mono text-[10px] text-crimson-700">
+                        +{region.temp_change}°C
+                      </td>
+                      <td className="px-4 py-4">
+                        <TacticalMarquee>
+                          <p className="text-[11px] text-primary leading-normal">{region.geopolitical_impact}</p>
+                        </TacticalMarquee>
+                        <p className="text-[10px] text-muted mt-1 italic">{region.strategic_concern}</p>
+                      </td>
+                      <td className="px-2 py-4">
+                        <span className="text-[9px] font-black uppercase p-1 rounded bg-black/5" style={{ color: region.drought_threat === 'CRITICAL' ? 'var(--accent-crimson)' : 'var(--accent-gold)' }}>{region.drought_threat}</span>
+                      </td>
+                      <td className="px-2 py-4">
+                        <span className="text-[9px] font-black uppercase p-1 rounded bg-black/5" style={{ color: region.flood_threat === 'CRITICAL' ? 'var(--accent-crimson)' : 'var(--accent-steelblue)' }}>{region.flood_threat}</span>
+                      </td>
+                      <td className="pr-4 py-4 text-right">
+                        <span className="text-xs font-mono text-primary">{region.crop_risk}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        {/* MEA Strategic Overview */}
-        {data.meaSummary && (
-          <div className="glass-card rounded-xl p-5 border-l-4" style={{ borderLeftColor: '#ef4444' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                  <span style={{ fontSize: '1.3rem' }}></span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>MEA Strategic Overview — Bilateral Relations Intelligence</h3>
-                  <p className="text-xs mt-0.5" style={{ color: '#94a3b8' }}>208 bilateral relation PDFs ingested from MEA foreign relations database</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-bold" style={{ color: '#ef4444' }}>{data.meaSummary.total_bilateral_relations}</div>
-                <div className="text-xs" style={{ color: '#94a3b8' }}>Relations Documented</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>COUNTRIES COVERED</div>
-                <div className="text-xl font-bold" style={{ color: '#ef4444' }}>{data.meaSummary.countries_covered}+</div>
-              </div>
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(251,146,60,0.2)' }}>
-                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>DATA CLASSIFICATION</div>
-                <div className="text-xs font-bold" style={{ color: '#f59e0b' }}>{data.meaSummary.data_classification}</div>
-              </div>
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(0,212,255,0.2)' }}>
-                <div className="text-xs font-mono" style={{ color: '#94a3b8', marginBottom: '0.5rem', fontSize: '0.65rem' }}>CONFIDENCE SCORE</div>
-                <div className="text-xs font-bold" style={{ color: '#00d4ff' }}>{(data.meaSummary.analysis_confidence * 100).toFixed(0)}%</div>
-              </div>
-            </div>
-
-            {data.meaRelations && data.meaRelations.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-semibold mb-3" style={{ color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Bilateral Relations</h4>
-                <div className="space-y-2">
-                  {data.meaRelations.slice(0, 5).map(rel => (
-                    <div key={rel.country_pair} className="p-3 rounded-lg flex items-between justify-between" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.5)' }}>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-xs" style={{ color: '#e2e8f0' }}>{rel.country_pair}</span>
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: rel.intelligence_priority === 'CRITICAL' ? 'rgba(239,68,68,0.15)' : 'rgba(251,146,60,0.15)', color: rel.intelligence_priority === 'CRITICAL' ? '#ef4444' : '#f59e0b', fontSize: '0.6rem', fontWeight: 'bold' }}>
-                            {rel.intelligence_priority}
-                          </span>
-                        </div>
-                        <p className="text-xs" style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Status: <span style={{ color: '#cbd5e1' }}>{rel.status}</span></p>
-                        <div className="flex gap-1 flex-wrap mt-1">
-                          {rel.key_issues.slice(0, 2).map(issue => (
-                            <span key={issue} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(30,58,95,0.4)', color: '#94a3b8', fontSize: '0.65rem' }}>
-                              {issue}
-                            </span>
-                          ))}
-                          {rel.key_issues.length > 2 && (
-                            <span className="text-xs px-1.5 py-0.5" style={{ color: '#64748b', fontSize: '0.65rem' }}>
-                              +{rel.key_issues.length - 2} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right ml-4">
-                        <div className="text-xs font-mono font-bold" style={{ color: '#00ff88' }}>
-                          {(rel.confidence * 100).toFixed(0)}% confidence
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {data.regionalHotspots && data.regionalHotspots.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold mb-3" style={{ color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Regional Hot Spots</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {data.regionalHotspots.slice(0, 4).map(hotspot => (
-                    <div key={hotspot.region} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: `1px solid ${hotspot.tension_level === 'CRITICAL' ? 'rgba(239,68,68,0.3)' : 'rgba(251,146,60,0.3)'}` }}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: hotspot.tension_level === 'CRITICAL' ? 'rgba(239,68,68,0.2)' : 'rgba(251,146,60,0.2)', color: hotspot.tension_level === 'CRITICAL' ? '#ef4444' : '#f59e0b', fontSize: '0.6rem' }}>
-                          {hotspot.tension_level}
-                        </span>
-                        <span className="text-xs font-semibold" style={{ color: '#e2e8f0' }}>{hotspot.region}</span>
-                      </div>
-                      <p className="text-xs mb-2" style={{ color: '#94a3b8', fontSize: '0.7rem', lineHeight: 1.3 }}>
-                        {hotspot.intelligence_assessment}
-                      </p>
-                      <div className="text-xs" style={{ color: '#cbd5e1', fontSize: '0.65rem', borderTop: '1px solid rgba(30,58,95,0.3)', paddingTop: '0.5rem' }}>
-                        <span style={{ color: '#00d4ff' }}>Strategic importance:</span> {hotspot.strategic_importance}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </main>
     </div>
   );

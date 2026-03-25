@@ -17,7 +17,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ontora - Global Intelligence & Ontology Analysis",
   description: "Production-grade global intelligence and ontology analysis system",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
+
+import { ThemeProvider } from "@/components/ThemeProvider";
+
+import { UIProvider } from "@/components/UIContext";
 
 export default function RootLayout({
   children,
@@ -25,13 +32,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        style={{ background: '#020817' }}
       >
-        <AppShell>{children}</AppShell>
-        {/* <Footer /> */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <UIProvider>
+            <AppShell>{children}</AppShell>
+          </UIProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -6,9 +6,10 @@ interface StatCardProps {
   subValue?: string;
   change?: number;
   changeLabel?: string;
-  icon: LucideIcon;
-  accentColor?: string;
-  glowClass?: string;
+  icon: React.ElementType;
+  accentColor?: string; // Legacy support
+  bgColor?: string;
+  textColor?: string;
   loading?: boolean;
 }
 
@@ -19,18 +20,25 @@ export default function StatCard({
   change,
   changeLabel,
   icon: Icon,
-  accentColor = '#00d4ff',
-  glowClass = 'glow-cyan',
+  accentColor = '#d6b985',
+  bgColor,
+  textColor = 'white',
   loading = false,
 }: StatCardProps) {
   const isPositive = change !== undefined && change > 0;
   const isNegative = change !== undefined && change < 0;
   const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus;
 
+  const finalBg = bgColor || accentColor;
+
   return (
     <div
-      className={`glass-card rounded-2xl p-5 relative overflow-hidden ${glowClass}`}
-      style={{ transition: 'box-shadow 0.25s' }}
+      className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-200 shadow-xl`}
+      style={{ 
+        background: finalBg,
+        border: `1px solid rgba(0,0,0,0.05)`,
+        boxShadow: `0 12px 30px -10px rgba(0,0,0,0.2)`
+      }}
     >
       {/* Subtle top-edge gold shimmer */}
       <div
@@ -48,9 +56,10 @@ export default function StatCard({
       <div className="flex items-center justify-between mb-4">
         <span
           style={{
-            color: '#3a4e62',
+            color: textColor,
             fontSize: '0.62rem',
-            fontWeight: 600,
+            fontWeight: 800,
+            opacity: 0.8,
             letterSpacing: '0.14em',
             textTransform: 'uppercase',
           }}
@@ -58,25 +67,21 @@ export default function StatCard({
           {label}
         </span>
         <div
-          className="w-8 h-8 rounded-xl flex items-center justify-center"
-          style={{
-            background: `linear-gradient(135deg, ${accentColor}18 0%, ${accentColor}08 100%)`,
-            border: `1px solid ${accentColor}28`,
-          }}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center bg-black/5"
         >
-          <Icon size={14} style={{ color: accentColor }} />
+          <Icon size={18} style={{ color: textColor }} />
         </div>
       </div>
 
       {/* Value */}
       <div
-        className={`font-bold count-up ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
-        style={{ color: '#dce4ee', lineHeight: 1, fontSize: '1.85rem', letterSpacing: '-0.02em' }}
+        className={`font-black count-up ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
+        style={{ color: textColor, lineHeight: 1, fontSize: '2rem', letterSpacing: '-0.04em' }}
       >
         {!loading && value}
       </div>
       {subValue && (
-        <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: '#4a6070', fontSize: '0.7rem', marginTop: '4px' }}>
+        <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: textColor, opacity: 0.75, fontSize: '0.75rem', fontWeight: 600, marginTop: '8px', letterSpacing: '0.05em' }}>
           {!loading && subValue}
         </div>
       )}
@@ -85,7 +90,6 @@ export default function StatCard({
       {change !== undefined && (
         <div
           className="flex items-center gap-1.5 mt-3 pt-3"
-          style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}
         >
           {loading ? (
             <div className="skeleton-box h-3 w-1/4" />
@@ -93,13 +97,13 @@ export default function StatCard({
             <>
               <TrendIcon
                 size={12}
-                style={{ color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62' }}
+                style={{ color: isPositive ? 'var(--accent-emerald)' : isNegative ? 'var(--accent-crimson)' : 'var(--text-muted)' }}
               />
               <span
                 style={{
                   fontSize: '0.68rem',
                   fontWeight: 500,
-                  color: isPositive ? '#3eb87a' : isNegative ? '#b84a4a' : '#3a4e62',
+                  color: isPositive ? 'var(--accent-emerald)' : isNegative ? 'var(--accent-crimson)' : 'var(--text-muted)',
                 }}
               >
                 {Math.abs(change)}% {changeLabel || (isPositive ? 'increase' : 'decrease')}

@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 
 from consumers.postgres_consumer import BaseKafkaConsumer
-from db.neo4j import get_driver
+from db.neo4j_driver import get_driver
 from db.postgres import AsyncSessionLocal
 from db.schemas import Document
 from services.entity_extractor import EntityExtractionService

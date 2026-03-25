@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 
 from core.config import settings
 from db.postgres import init_db as init_postgres_db
-from db.neo4j import init_driver as init_neo4j_driver, verify_connection as verify_neo4j_connection
+from db.neo4j_driver import init_driver as init_neo4j_driver, verify_connection as verify_neo4j_connection
 from api import metrics, intelligence, knowledge_graph, geospatial, predictions, streams, data_lake, security, auth, users, security_monitoring, bill_analysis, tasks, search
 from services.llm_classifier import LLMClassifierService
 from middleware.security_hardening import ProductionSecurityConfig
