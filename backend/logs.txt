@@ -1,0 +1,44 @@
+﻿..\.venv\Scripts\python.exe 
+: No LLM API key configured (
+GEMINI_API_KEY/GROK_API_KEY).
+ Using mock analysis mode.
+At line:1 char:1
++ 
+..\.venv\Scripts\python.exe 
+main.py 2>&1 | Out-File 
+-Encoding utf8 lo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (No LLM   
+  API key ... analysis mod   
+ e.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+Traceback (most recent call 
+last):
+  File "C:\Users\dubey\OneDri
+ve\Desktop\ontora\DMC_Hackath
+on\backend\main.py", line 
+18, in <module>
+    from api import metrics, 
+intelligence, 
+knowledge_graph, geospatial, 
+predictions, streams, 
+data_lake, security, auth, 
+users, security_monitoring, 
+bill_analysis, tasks, search
+  File "C:\Users\dubey\OneDri
+ve\Desktop\ontora\DMC_Hackath
+on\backend\api\search.py", 
+line 8, in <module>
+    from db.neo4j import 
+get_neo4j_session
+ImportError: cannot import 
+name 'get_neo4j_session' 
+from 'db.neo4j' (C:\Users\dub
+ey\OneDrive\Desktop\ontora\DM
+C_Hackathon\backend\db\neo4j.
+py)

@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useState } from 'react';
+import OntoraLogo from '@/components/OntoraLogo';
 
 interface FeatureCard {
   icon: any;
@@ -257,8 +258,8 @@ export default function LandingPage() {
             onClick={() => router.push('/landing')}
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
-            <div className="p-2.5 rounded-lg" style={{ background: 'rgba(200,168,74,0.16)' }}>
-              <Globe size={24} style={{ color: '#d6b985' }} />
+            <div className="p-1 rounded-lg">
+              <OntoraLogo size={32} />
             </div>
             <div>
               <h1 className="text-lg font-semibold" style={{ color: '#dce4ee', letterSpacing: '0.05em' }}>

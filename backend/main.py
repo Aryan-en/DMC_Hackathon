@@ -12,10 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.responses import PlainTextResponse
 
-from config import settings
+from core.config import settings
 from db.postgres import init_db as init_postgres_db
-from db.neo4j import init_driver as init_neo4j_driver, verify_connection as verify_neo4j_connection
-from api import metrics, intelligence, knowledge_graph, geospatial, predictions, streams, data_lake, security, auth, users, security_monitoring, bill_analysis
+from db.neo4j_driver import init_driver as init_neo4j_driver, verify_connection as verify_neo4j_connection
+from api import metrics, intelligence, knowledge_graph, geospatial, predictions, streams, data_lake, security, auth, users, security_monitoring, bill_analysis, tasks, search
 from services.llm_classifier import LLMClassifierService
 from middleware.security_hardening import ProductionSecurityConfig
 
@@ -232,6 +232,8 @@ app.include_router(data_lake.router, prefix="/api/data-lake", tags=["Data Lake"]
 app.include_router(security.router, prefix="/api/security", tags=["Security"])
 app.include_router(security_monitoring.router, prefix="/api/security-monitoring", tags=["Security Monitoring"])
 app.include_router(bill_analysis.router, prefix="/api/bill-analysis", tags=["Bill Analysis"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["Task Management"])
+app.include_router(search.router, prefix="/api/search", tags=["Global Search"])
 
 
 # Global exception handler

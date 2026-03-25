@@ -2,30 +2,35 @@
 
 import os
 import json
-import asyncio
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from typing import Optional
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
 import PyPDF2
 import io
 from datetime import datetime
 import logging
 
 from db.postgres import get_db_session
+from db.schemas import BillAnalysis
 from utils.response import build_error, build_success
-from config import Settings
+from core.config import settings
 from services.grok_bill_analyzer import GrokBillAnalyzer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Initialize analyzer for 300+ page bill processing
-settings = Settings()
 grok_analyzer = GrokBillAnalyzer(settings)
+
+UPLOAD_DIR = os.path.join("uploads", "bills")
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.post("/analyze")
 async def analyze_bill(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -42,16 +47,36 @@ async def analyze_bill(
     progress = 0
     
     try:
-        # Step 1: Validate & Read PDF (15%)
+        # Step 1: Validate & Read (15%)
         progress = 15
-        logs.append("✓ Validating PDF file...")
-        if not file.filename or not file.filename.endswith('.pdf'):
-            return build_error("INVALID_FILE", "Only PDF files are accepted", progress=progress, logs=logs)
+        contents = None
+        filename = None
+        source_url = url
         
-        try:
+        if file:
+            logs.append(f"✓ Validating uploaded file: {file.filename}")
+            if not file.filename or not file.filename.endswith('.pdf'):
+                return build_error("INVALID_FILE", "Only PDF files are accepted", progress=progress, logs=logs)
             contents = await file.read()
+            filename = file.filename
+        elif url:
+            logs.append(f"✓ Fetching PDF from tactical URL: {url}")
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    contents = resp.content
+                    filename = url.split('/')[-1] if '/' in url else "downloaded_bill.pdf"
+                    if not filename.endswith('.pdf'): filename += ".pdf"
+            except Exception as download_err:
+                logs.append(f"✗ Failed to download PDF: {str(download_err)}")
+                return build_error("DOWNLOAD_ERROR", "Failed to fetch PDF from URL", progress=progress, logs=logs)
+        else:
+            return build_error("NO_INPUT", "Please provide a file or a PDF URL", progress=progress, logs=logs)
+
+        try:
             if not contents:
-                return build_error("EMPTY_FILE", "File is empty", progress=progress, logs=logs)
+                return build_error("EMPTY_FILE", "No content found in document", progress=progress, logs=logs)
             
             pdf_file = io.BytesIO(contents)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -96,15 +121,45 @@ async def analyze_bill(
         analysis, analysis_logs = await grok_analyzer.analyze_bill(extracted_text, logs)
         logs.extend(analysis_logs)
         
-        # Step 3: Finalize (100%)
+        # Step 3: Persistence (90%)
+        progress = 90
+        logs.append("✓ Saving analysis to strategic archive...")
+        
+        # Save file physically
+        safe_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, safe_filename)
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Save to DB
+        bill_db_entry = BillAnalysis(
+            bill_title=analysis.get("bill_title", filename),
+            filename=filename,
+            file_path=file_path,
+            source_url=source_url,
+            status="completed",
+            analysis_data=analysis,
+            model_used=active_model,
+            provider=grok_analyzer.provider,
+            pages=pages,
+            words=len(extracted_text.split())
+        )
+        db.add(bill_db_entry)
+        await db.commit()
+        await db.refresh(bill_db_entry)
+        
+        # Step 4: Finalize (100%)
         progress = 100
         logs.append("✅ Analysis complete! Bill processed successfully.")
         
         response_data = {
-            "analysis_id": "bill_" + datetime.utcnow().isoformat(),
+            "analysis_id": str(bill_db_entry.id),
             "pages": pages,
             "words": len(extracted_text.split()),
             "provider": grok_analyzer.provider,
+            "model": active_model,
+            "filename": filename,
+            "source_url": source_url,
             **analysis
         }
         
@@ -127,39 +182,78 @@ async def get_analysis_history(
     """GET /api/bill-analysis/history - Get previous bill analyses"""
     
     try:
-        # In production, query from database
-        # For now, return mock data
+        from sqlalchemy import select, desc
+        result = await db.execute(
+            select(BillAnalysis).order_by(desc(BillAnalysis.created_at)).limit(limit)
+        )
+        entries = result.scalars().all()
+        
         history = [
             {
-                "id": "bill_1",
-                "bill_title": "Digital Privacy Protection Act",
-                "country": "United States",
-                "analyzed_at": "2026-03-22T10:30:00",
-                "risk_level": "HIGH",
-                "pages": 247
-            },
-            {
-                "id": "bill_2",
-                "bill_title": "Renewable Energy Transition Act",
-                "country": "Germany",
-                "analyzed_at": "2026-03-21T14:15:00",
-                "risk_level": "MEDIUM",
-                "pages": 156
-            },
-            {
-                "id": "bill_3",
-                "bill_title": "Trade Facilitation Act",
-                "country": "China",
-                "analyzed_at": "2026-03-20T09:45:00",
-                "risk_level": "MEDIUM",
-                "pages": 189
-            },
+                "id": str(entry.id),
+                "bill_title": entry.bill_title,
+                "country": entry.analysis_data.get("country", "Unknown"),
+                "analyzed_at": entry.created_at.isoformat(),
+                "status": entry.status,
+                "pages": entry.pages,
+                "provider": entry.provider,
+                "model": entry.model_used,
+                "source_url": entry.source_url
+            }
+            for entry in entries
         ]
         
-        return build_success({"history": history[:limit]})
+        return build_success({"history": history})
     except Exception as e:
         logger.error(f"History retrieval error: {str(e)}")
         return build_error("HISTORY_ERROR", f"Failed to retrieve history: {str(e)}")
+
+
+@router.get("/history/{analysis_id}")
+async def get_analysis_detail(
+    analysis_id: str,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """GET /api/bill-analysis/history/{id} - Get detail of a specific analysis"""
+    
+    try:
+        from sqlalchemy import select
+        result = await db.execute(
+            select(BillAnalysis).filter(BillAnalysis.id == analysis_id)
+        )
+        entry = result.scalar_one_or_none()
+        
+        if not entry:
+            return build_error("NOT_FOUND", "Analysis not found")
+            
+        return build_success(entry)
+    except Exception as e:
+        logger.error(f"Detail retrieval error: {str(e)}")
+        return build_error("DETAIL_ERROR", f"Failed to retrieve analysis detail: {str(e)}")
+
+
+@router.get("/download/{analysis_id}")
+async def download_archived_bill(
+    analysis_id: str,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """GET /api/bill-analysis/download/{id} - Serve the archived PDF file"""
+    try:
+        from sqlalchemy import select
+        result = await db.execute(select(BillAnalysis).filter(BillAnalysis.id == analysis_id))
+        entry = result.scalar_one_or_none()
+        
+        if not entry or not entry.file_path or not os.path.exists(entry.file_path):
+            return build_error("NOT_FOUND", "Archived document not found")
+            
+        return FileResponse(
+            path=entry.file_path,
+            media_type="application/pdf",
+            filename=entry.filename
+        )
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return build_error("DOWNLOAD_ERROR", f"Failed to serve file: {str(e)}")
 
 
 @router.get("/status")

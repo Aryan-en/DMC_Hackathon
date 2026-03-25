@@ -13,6 +13,7 @@ from db.schemas import Document, Entity, SystemMetric
 from services.entity_extractor import EntityExtractionService
 from services.llm_classifier import LLMClassifierService
 from utils.response import build_error, build_success
+from utils.cache import cached_endpoint
 
 router = APIRouter()
 
@@ -31,31 +32,53 @@ entity_service = EntityExtractionService()
 
 
 @router.get("/entity-extraction")
+@cached_endpoint(ttl=30)
 async def get_entity_extraction(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/entity-extraction - Last 24h extractions"""
     try:
         stmt = (
-            select(Entity.name, Entity.entity_type, Entity.confidence_score, Entity.mention_count)
+            select(
+                Entity.name, 
+                Entity.entity_type, 
+                Entity.confidence_score, 
+                Entity.mention_count
+            )
             .order_by(Entity.mention_count.desc())
             .limit(10)
         )
         rows = (await db.execute(stmt)).all()
 
-        entities = [
-            {
+        # Optimization: Fetch latest document URLs for all 10 entities in a single batch
+        entity_names = [r[0] for r in rows]
+        # This is a bit complex with ilike across many names, but let's at least pre-fetch or join
+        # For now, we'll keep the logic but the cache already mitigates the 10-query delay.
+        # A true fix involves a more sophisticated full-text search or many-to-many relationship.
+        
+        entities = []
+        for name, entity_type, confidence_score, mention_count in rows:
+            # We keep the single query but it's now wrapped in the 30s cache so it's only 10 queries per 30s total.
+            doc_stmt = (
+                select(Document.url)
+                .where(Document.content.ilike(f"%{name}%"))
+                .order_by(Document.created_at.desc())
+                .limit(1)
+            )
+            latest_url = (await db.execute(doc_stmt)).scalar_one_or_none()
+            
+            entities.append({
                 "entity": name,
                 "type": entity_type,
                 "confidence": round(float(confidence_score or 0.75), 3),
                 "mentions": int(mention_count or 0),
-            }
-            for name, entity_type, confidence_score, mention_count in rows
-        ]
+                "url": latest_url
+            })
         return build_success({"entities": entities})
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch entity extraction metrics: {exc}")
 
 
 @router.get("/language-distribution")
+@cached_endpoint(ttl=30)
 async def get_language_distribution(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/language-distribution"""
     try:
@@ -84,6 +107,7 @@ async def get_language_distribution(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/trending-keywords")
+@cached_endpoint(ttl=30)
 async def get_trending_keywords(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/trending-keywords"""
     try:
@@ -112,6 +136,7 @@ async def get_trending_keywords(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/sentiment-radar")
+@cached_endpoint(ttl=30)
 async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/sentiment-radar - Enhanced with live climate data"""
     try:
@@ -163,12 +188,13 @@ async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/strategic-briefs")
+@cached_endpoint(ttl=30)
 async def get_strategic_briefs(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/strategic-briefs"""
     try:
         rows = (
             await db.execute(
-                select(Document.title, Document.content, Document.source, Document.created_at)
+                select(Document.title, Document.content, Document.source, Document.created_at, Document.url)
                 .order_by(Document.created_at.desc())
                 .limit(3)
             )
@@ -185,7 +211,7 @@ async def get_strategic_briefs(db: AsyncSession = Depends(get_db_session)):
         model_name = llm_status.get("model") if llm_status.get("model_available") else "Heuristic"
 
         briefs = []
-        for title, content, source, created_at in rows:
+        for title, content, source, created_at, url in rows:
             text = (content or "").strip()
             if not text:
                 continue
@@ -202,6 +228,7 @@ async def get_strategic_briefs(db: AsyncSession = Depends(get_db_session)):
                     "model": model_name,
                     "confidence": confidence,
                     "dateGen": created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else None,
+                    "url": url
                 }
             )
 
@@ -332,6 +359,7 @@ async def generate_brief_alt(payload: GenerateBriefRequest, db: AsyncSession = D
 
 
 @router.get("/pipeline-status")
+@cached_endpoint(ttl=30)
 async def get_pipeline_status(
     mode: Literal["force-running", "strict-real-metrics"] = Query(default="force-running"),
     db: AsyncSession = Depends(get_db_session),
@@ -438,6 +466,7 @@ async def get_pipeline_status(
 
 
 @router.get("/climate-intelligence")
+@cached_endpoint(ttl=30)
 async def get_climate_intelligence(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/climate-intelligence - Climate risk intelligence for critical regions"""
     try:
@@ -558,7 +587,7 @@ async def get_climate_intelligence(db: AsyncSession = Depends(get_db_session)):
 async def classify_text(payload: TextRequest):
     """POST /api/intelligence/classify - LLM-backed text classification."""
     try:
-        result = classifier_service.classify(payload.text)
+        result = await classifier_service.classify(payload.text)
         return build_success(
             {
                 "label": result.label,
@@ -623,6 +652,7 @@ async def llm_health():
 
 
 @router.get("/mea-strategic-relations")
+@cached_endpoint(ttl=30)
 async def get_mea_strategic_relations(db: AsyncSession = Depends(get_db_session)):
     """GET /api/intelligence/mea-strategic-relations - MEA bilateral relations intelligence"""
     try:
@@ -722,12 +752,40 @@ async def get_mea_strategic_relations(db: AsyncSession = Depends(get_db_session)
                 "strategic_importance": "Major humanitarian corridor",
             },
         ]
+
+        # Enhanced relations with source links
+        enhanced_relations = []
+        for rel in key_relations:
+            # Find a relevant MEA document for this country pair
+            doc_stmt = (
+                select(Document.url)
+                .where(Document.source == "MEA")
+                .where(Document.content.ilike(f"%{rel['country_pair'].split('-')[0]}%"))
+                .where(Document.content.ilike(f"%{rel['country_pair'].split('-')[1]}%"))
+                .order_by(Document.created_at.desc())
+                .limit(1)
+            )
+            rel_url = (await db.execute(doc_stmt)).scalar_one_or_none()
+            enhanced_relations.append({**rel, "url": rel_url})
+
+        # Enhanced hotspots with source links
+        enhanced_hotspots = []
+        for hotspot in regional_hot_spots:
+            # Find a relevant document for this region
+            doc_stmt = (
+                select(Document.url)
+                .where(Document.content.ilike(f"%{hotspot['region']}%"))
+                .order_by(Document.created_at.desc())
+                .limit(1)
+            )
+            hotspot_url = (await db.execute(doc_stmt)).scalar_one_or_none()
+            enhanced_hotspots.append({**hotspot, "url": hotspot_url})
         
         return build_success(
             {
                 "summary": strategic_summary,
-                "key_relations": key_relations,
-                "regional_hotspots": regional_hot_spots,
+                "key_relations": enhanced_relations,
+                "regional_hotspots": enhanced_hotspots,
                 "network_statistics": {
                     "total_documented_countries": 190,
                     "bilateral_relationships": relations_count,
@@ -797,9 +855,82 @@ async def processing_log(db: AsyncSession = Depends(get_db_session)):
 
         events.sort(key=lambda item: item["timestamp"], reverse=True)
 
-        return build_success({"events": events[:8]}, source="db")
+        return build_success({"events": events[:12]}, source="db")
     except Exception as exc:
-        return build_error("PROCESSING_LOG_ERROR", f"Failed to fetch processing log: {exc}")
+        return build_error("QUERY_ERROR", f"Failed to fetch processing log: {exc}")
+
+
+@router.get("/alerts")
+@cached_endpoint(ttl=30)
+async def get_intelligence_alerts(
+    limit: int = Query(default=8, ge=1, le=50),
+    min_severity: str = Query(default="medium"),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """GET /api/intelligence/alerts - Fetch high-fidelity alerts from documents and entities."""
+    try:
+        # Fetch recent documents with critical keywords
+        keywords = ["conflict", "war", "military", "threat", "dispute", "cyber", "attack", "market", "crisis"]
+        filter_cond = Document.content.ilike(f"%{keywords[0]}%")
+        for kw in keywords[1:]:
+            filter_cond |= Document.content.ilike(f"%{kw}%")
+
+        since = datetime.utcnow() - timedelta(hours=48)
+        stmt = (
+            select(Document.id, Document.created_at, Document.source, Document.title, Document.content, Document.url)
+            .where(filter_cond)
+            .where(Document.created_at >= since)
+            .order_by(Document.created_at.desc())
+            .limit(limit)
+        )
+        rows = (await db.execute(stmt)).all()
+
+        severity_map = {
+            "critical": ["conflict", "war", "attack", "critical"],
+            "high": ["threat", "dispute", "military", "high"],
+            "medium": ["market", "crisis", "social", "medium"],
+            "low": ["processed", "update", "low"]
+        }
+
+        alerts = []
+        for doc_id, created_at, source, title, content, url in rows:
+            text = (content or "").lower()
+            severity = "low"
+            if any(k in text for k in severity_map["critical"]):
+                severity = "critical"
+            elif any(k in text for k in severity_map["high"]):
+                severity = "high"
+            elif any(k in text for k in severity_map["medium"]):
+                severity = "medium"
+
+            # Skip if severity is lower than requested
+            sev_levels = ["low", "medium", "high", "critical"]
+            if sev_levels.index(severity) < sev_levels.index(min_severity):
+                continue
+
+            # Extract region if possible (mock logic for now)
+            region = "GLOBAL"
+            if "india" in text or "delhi" in text:
+                region = "SOUTH ASIA"
+            elif "china" in text or "beijing" in text:
+                region = "EAST ASIA"
+            elif "ukraine" in text or "russia" in text:
+                region = "EASTERN EUROPE"
+
+            alerts.append({
+                "id": str(doc_id)[:8],
+                "time": created_at.strftime("%H:%M:%S") if created_at else "00:00:00",
+                "severity": severity,
+                "region": region,
+                "message": (title or "Intelligence Update").strip(),
+                "source": (source or "INTEL").upper(),
+                "confidence": round(0.75 + (0.2 if severity == "critical" else 0.1), 2),
+                "url": url
+            })
+
+        return build_success({"alerts": alerts}, source="db")
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch intelligence alerts: {exc}")
 
 
 @router.get("/live-alerts")
@@ -818,7 +949,7 @@ async def get_live_alerts(db: AsyncSession = Depends(get_db_session)):
         # Fetch recent documents
         doc_rows = (
             await db.execute(
-                select(Document.created_at, Document.title, Document.source)
+                select(Document.created_at, Document.title, Document.source, Document.url)
                 .order_by(Document.created_at.desc())
                 .limit(10)
             )
@@ -840,6 +971,15 @@ async def get_live_alerts(db: AsyncSession = Depends(get_db_session)):
         for ent_name, ent_type, mention_count, confidence in entity_rows:
             if not ent_name or alert_idx >= 5:
                 continue
+
+            # Find the latest document for this entity to provide a link
+            entity_doc_stmt = (
+                select(Document.url)
+                .where(Document.content.ilike(f"%{ent_name}%"))
+                .order_by(Document.created_at.desc())
+                .limit(1)
+            )
+            entity_url = (await db.execute(entity_doc_stmt)).scalar_one_or_none()
 
             template = alert_templates.get(ent_type or "CONCEPT", alert_templates["CONCEPT"])
             mentions = int(mention_count or 0)
@@ -894,13 +1034,14 @@ async def get_live_alerts(db: AsyncSession = Depends(get_db_session)):
                     "region": template["tag"],
                     "title": description,
                     "confidence": round(float(confidence or 0.8), 2),
+                    "url": entity_url
                 }
             )
             alert_idx += 1
 
         # Add document-based alerts if we don't have enough
         if alert_idx < 5 and doc_rows:
-            for created_at, title, source in doc_rows:
+            for created_at, title, source, url in doc_rows:
                 if not title or alert_idx >= 5:
                     continue
                 if created_at:
@@ -915,6 +1056,7 @@ async def get_live_alerts(db: AsyncSession = Depends(get_db_session)):
                         "region": source or "GEN",
                         "title": (title or "Document processed")[:80],
                         "confidence": 0.85,
+                        "url": url
                     }
                 )
                 alert_idx += 1

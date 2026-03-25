@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Primary Storage)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ontora-postgres-lite
+    environment:
+      POSTGRES_USER: ontora_user
+      POSTGRES_PASSWORD: ontora_password
+      POSTGRES_DB: ontora_prod
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_lite_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ontora_user -d ontora_prod" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ontora-lite-network
+
+  # Neo4j Graph Database (Ontology & Relationships)
+  neo4j:
+    image: neo4j:5.13
+    container_name: ontora-neo4j-lite
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_password
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 512m
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - neo4j_lite_data:/var/lib/neo4j/data
+    healthcheck:
+      test: [ "CMD", "cypher-shell", "-u", "neo4j", "-p", "neo4j_password", "RETURN 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - ontora-lite-network
+
+  # Redis Cache (Task Queue)
+  redis:
+    image: redis:7-alpine
+    container_name: ontora-redis-lite
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_lite_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ontora-lite-network
+
+  # Single Node Kafka (Reduced from 3-node cluster)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: ontora-zookeeper-lite
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ontora-lite-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ontora-kafka-lite
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - ontora-lite-network
+
+volumes:
+  postgres_lite_data:
+  neo4j_lite_data:
+  redis_lite_data:
+
+
+networks:
+  ontora-lite-network:
+    driver: bridge

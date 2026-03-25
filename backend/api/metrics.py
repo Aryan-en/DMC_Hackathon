@@ -2,13 +2,14 @@
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres import get_db_session
 from db.schemas import Country, CountryRelation, EconomicIndicator, Entity, SystemMetric
 from utils.response import build_error, build_success
+from utils.cache import cached_endpoint
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ def _health_color(value: int) -> str:
 
 
 @router.get("/regional-risk")
+@cached_endpoint(ttl=30)
 async def get_regional_risk(db: AsyncSession = Depends(get_db_session)):
     try:
         stmt = (
@@ -59,7 +61,69 @@ async def get_regional_risk(db: AsyncSession = Depends(get_db_session)):
         return build_error("QUERY_ERROR", f"Failed to compute regional risk: {exc}")
 
 
+@router.get("/sentiment-trend")
+@cached_endpoint(ttl=30)
+async def get_sentiment_trend(
+    days: int = Query(default=7, ge=1, le=30),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """GET /api/metrics/sentiment-trend - Fetch aggregated sentiment scores over time."""
+    try:
+        # Mocking dynamic trend based on Document sentiment if not explicitly in SystemMetric
+        # In a real scenario, this would be a complex group-by query.
+        import random
+        from datetime import datetime, timedelta
+        
+        history = []
+        for i in range(days):
+            date = (datetime.utcnow() - timedelta(days=days-i-1)).date()
+            history.append({
+                "date": date.isoformat(),
+                "positive": round(random.uniform(0.3, 0.6), 2),
+                "neutral": round(random.uniform(0.2, 0.4), 2),
+                "negative": round(random.uniform(0.1, 0.3), 2)
+            })
+            
+        return build_success({"history": history}, source="simulated")
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch sentiment trend: {exc}")
+
+
+@router.get("/entity-distribution")
+@cached_endpoint(ttl=30)
+async def get_entity_distribution(db: AsyncSession = Depends(get_db_session)):
+    """GET /api/metrics/entity-distribution - Category-wise entity counts for bar chart."""
+    try:
+        # Try to get real counts from DB
+        from db.schemas import Entity
+        
+        stmt = select(Entity.entity_type, func.count(Entity.id)).group_by(Entity.entity_type)
+        rows = (await db.execute(stmt)).all()
+        
+        distribution = []
+        if rows:
+            for entity_type, count in rows:
+                distribution.append({
+                    "category": (entity_type or "Unknown").capitalize(),
+                    "count": count
+                })
+        else:
+            # Fallback for empty DB
+            distribution = [
+                {"category": "People", "count": 1240},
+                {"category": "Organizations", "count": 850},
+                {"category": "Locations", "count": 420},
+                {"category": "vulnerabilities", "count": 120},
+                {"category": "Threat Actors", "count": 45}
+            ]
+            
+        return build_success({"distribution": distribution}, source="db" if rows else "fallback")
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch entity distribution: {exc}")
+
+
 @router.get("/global-entities")
+@cached_endpoint(ttl=30)
 async def get_global_entities(db: AsyncSession = Depends(get_db_session)):
     try:
         total_entities = (await db.execute(select(func.count(Entity.id)))).scalar() or 0
@@ -84,6 +148,7 @@ async def get_global_entities(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/threat-threads")
+@cached_endpoint(ttl=30)
 async def get_threat_threads(db: AsyncSession = Depends(get_db_session)):
     try:
         rows = (await db.execute(select(CountryRelation.status, func.count(CountryRelation.id)).group_by(CountryRelation.status))).all()
@@ -115,6 +180,7 @@ async def get_threat_threads(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/daily-ingestion")
+@cached_endpoint(ttl=30)
 async def get_daily_ingestion(db: AsyncSession = Depends(get_db_session)):
     try:
         last_24h = datetime.utcnow() - timedelta(hours=24)
@@ -147,6 +213,7 @@ async def get_daily_ingestion(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/prediction-accuracy")
+@cached_endpoint(ttl=30)
 async def get_prediction_accuracy(db: AsyncSession = Depends(get_db_session)):
     try:
         rows = (
@@ -172,6 +239,7 @@ async def get_prediction_accuracy(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/infrastructure-health")
+@cached_endpoint(ttl=30)
 async def get_infrastructure_health(db: AsyncSession = Depends(get_db_session)):
     rows = (
         await db.execute(
@@ -206,6 +274,7 @@ async def get_infrastructure_health(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.get("/kg-nodes")
+@cached_endpoint(ttl=30)
 async def get_kg_nodes(db: AsyncSession = Depends(get_db_session)):
     entity_total = (await db.execute(select(func.count(Entity.id)))).scalar() or 0
     nations = (await db.execute(select(func.count(Country.id)))).scalar() or 0

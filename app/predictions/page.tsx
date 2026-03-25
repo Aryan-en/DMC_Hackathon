@@ -3,7 +3,8 @@
 import TopBar from '@/components/TopBar';
 import { usePredictionsMetrics } from '@/app/hooks/usePredictionsMetrics';
 import { useServingHealthMetrics } from '@/app/hooks/useServingHealthMetrics';
-import ServingHealthChart from '@/app/components/ServingHealthChart';
+import ServingHealthChart from '@/components/app/ServingHealthChart';
+import IngestionStatus from '@/components/app/IngestionStatus';
 
 export default function PredictionsPage() {
   const { data, loading, error } = usePredictionsMetrics();
@@ -21,14 +22,14 @@ export default function PredictionsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Forecast Horizon</div><div className="text-2xl font-bold" style={{ color: '#00d4ff' }}>{data.forecast.length} days</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Latest Probability</div><div className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{latest ? `${(latest.probability * 100).toFixed(1)}%` : '0%'}</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Model Accuracy</div><div className="text-2xl font-bold" style={{ color: '#00ff88' }}>{data.dashboardOverview.model_accuracy.toFixed(2)}%</div></div>
           <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: '#94a3b8' }}>Serving Health</div><div className="text-2xl font-bold" style={{ color: servingColor }}>{data.servingHealth.status.toUpperCase()}</div></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="glass-card rounded-xl p-5">
             <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>PyG Conflict Model</h3>
             <div className="grid grid-cols-4 gap-3">
@@ -70,14 +71,14 @@ export default function PredictionsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="glass-card rounded-xl p-5">
             <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Training Status</h3>
             <div className="space-y-2 text-xs">
               <div style={{ color: '#94a3b8' }}>State: <span style={{ color: '#00d4ff' }}>{data.trainingStatus.status.toUpperCase()}</span></div>
               <div style={{ color: '#94a3b8' }}>Progress: <span style={{ color: '#00ff88' }}>{data.trainingStatus.progress_pct.toFixed(1)}%</span></div>
               <div style={{ color: '#94a3b8' }}>Epochs: <span style={{ color: '#f59e0b' }}>{data.trainingStatus.epochs_completed}/{data.trainingStatus.epochs_target}</span></div>
-              <div style={{ color: '#94a3b8' }}>Dataset Size: <span style={{ color: '#00d4ff' }}>{data.trainingStatus.dataset_size.toLocaleString()}</span></div>
+              <div style={{ color: '#94a3b8' }}>Dataset Size: <span style={{ color: '#00d4ff' }} suppressHydrationWarning>{data.trainingStatus.dataset_size.toLocaleString('en-US')}</span></div>
               <div style={{ color: '#94a3b8' }}>Latest Loss: <span style={{ color: '#ef4444' }}>{data.trainingStatus.latest_loss.toFixed(4)}</span></div>
             </div>
           </div>
@@ -92,14 +93,8 @@ export default function PredictionsPage() {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl p-5">
-            <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Dashboard Overview</h3>
-            <div className="space-y-2 text-xs">
-              <div style={{ color: '#94a3b8' }}>Latest Risk: <span style={{ color: '#ef4444' }}>{(data.dashboardOverview.latest_risk_probability * 100).toFixed(2)}%</span></div>
-              <div style={{ color: '#94a3b8' }}>7d Avg Risk: <span style={{ color: '#f59e0b' }}>{(data.dashboardOverview.avg_7d_risk_probability * 100).toFixed(2)}%</span></div>
-              <div style={{ color: '#94a3b8' }}>F1 Score: <span style={{ color: '#00d4ff' }}>{data.dashboardOverview.model_f1.toFixed(2)}</span></div>
-              <div style={{ color: '#94a3b8' }}>AUC ROC: <span style={{ color: '#00ff88' }}>{data.dashboardOverview.model_auc_roc.toFixed(2)}</span></div>
-            </div>
+          <div className="md:col-span-1">
+            <IngestionStatus />
           </div>
         </div>
 
@@ -134,7 +129,7 @@ export default function PredictionsPage() {
 
         <div className="glass-card rounded-xl p-5">
           <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Model Performance</h3>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
               ['Accuracy', data.modelPerformance.accuracy],
               ['Precision', data.modelPerformance.precision],
@@ -152,7 +147,7 @@ export default function PredictionsPage() {
 
         <div className="glass-card rounded-xl p-5">
           <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Model Drift Monitoring</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
               <div className="text-xs" style={{ color: '#94a3b8' }}>Drift Detected</div>
               <div className="text-lg font-bold" style={{ color: data.modelDrift.drift_detected ? '#ef4444' : '#00ff88' }}>

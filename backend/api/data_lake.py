@@ -199,6 +199,41 @@ async def get_query_costs(days: int = Query(default=1)):
         return build_error("QUERY_ERROR", f"Failed to fetch costs: {e}")
 
 
+@router.get("/documents")
+async def get_documents(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    source: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """GET /api/data-lake/documents - Retrieve ingested documents with metadata."""
+    try:
+        query = select(Document).order_by(Document.created_at.desc())
+        if source:
+            query = query.where(Document.source == source)
+        
+        query = query.limit(limit).offset(offset)
+        result = await db.execute(query)
+        documents = result.scalars().all()
+        
+        payload = []
+        for doc in documents:
+            payload.append({
+                "id": str(doc.id),
+                "title": doc.title or "Untitled Document",
+                "source": doc.source,
+                "url": doc.url,
+                "published_date": doc.published_date.isoformat() if doc.published_date else None,
+                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                "content_preview": (doc.content[:200] + "...") if len(doc.content) > 200 else doc.content,
+                "metadata": doc.doc_metadata,
+            })
+            
+        return build_success({"documents": payload, "limit": limit, "offset": offset})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch documents: {exc}")
+
+
 @router.get("/materialized-views")
 async def get_materialized_views():
     """GET /api/data-lake/materialized-views - Materialized views metadata (Week 11)"""

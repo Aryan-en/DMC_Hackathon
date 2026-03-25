@@ -6,7 +6,7 @@ from typing import Dict
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from config import settings
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

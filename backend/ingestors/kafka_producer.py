@@ -24,7 +24,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
-from config import Settings
+from core.config import Settings
 
 logger = logging.getLogger(__name__)
 config = Settings()

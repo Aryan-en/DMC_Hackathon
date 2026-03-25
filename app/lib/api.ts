@@ -11,7 +11,7 @@ async function parseJson(response: Response) {
 
 export async function apiGet<T>(path: string): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
   const requestUrl = `${API_BASE_URL}${path}`;
 
   try {
@@ -40,7 +40,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
   const requestUrl = `${API_BASE_URL}${path}`;
 
   try {

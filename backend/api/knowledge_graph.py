@@ -25,6 +25,9 @@ async def _relationship_rows(db: AsyncSession, limit: int = 3000):
             o.c.name,
             Relationship.predicate,
             Relationship.confidence_score,
+            Relationship.url,
+            s.c.properties.label("subject_properties"),
+            o.c.properties.label("object_properties")
         )
         .join(s, Relationship.subject_entity_id == s.c.id)
         .join(o, Relationship.object_entity_id == o.c.id)
@@ -67,7 +70,7 @@ async def get_nodes(db: AsyncSession = Depends(get_db_session)):
 
 @router.get("/relationships")
 async def get_relationships(
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=3000, ge=1, le=10000),
     query: str | None = Query(default=None, min_length=1, max_length=120),
     min_strength: int = Query(default=0, ge=0, le=100),
     db: AsyncSession = Depends(get_db_session),
@@ -79,7 +82,7 @@ async def get_relationships(
         q = query.strip().lower() if query else None
 
         relationships = []
-        for source, target, relation, confidence in rows:
+        for source, target, relation, confidence, url, s_props, o_props in rows:
             strength = int((confidence or 0.75) * 100)
             if strength < min_strength:
                 continue
@@ -93,6 +96,9 @@ async def get_relationships(
                     "target": target,
                     "relation": relation,
                     "strength": strength,
+                    "url": url,
+                    "subject_properties": s_props,
+                    "object_properties": o_props
                 }
             )
 
@@ -173,7 +179,7 @@ async def get_conflict_detection(db: AsyncSession = Depends(get_db_session)):
         high_risk_edges = []
         hotspot_counter = defaultdict(int)
 
-        for source, target, predicate, confidence in rows:
+        for source, target, predicate, confidence, *rest in rows:
             pred = (predicate or "").lower()
             conf = float(confidence or 0.0)
             is_keyword_match = any(k in pred for k in keywords)
@@ -215,7 +221,7 @@ async def get_centrality_stats(db: AsyncSession = Depends(get_db_session)):
 
         degree = defaultdict(int)
         nodes = set()
-        for source, target, _predicate, _confidence in rows:
+        for source, target, _predicate, _confidence, *rest in rows:
             if not source or not target:
                 continue
             nodes.add(source)
@@ -268,7 +274,7 @@ async def get_paths(
 
         adjacency = defaultdict(list)
         canonical = {}
-        for s_name, o_name, _predicate, confidence in rows:
+        for s_name, o_name, _predicate, confidence, *rest in rows:
             if not s_name or not o_name:
                 continue
             s_key = s_name.strip().lower()

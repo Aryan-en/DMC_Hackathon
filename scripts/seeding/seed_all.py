@@ -11,9 +11,10 @@ from datetime import datetime
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / 'backend'))
+# Add parent directory to path to allow importing from backend
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'backend'))
 
-from config import settings
+from core.config import settings
 
 
 def infer_continent(region: str) -> str:

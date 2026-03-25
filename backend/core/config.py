@@ -8,11 +8,14 @@ from typing import List, Optional
 from pydantic_settings import BaseSettings
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+# List of candidate paths for the .env file in order of precedence.
 ENV_CANDIDATES = [
-    ROOT_DIR / ".env",
+    PROJECT_ROOT / ".env",
     BACKEND_DIR / ".env",
+    BACKEND_DIR / "core" / ".env",
 ]
 
 
@@ -59,6 +62,10 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
     REDIS_URL: Optional[str] = os.getenv("REDIS_URL")
     
+    # Celery Configuration
+    CELERY_BROKER_URL: Optional[str] = os.getenv("CELERY_BROKER_URL")
+    CELERY_RESULT_BACKEND: Optional[str] = os.getenv("CELERY_RESULT_BACKEND")
+    
     # Kafka Configuration
     KAFKA_BROKERS: str = os.getenv("KAFKA_BROKERS", "localhost:9092")
     KAFKA_BROKERS_LIST: Optional[List[str]] = None
@@ -96,13 +103,15 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 24
     
-    class Config:
-        env_file = (
-            str(ROOT_DIR / ".env"),
+    model_config = {
+        "env_file": (
+            str(PROJECT_ROOT / ".env"),
             str(BACKEND_DIR / ".env"),
             ".env",
-        )
-        case_sensitive = True
+        ),
+        "case_sensitive": True,
+        "extra": "ignore"
+    }
     
     def __init__(self, **data):
         super().__init__(**data)
@@ -122,6 +131,12 @@ class Settings(BaseSettings):
                 f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
                 if self.REDIS_PASSWORD else f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
             )
+            
+        if not self.CELERY_BROKER_URL:
+            self.CELERY_BROKER_URL = self.REDIS_URL
+        
+        if not self.CELERY_RESULT_BACKEND:
+            self.CELERY_RESULT_BACKEND = self.REDIS_URL
         
         self.KAFKA_BROKERS_LIST = [
             broker.strip() for broker in self.KAFKA_BROKERS.split(",")

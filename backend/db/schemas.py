@@ -109,6 +109,7 @@ class Entity(Base):
     confidence_score = Column(Float, nullable=True)
     mention_count = Column(Integer, default=1)
     sentiment = Column(String(20), nullable=True)
+    properties = Column(JSONB, nullable=True)  # Core OWL/Ontology properties
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -123,6 +124,7 @@ class Relationship(Base):
     object_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False, index=True)
     confidence_score = Column(Float, nullable=True, index=True)
     source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
+    url = Column(String(2000), nullable=True) # Direct source link for quick access
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -168,3 +170,23 @@ class SystemMetric(Base):
     unit = Column(String(50), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     tags = Column(JSONB, nullable=True)
+
+
+class BillAnalysis(Base):
+    """Legislative bill analysis results"""
+    __tablename__ = "bill_analyses"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    bill_title = Column(String(500), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=True)
+    status = Column(String(50), default="completed") # processing, completed, failed
+    analysis_data = Column(JSONB, nullable=False) # The full JSON result
+    model_used = Column(String(100), nullable=True)
+    provider = Column(String(50), nullable=True)
+    pages = Column(Integer, nullable=True)
+    words = Column(Integer, nullable=True)
+    source_url = Column(String(2000), nullable=True) # If analyzed from URL
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+

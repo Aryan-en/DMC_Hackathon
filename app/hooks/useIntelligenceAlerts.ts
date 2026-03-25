@@ -1,60 +1,75 @@
-import { useEffect, useState } from 'react';
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
 import { apiGet } from '@/app/lib/api';
 
-export interface IntelligenceAlert {
-  timestamp: string;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export interface IntelAlert {
+  id: string;
+  time: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
   region: string;
-  title: string;
+  message: string;
+  source: string;
   confidence: number;
+  url?: string | null;
 }
 
-export interface AlertsData {
-  alerts: IntelligenceAlert[];
-  total_count: number;
-  critical_count: number;
-  high_count: number;
-}
+let _cachedAlerts: IntelAlert[] = [];
+let _lastAlertFetch: number = 0;
+const ALERTS_CACHE_TTL = 30000;
 
-const DEFAULT_ALERTS_DATA: AlertsData = {
-  alerts: [],
-  total_count: 0,
-  critical_count: 0,
-  high_count: 0,
-};
-
-export function useIntelligenceAlerts() {
-  const [data, setData] = useState<AlertsData>(DEFAULT_ALERTS_DATA);
-  const [loading, setLoading] = useState(true);
+export function useIntelligenceAlerts(pollingInterval = 30000) {
+  const [alerts, setAlerts] = useState<IntelAlert[]>(() => {
+    if (_cachedAlerts.length > 0) return _cachedAlerts;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ontora_intelligence_alerts');
+      if (saved) return JSON.parse(saved);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(_cachedAlerts.length === 0 && alerts.length === 0);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchAlerts = async () => {
-      try {
-        setLoading(true);
-        const result = await apiGet<any>('/api/intelligence/live-alerts');
-        if (result && result.success && result.data) {
-          setData(result.data);
-        } else if (result && result.data) {
-          setData(result.data);
-        } else {
-          throw new Error('Invalid response format');
+  const fetchAlerts = useCallback(async (force = false) => {
+    const hasData = _cachedAlerts.length > 0 || alerts.length > 0;
+    if (!force && hasData && (Date.now() - _lastAlertFetch < ALERTS_CACHE_TTL)) {
+      if (loading) setLoading(false);
+      return;
+    }
+
+    try {
+      if (!hasData) setLoading(true);
+      const data = await apiGet<{ alerts: IntelAlert[] }>('/api/intelligence/alerts?min_severity=medium&limit=10');
+      if (data && data.alerts) {
+        // Client-side deduping by message to prevent redundant alerts for same news item
+        const seen = new Set();
+        const deduped = data.alerts.filter(alert => {
+          if (seen.has(alert.message)) return false;
+          seen.add(alert.message);
+          return true;
+        });
+        
+        _cachedAlerts = deduped;
+        _lastAlertFetch = Date.now();
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ontora_intelligence_alerts', JSON.stringify(deduped));
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        setError(message);
-        setData(DEFAULT_ALERTS_DATA);
-      } finally {
-        setLoading(false);
+        setAlerts(deduped);
+        setError(null);
       }
-    };
+    } catch (err: any) {
+      console.error('Error fetching alerts:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading]);
 
+  useEffect(() => {
     fetchAlerts();
-    
-    // Refresh alerts every 10 seconds for live updates
-    const interval = setInterval(fetchAlerts, 10000);
+    const interval = setInterval(fetchAlerts, pollingInterval);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAlerts, pollingInterval]);
 
-  return { data, loading, error };
+  return { alerts, loading, error, refetch: fetchAlerts };
 }

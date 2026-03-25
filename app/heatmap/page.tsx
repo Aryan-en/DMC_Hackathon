@@ -1,7 +1,7 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import MultiLayerGeoHeatmap from '@/app/components/MultiLayerGeoHeatmap';
+import MultiLayerGeoHeatmap from '@/components/app/MultiLayerGeoHeatmap';
 import { useGeospatialMetrics } from '@/app/hooks/useGeospatialMetrics';
 
 export default function HeatmapPage() {

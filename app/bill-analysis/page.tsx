@@ -1,8 +1,12 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import MultiLayerGeoHeatmap from '@/app/components/MultiLayerGeoHeatmap';
-import { Upload, AlertCircle, TrendingUp, TrendingDown, Sparkles, Gauge, ShieldCheck, Flag, Lightbulb, Target } from 'lucide-react';
+import MultiLayerGeoHeatmap from '@/components/app/MultiLayerGeoHeatmap';
+import { 
+  Upload, AlertCircle, TrendingUp, TrendingDown, Sparkles, Gauge, 
+  ShieldCheck, Flag, Lightbulb, Target, BookOpen, Scale, Leaf, History, FileText
+} from 'lucide-react';
+import OntoraLogo from '@/components/OntoraLogo';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 import { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '@/app/lib/api';
@@ -62,9 +66,37 @@ interface BillAnalysis {
     top_recommendations: string[];
     next_90_days: string[];
   };
+  esg_impact?: {
+    esg_score: number;
+    environmental: string;
+    social: string;
+    governance: string;
+    sustainability_metrics: string[];
+  };
+  compliance_burden?: {
+    complexity_score: number;
+    estimated_cost_level: string;
+    burdensome_provisions: string[];
+    required_resources: string[];
+  };
+  legal_precedents?: {
+    precedents: { act_name: string; outcome: string; relevance: string }[];
+    legal_challenges_risk: string;
+  };
   analysis_provider?: string;
   analysis_model?: string;
   provider?: string;
+}
+
+interface AnalysisHistory {
+  id: string;
+  bill_title: string;
+  country: string;
+  analyzed_at: string;
+  status: string;
+  pages: number;
+  provider: string;
+  model: string;
 }
 
 interface AnalyzerStatus {
@@ -87,7 +119,24 @@ export default function BillAnalysisPage() {
   const [analysisModel, setAnalysisModel] = useState<string>('N/A');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [history, setHistory] = useState<AnalysisHistory[]>([]);
   const { data: geospatialData, loading: heatmapLoading, error: heatmapError } = useGeospatialMetrics();
+  
+  const fetchHistory = async () => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/bill-analysis/history?limit=10`);
+      const payload = await resp.json();
+      if (payload.data?.history) {
+        setHistory(payload.data.history);
+      }
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
   // Auto-scroll logs to bottom when they update
   useEffect(() => {
@@ -165,6 +214,7 @@ export default function BillAnalysisPage() {
         setAnalysisModel(data.analysis_model || analyzerStatus?.model || 'N/A');
         setProgress(100);
         setLogs(prev => [...prev, '✓ Analysis completed successfully']);
+        fetchHistory(); // Refresh history
       } else {
         throw new Error('Invalid response format');
       }
@@ -175,6 +225,34 @@ export default function BillAnalysisPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLoadHistory = (item: AnalysisHistory) => {
+    // In a real app we'd fetch the full analysis_data by ID.
+    // Since we already have the history object, let's assume we need to fetch full detail.
+    const loadDetail = async () => {
+      try {
+        setLoading(true);
+        // We'll simulate fetching full detail if not fully in history payload
+        // Actually, let's just use what we have or add a detail endpoint if needed.
+        // For now, let's assume we need to fetch.
+        const resp = await fetch(`${API_BASE_URL}/api/bill-analysis/history/${item.id}`);
+        const payload = await resp.json();
+        if (payload.data) {
+          setAnalysis(payload.data.analysis_data);
+          setAnalysisProvider(payload.data.provider?.toUpperCase() || 'N/A');
+          setAnalysisModel(payload.data.model_used || 'N/A');
+          setLogs(['✓ Historical analysis restored from archive']);
+          setProgress(100);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (err) {
+        setError('Failed to load archived analysis');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDetail();
   };
 
   const handleExportPolicyBrief = () => {
@@ -245,19 +323,24 @@ export default function BillAnalysisPage() {
 
         <div className="glass-card rounded-xl p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={16} style={{ color: '#00d4ff' }} />
-                <span style={{ color: '#8ab4d9', fontSize: '0.78rem', letterSpacing: '0.08em', fontWeight: 700 }}>
-                  LEGISLATIVE IMPACT LAB
-                </span>
+            <div className="flex items-center gap-5">
+              <div className="p-3 rounded-2xl bg-gold/10 border border-gold/20 glow-gold">
+                <OntoraLogo size={32} />
               </div>
-              <h2 style={{ color: '#e2e8f0', fontSize: '1.15rem', fontWeight: 700, marginBottom: '4px' }}>
-                Upload. Analyze. Simulate National and Global Outcomes.
-              </h2>
-              <p style={{ color: '#6c8298', fontSize: '0.82rem' }}>
-                Live AI analysis with sector impact charts, stakeholder influence mapping, and implementation timeline intelligence.
-              </p>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={14} className="text-gold animate-pulse" />
+                  <span className="text-secondary text-[10px] font-black uppercase tracking-widest">
+                    Legislative Intelligence Cluster
+                  </span>
+                </div>
+                <h2 className="text-primary text-xl font-black tracking-tight leading-none mb-1">
+                  Bill Analysis Engine <span className="text-gold/50 text-sm font-normal">v2.4 — DEEP LOGIC ENABLED</span>
+                </h2>
+                <p className="text-secondary text-xs font-medium">
+                  Autonomous synthesis of multi-section legislative documents.
+                </p>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -489,7 +572,7 @@ export default function BillAnalysisPage() {
             <div className="glass-card rounded-xl p-6">
               <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>National Economic Impact</h3>
               
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="p-4 rounded-lg" style={{ background: 'rgba(55,65,81,0.3)', borderLeft: `3px solid ${analysis.national_impact.gdp_impact > 0 ? '#10b981' : '#ef4444'}` }}>
                   <p style={{ color: '#4a6070', fontSize: '0.75rem' }}>GDP Impact</p>
                   <p className="text-lg font-bold" style={{ color: analysis.national_impact.gdp_impact > 0 ? '#10b981' : '#ef4444' }}>
@@ -542,7 +625,7 @@ export default function BillAnalysisPage() {
                 <h3 className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>Risk Assessment</h3>
               </div>
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <div className="p-4 rounded-lg mb-4" style={{ background: `${riskColor}15`, border: `1px solid ${riskColor}30` }}>
                     <p style={{ color: '#4a6070', fontSize: '0.75rem' }}>Risk Level</p>
@@ -594,7 +677,7 @@ export default function BillAnalysisPage() {
             <div className="glass-card rounded-xl p-6">
               <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Global Impact</h3>
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '8px' }}>Trade Relations</h4>
                   <ul className="space-y-2">
@@ -623,6 +706,79 @@ export default function BillAnalysisPage() {
                   <p style={{ color: '#4a6070', fontSize: '0.75rem', marginTop: '8px' }}>
                     Level of influence on global geopolitical landscape
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Deep Logic Extensions: ESG, Compliance, Legal */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* ESG Impact */}
+              <div className="glass-card rounded-2xl p-6 border-l-4 border-emerald-500/50">
+                <div className="flex items-center gap-3 mb-6">
+                  <Leaf className="text-emerald-400" size={20} />
+                  <h3 className="text-primary font-black text-sm uppercase tracking-widest">ESG Foresight</h3>
+                </div>
+                {analysis.esg_impact ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary text-xs uppercase font-bold">Sustainability Score</span>
+                      <span className="text-emerald-400 font-extrabold text-lg">{Math.round(analysis.esg_impact.esg_score)}/100</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                        <span className="text-[10px] text-emerald-400 font-black uppercase">Environmental</span>
+                        <p className="text-primary text-xs mt-1 leading-relaxed">{analysis.esg_impact.environmental}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-lavender-500/5 border border-lavender-500/10">
+                        <span className="text-[10px] text-lavender-400 font-black uppercase">Social</span>
+                        <p className="text-primary text-xs mt-1 leading-relaxed">{analysis.esg_impact.social}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : <div className="text-secondary text-xs italic">Awaiting AI ESG synthesis...</div>}
+              </div>
+
+              {/* Compliance Burden */}
+              <div className="glass-card rounded-2xl p-6 border-l-4 border-gold/50">
+                <div className="flex items-center gap-3 mb-6">
+                  <Scale className="text-gold" size={20} />
+                  <h3 className="text-primary font-black text-sm uppercase tracking-widest">Regulatory Burden</h3>
+                </div>
+                {analysis.compliance_burden ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary text-xs uppercase font-bold">Complexity Level</span>
+                      <span className="text-gold font-extrabold text-lg uppercase">{analysis.compliance_burden.estimated_cost_level}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-secondary font-black uppercase">Resources Required</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {analysis.compliance_burden.required_resources.map((r, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-full bg-gold/10 border border-gold/20 text-[9px] text-gold font-bold">{r}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : <div className="text-secondary text-xs italic">Analyzing compliance matrix...</div>}
+              </div>
+
+              {/* Legal Precedents */}
+              <div className="glass-card rounded-2xl p-6 border-l-4 border-crimson-500/50">
+                <div className="flex items-center gap-3 mb-6">
+                  <BookOpen className="text-crimson-400" size={20} />
+                  <h3 className="text-primary font-black text-sm uppercase tracking-widest">Legal Resilience</h3>
+                </div>
+                <div className="space-y-4">
+                  {analysis.legal_precedents?.precedents?.slice(0, 2).map((p, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-crimson-500/5 border border-crimson-500/10">
+                      <span className="text-[10px] text-crimson-400 font-black uppercase">{p.act_name}</span>
+                      <p className="text-primary text-[10px] mt-1 italic leading-tight"> outcome: {p.outcome}</p>
+                    </div>
+                  ))}
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/5">
+                    <span className="text-[10px] text-secondary font-black uppercase">Challenge Risk Assessment</span>
+                    <p className="text-primary text-xs mt-1">{analysis.legal_precedents?.legal_challenges_risk}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -860,6 +1016,79 @@ export default function BillAnalysisPage() {
             </div>
           </>
         )}
+
+        {/* Analysis Archive */}
+        <div className="glass-card rounded-2xl overflow-hidden mt-8">
+          <div className="p-5 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <History className="text-gold" size={18} />
+              <h3 className="text-primary font-black text-xs uppercase tracking-widest">Strategic Analysis Archive</h3>
+            </div>
+            <span className="text-secondary text-[10px] font-bold uppercase tracking-widest">Total Audited: {history.length}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="text-[9px] font-bold uppercase tracking-[0.2em] bg-black/20">
+                <tr>
+                  <th className="px-6 py-4 text-secondary">ID & Timestamp</th>
+                  <th className="px-6 py-4 text-secondary">Document Title</th>
+                  <th className="px-6 py-4 text-secondary">Context</th>
+                  <th className="px-6 py-4 text-secondary">Intelligence Tier</th>
+                  <th className="px-6 py-4 text-secondary text-right">Scope</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {history.map((entry) => (
+                  <tr 
+                    key={entry.id} 
+                    onClick={() => handleLoadHistory(entry)}
+                    className="group hover:bg-gold/5 transition-colors cursor-pointer"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-primary text-[10px] font-mono font-bold tracking-tighter">
+                          {entry.id.substring(0, 8)}...
+                        </span>
+                        <span className="text-secondary text-[9px] mt-0.5">
+                          {new Date(entry.analyzed_at).toLocaleString()}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <FileText size={14} className="text-gold/60" />
+                        <span className="text-primary text-[11px] font-bold tracking-tight line-clamp-1">{entry.bill_title}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Flag size={10} className="text-secondary" />
+                        <span className="text-secondary text-[10px] font-black uppercase">{entry.country}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-gold/10 border border-gold/20 text-gold text-[9px] font-black uppercase">
+                          {entry.model}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-mono text-secondary text-[10px]">
+                      {entry.pages} PAGES
+                    </td>
+                  </tr>
+                ))}
+                {history.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-secondary text-xs italic">
+                      No historical intelligence records found in archive.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </main>
     </div>
   );

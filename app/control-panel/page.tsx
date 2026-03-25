@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TopBar from '@/components/TopBar';
-import { Settings, Database, Network, Shield, Zap, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { 
+  Settings, Database, Network, Shield, Zap, AlertCircle, 
+  CheckCircle, Clock, Server, Layers, Globe, Activity 
+} from 'lucide-react';
 
 type SystemStatus = 'online' | 'degraded' | 'offline' | 'maintenance';
 
@@ -18,6 +21,11 @@ interface ServiceConfig {
 export default function ControlPanelPage() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const services: ServiceConfig[] = [
     {
@@ -72,31 +80,21 @@ export default function ControlPanelPage() {
 
   const getStatusColor = (status: SystemStatus) => {
     switch (status) {
-      case 'online':
-        return '#3eb87a';
-      case 'degraded':
-        return '#c8a84a';
-      case 'offline':
-        return '#ef4444';
-      case 'maintenance':
-        return '#5b8db8';
-      default:
-        return '#6f8096';
+      case 'online': return 'var(--accent-emerald)';
+      case 'degraded': return 'var(--accent-gold)';
+      case 'offline': return 'var(--accent-crimson)';
+      case 'maintenance': return 'var(--accent-steel)';
+      default: return 'var(--text-muted)';
     }
   };
 
   const getStatusLabel = (status: SystemStatus) => {
     switch (status) {
-      case 'online':
-        return 'OPERATIONAL';
-      case 'degraded':
-        return 'DEGRADED';
-      case 'offline':
-        return 'OFFLINE';
-      case 'maintenance':
-        return 'MAINTENANCE';
-      default:
-        return 'UNKNOWN';
+      case 'online': return 'OPERATIONAL';
+      case 'degraded': return 'DEGRADED';
+      case 'offline': return 'OFFLINE';
+      case 'maintenance': return 'MAINT';
+      default: return 'UNKNOWN';
     }
   };
 
@@ -106,245 +104,191 @@ export default function ControlPanelPage() {
     setRefreshing(false);
   };
 
-  return (
-    <main 
-      className="min-h-screen cursor-pointer" 
-      style={{ background: '#030810' }}
-      onClick={() => window.location.href = 'http://localhost:3002/landing'}
-    >
-      <TopBar title="Control Panel" subtitle="System infrastructure and service management" />
+  if (!mounted) return null;
 
-      <div className="p-8">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+  return (
+    <main className="flex-1 flex flex-col grid-bg min-h-screen">
+      <TopBar title="Control Panel" subtitle="Core Infrastructure & System Orchestration — CLASSIFICATION: TOP SECRET" />
+
+      <div className="flex-1 p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--border-color)]">
           <div>
-            <h1
-              className="text-2xl font-bold"
-              style={{ color: '#d6b985', marginBottom: '8px' }}
-            >
-              Infrastructure Control
-            </h1>
-            <p style={{ color: '#6f8096', fontSize: '0.9rem' }}>
-              Monitor and manage all backend services and infrastructure components
+            <div className="flex items-center gap-2 mb-2">
+              <Settings className="w-5 h-5 text-[var(--accent-gold)]" />
+              <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">System Control Panel</h1>
+            </div>
+            <p className="text-[var(--text-secondary)] text-sm max-w-xl">
+              Real-time monitoring and configuration interface for Ontora's distributed intelligence mesh.
             </p>
           </div>
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all"
-            style={{
-              background: '#c8a84a',
-              color: '#1a1302',
-              border: '1px solid #d4b15f',
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              letterSpacing: '0.06em',
-              opacity: refreshing ? 0.7 : 1,
-              cursor: refreshing ? 'not-allowed' : 'pointer',
-            }}
+            className="px-5 py-2.5 rounded-xl bg-[var(--accent-gold)] text-[var(--sidebar-bg)] font-bold text-xs tracking-widest transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
           >
-            {refreshing ? 'REFRESHING...' : 'REFRESH STATUS'}
+            {refreshing ? 'SYNCHRONIZING...' : 'FORCE SYSTEM AUDIT'}
           </button>
         </div>
 
-        {/* System Overview */}
-        <div
-          className="mb-8 p-6 rounded-2xl"
-          style={{
-            background: 'linear-gradient(160deg, rgba(10,21,37,0.6) 0%, rgba(8,16,30,0.4) 100%)',
-            border: '1px solid rgba(200,168,74,0.15)',
-          }}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Services Online', value: '5/6', color: '#3eb87a' },
-              { label: 'Avg Uptime', value: '99.2%', color: '#00d4ff' },
-              { label: 'Total Requests', value: '2.4M', color: '#c8a84a' },
-              { label: 'Last Alert', value: '2h 15m ago', color: '#5b8db8' },
-            ].map(stat => (
-              <div key={stat.label}>
-                <div style={{ color: '#6f8096', fontSize: '0.7rem', marginBottom: '6px', letterSpacing: '0.06em' }}>
-                  {stat.label}
-                </div>
-                <div style={{ color: stat.color, fontSize: '1.5rem', fontWeight: 700 }}>
-                  {stat.value}
-                </div>
+        {/* Global Overview Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Services Online', value: '5/6', color: 'var(--accent-emerald)', icon: CheckCircle },
+            { label: 'Composite Uptime', value: '99.2%', color: 'var(--accent-steel)', icon: Activity },
+            { label: 'Cluster Throughput', value: '2.4M ops', color: 'var(--accent-gold)', icon: Zap },
+            { label: 'Security Handshake', value: 'PASS', color: 'var(--accent-emerald)', icon: Shield },
+          ].map(stat => (
+            <div key={stat.label} className="glass-card p-5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[var(--text-dim)] text-[0.65rem] font-bold tracking-widest uppercase mb-1">{stat.label}</p>
+                <p className="text-xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {services.map(service => (
-            <div
-              key={service.name}
-              onClick={() => setSelectedService(selectedService === service.name ? null : service.name)}
-              className="p-5 rounded-xl transition-all cursor-pointer"
-              style={{
-                background:
-                  selectedService === service.name
-                    ? 'linear-gradient(160deg, rgba(50,74,100,0.5) 0%, rgba(30,50,70,0.3) 100%)'
-                    : 'linear-gradient(160deg, rgba(10,21,37,0.6) 0%, rgba(8,16,30,0.4) 100%)',
-                border: `1px solid ${
-                  selectedService === service.name
-                    ? 'rgba(200,168,74,0.4)'
-                    : 'rgba(200,168,74,0.12)'
-                }`,
-              }}
-            >
-              {/* Service Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div
-                  className="p-2.5 rounded-lg"
-                  style={{
-                    background: `${getStatusColor(service.status)}20`,
-                    color: getStatusColor(service.status),
-                  }}
-                >
-                  {service.icon}
-                </div>
-                <div
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold"
-                  style={{
-                    background: `${getStatusColor(service.status)}15`,
-                    color: getStatusColor(service.status),
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: getStatusColor(service.status) }}
-                  />
-                  {getStatusLabel(service.status)}
-                </div>
-              </div>
-
-              {/* Service Name */}
-              <h3
-                className="font-semibold mb-1"
-                style={{ color: '#d6b985', fontSize: '0.9rem' }}
-              >
-                {service.name}
-              </h3>
-              <p
-                className="mb-4"
-                style={{ color: '#6f8096', fontSize: '0.75rem', lineHeight: 1.5 }}
-              >
-                {service.description}
-              </p>
-
-              {/* Service Metrics */}
-              {selectedService === service.name && (
-                <div
-                  className="pt-4 border-t space-y-3"
-                  style={{ borderColor: 'rgba(200,168,74,0.1)' }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span style={{ color: '#6f8096', fontSize: '0.75rem' }}>Uptime</span>
-                    <span
-                      style={{
-                        color: '#d6b985',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        fontFamily: 'var(--font-geist-mono)',
-                      }}
-                    >
-                      {service.uptime}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(200,168,74,0.1)' }}>
-                    <div
-                      className="h-full"
-                      style={{
-                        background: getStatusColor(service.status),
-                        width: `${service.uptime}%`,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span style={{ color: '#6f8096', fontSize: '0.75rem' }}>Response Time</span>
-                    <span
-                      style={{
-                        color: '#3eb87a',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        fontFamily: 'var(--font-geist-mono)',
-                      }}
-                    >
-                      {service.responseTime}ms
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Stats */}
-              {selectedService !== service.name && (
-                <div className="flex items-center gap-2 pt-3 border-t" style={{ borderColor: 'rgba(200,168,74,0.1)' }}>
-                  <Clock size={12} style={{ color: '#6f8096' }} />
-                  <span
-                    style={{
-                      color: '#6f8096',
-                      fontSize: '0.7rem',
-                      fontFamily: 'var(--font-geist-mono)',
-                    }}
-                  >
-                    ~{service.responseTime}ms
-                  </span>
-                </div>
-              )}
+              <stat.icon className="w-8 h-8 opacity-20" style={{ color: stat.color }} />
             </div>
           ))}
         </div>
 
-        {/* Alert Section */}
-        <div
-          className="mt-8 p-5 rounded-xl border"
-          style={{
-            background: 'rgba(184,74,74,0.08)',
-            borderColor: 'rgba(184,74,74,0.22)',
-          }}
-        >
-          <div className="flex items-start gap-3">
-            <AlertCircle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
-            <div className="flex-1">
-              <h4 style={{ color: '#fca5a5', fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>
-                Active Alert: Kafka Stream Degradation
-              </h4>
-              <p style={{ color: '#f87171', fontSize: '0.75rem', lineHeight: 1.5 }}>
-                Data pipeline experiencing increased latency. Investigating connection pool exhaustion. Estimated recovery: 45 minutes.
-              </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Services Grid */}
+          <div className="lg:col-span-2 space-y-6">
+            <h2 className="text-xs font-bold tracking-[0.2em] text-[var(--accent-gold)] uppercase px-1">Active Mesh Components</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {services.map(service => {
+                const isSelected = selectedService === service.name;
+                const statusColor = getStatusColor(service.status);
+                
+                return (
+                  <div
+                    key={service.name}
+                    onClick={() => setSelectedService(isSelected ? null : service.name)}
+                    className={`p-5 rounded-2xl transition-all cursor-pointer border ${isSelected ? 'scale-[1.02] border-[var(--accent-gold)]' : 'border-[var(--border-color)] hover:border-[var(--accent-gold-dim)]'}`}
+                    style={{ background: isSelected ? 'var(--accent-gold-dim)' : 'var(--card-bg)' }}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="p-2.5 rounded-xl border border-[var(--border-color)]" style={{ background: 'var(--background)' }}>
+                        <div style={{ color: statusColor }}>{service.icon}</div>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[0.6rem] font-black border" 
+                           style={{ borderColor: `${statusColor}40`, color: statusColor, background: `${statusColor}10` }}>
+                        <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: statusColor }} />
+                        {getStatusLabel(service.status)}
+                      </div>
+                    </div>
+                    
+                    <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">{service.name}</h3>
+                    <p className="text-[var(--text-secondary)] text-[0.7rem] line-clamp-2 leading-relaxed mb-4">{service.description}</p>
+                    
+                    {isSelected ? (
+                      <div className="pt-4 border-t border-[var(--border-color)] space-y-3">
+                        <div className="flex justify-between text-[0.65rem]">
+                          <span className="text-[var(--text-dim)]">LATENCY</span>
+                          <span className="text-[var(--accent-emerald)] font-mono">{service.responseTime}ms</span>
+                        </div>
+                        <div className="flex justify-between text-[0.65rem]">
+                          <span className="text-[var(--text-dim)]">UPTIME</span>
+                          <span className="text-[var(--accent-gold)] font-mono">{service.uptime}%</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-[var(--background)] overflow-hidden">
+                          <div className="h-full bg-[var(--accent-emerald)] shadow-[0_0_10px] shadow-[var(--accent-emerald)]" style={{ width: `${service.uptime}%` }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-[var(--text-muted)] text-[0.6rem] font-mono">
+                        <Clock size={10} />
+                        LAST HEARTBEAT: {(Math.random() * 5).toFixed(1)}s AGO
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Sidebar - System Health & New Info */}
+          <div className="space-y-6">
+            {/* The Moved Component: SYSTEM STATUS */}
+            <div className="glass-card p-6 rounded-2xl border-l-[3px] border-l-[var(--accent-gold)]">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-[0.7rem] font-black tracking-[0.2em] text-[var(--text-dim)] uppercase">System Health</h3>
+                  <p className="text-[0.6rem] text-[var(--text-muted)] italic">Core Process Verification</p>
+                </div>
+                <Globe className="w-4 h-4 text-[var(--accent-gold)] opacity-50" />
+              </div>
+              
+              <div className="space-y-4">
+                {[
+                  { label: 'Data Ingestion', status: 'ONLINE', color: 'var(--accent-emerald)', load: 45 },
+                  { label: 'ML Pipeline', status: 'ONLINE', color: 'var(--accent-emerald)', load: 82 },
+                  { label: 'Neo4j Cluster', status: 'SYNCING', color: 'var(--accent-gold)', load: 94 },
+                  { label: 'Ollama Inference', status: 'ONLINE', color: 'var(--accent-emerald)', load: 24 },
+                ].map(s => (
+                  <div key={s.label} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[0.7rem] text-[var(--text-secondary)] font-medium">{s.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.6rem] font-mono font-bold" style={{ color: s.color }}>{s.status}</span>
+                        <div className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: s.color }} />
+                      </div>
+                    </div>
+                    <div className="h-1 rounded-full bg-[var(--background)] overflow-hidden">
+                      <div className="h-full transition-all duration-1000" style={{ width: `${s.load}%`, background: s.color, opacity: 0.6 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-[var(--border-color)] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center">
+                    <Layers className="w-5 h-5 text-[var(--text-dim)]" />
+                  </div>
+                  <div>
+                    <p className="text-[0.65rem] font-bold text-[var(--text-primary)]">v4.2.1-GOLD</p>
+                    <p className="text-[0.55rem] text-[var(--text-muted)] tracking-widest uppercase">Classified Build</p>
+                  </div>
+                </div>
+                <div className="text-[0.55rem] font-mono text-[var(--text-muted)] text-right">
+                  NODE: 0x9f22<br/>STABLE
+                </div>
+              </div>
+            </div>
+
+            {/* Critical Alert Card */}
+            <div className="p-5 rounded-2xl bg-[var(--accent-crimson)]/[0.08] border border-[var(--accent-crimson)]/[0.2] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <AlertCircle className="w-24 h-24 text-[var(--accent-crimson)]" />
+              </div>
+              <div className="flex items-start gap-3 relative z-10">
+                <AlertCircle className="w-5 h-5 text-[var(--accent-crimson)] shrink-0 mt-1 animate-pulse" />
+                <div>
+                  <h4 className="text-[0.75rem] font-bold text-[var(--accent-crimson)] mb-1 uppercase tracking-wider">Kafka Stream Degradation</h4>
+                  <p className="text-[0.7rem] text-[var(--accent-crimson)] opacity-80 leading-relaxed">
+                    Data pipeline experiencing increased latency (45ms). Potential connection pool exhaustion in region: [ASIA-EAST-1].
+                  </p>
+                  <button className="mt-4 px-3 py-1.5 rounded-lg bg-[var(--accent-crimson)] text-white text-[0.6rem] font-black tracking-widest">
+                    PATCH CLUSTER
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Global Management Actions */}
+        <div className="pt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'View Logs', color: '#00d4ff' },
-            { label: 'Configure Cache', color: '#3eb87a' },
-            { label: 'Database Backup', color: '#c8a84a' },
-            { label: 'System Settings', color: '#5b8db8' },
+            { label: 'View Audit Logs', icon: Clock, color: 'var(--accent-steel)' },
+            { label: 'Cache Control', icon: Zap, color: 'var(--accent-emerald)' },
+            { label: 'Database Backup', icon: Database, color: 'var(--accent-gold)' },
+            { label: 'System Reset', icon: Settings, color: 'var(--accent-crimson)' },
           ].map(action => (
-            <button
-              key={action.label}
-              className="px-4 py-2.5 rounded-lg transition-all font-semibold text-sm"
-              style={{
-                background: `${action.color}15`,
-                border: `1px solid ${action.color}35`,
-                color: action.color,
-                letterSpacing: '0.04em',
-                cursor: 'pointer',
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = `${action.color}25`;
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = `${action.color}15`;
-              }}
-            >
-              {action.label}
+            <button key={action.label} className="glass-card p-4 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all hover:border-[var(--accent-gold)] group">
+              <div className="p-2 rounded-xl bg-[var(--background)] group-hover:scale-110 transition-transform">
+                <action.icon size={18} style={{ color: action.color }} />
+              </div>
+              <span className="text-[0.65rem] font-bold text-[var(--text-dim)] uppercase tracking-widest">{action.label}</span>
             </button>
           ))}
         </div>

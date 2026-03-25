@@ -16,37 +16,8 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-class Token(BaseModel):
-    """JWT Token response model."""
-    access_token: str
-    refresh_token: Optional[str] = None
-    token_type: str = "bearer"
-    expires_in: int
-
-
-class TokenData(BaseModel):
-    """JWT Token payload data."""
-    user_id: str
-    username: str
-    email: str
-    roles: list[str]
-    clearance_level: str
-    exp: Optional[datetime] = None
-
-
-class UserCredentials(BaseModel):
-    """User login credentials."""
-    username: str
-    password: str
-
-
-class UserRegistration(BaseModel):
-    """User registration payload."""
-    username: str
-    email: str
-    password: str
-    clearance_level: str = "UNCLASS"
+from schemas.auth import Token, TokenData, UserCredentials, UserRegistration
+import os
 
 
 def hash_password(password: str) -> str:

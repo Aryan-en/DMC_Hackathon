@@ -1,139 +1,153 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Alert {
-  id: number;
-  time: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  region: string;
-  message: string;
-  source: string;
-}
+import { useIntelligenceAlerts } from '@/app/hooks/useIntelligenceAlerts';
+import TacticalMarquee from './TacticalMarquee';
 
 const SEVERITY_COLORS = {
-  critical: '#b84a4a',
-  high: '#c8822a',
-  medium: '#5b8db8',
-  low: '#3eb87a',
+  critical: 'var(--accent-crimson)',
+  high: 'var(--accent-amber)',
+  medium: 'var(--accent-steel)',
+  low: 'var(--accent-emerald)',
 };
 
 const SEVERITY_BG = {
-  critical: 'rgba(184,74,74,0.07)',
-  high: 'rgba(200,130,42,0.07)',
-  medium: 'rgba(91,141,184,0.07)',
-  low: 'rgba(62,184,122,0.07)',
+  critical: 'rgba(153, 27, 27, 0.05)',
+  high: 'rgba(180, 83, 9, 0.05)',
+  medium: 'rgba(0, 0, 0, 0.02)',
+  low: 'rgba(21, 128, 61, 0.05)',
 };
 
-const alerts: Alert[] = [
-  { id: 1, time: '09:47:33', severity: 'critical', region: 'MENA', message: 'Unusual military deployment detected near Strait of Hormuz', source: 'SAT-FEED' },
-  { id: 2, time: '09:45:12', severity: 'high', region: 'EU', message: 'Commodity price volatility exceeds 3σ threshold — natural gas', source: 'MARKET' },
-  { id: 3, time: '09:41:05', severity: 'medium', region: 'APAC', message: 'Social unrest probability model: 67% confidence — Jakarta', source: 'NLP-AI' },
-  { id: 4, time: '09:38:44', severity: 'high', region: 'LATAM', message: 'Election interference narrative detected across 14 platforms', source: 'OSINT' },
-  { id: 5, time: '09:31:19', severity: 'medium', region: 'SSA', message: 'Drought index critical: 3 provinces at risk — food security impact', source: 'CLIMATE' },
-  { id: 6, time: '09:28:07', severity: 'low', region: 'NA', message: 'Federal Reserve language model signals 82% rate hold probability', source: 'ECON-AI' },
-  { id: 7, time: '09:21:54', severity: 'high', region: 'APAC', message: 'Rare earth supply chain disruption — semiconductor dependency mapping updated', source: 'TRADE' },
-  { id: 8, time: '09:14:30', severity: 'critical', region: 'EEU', message: 'Cyber intrusion pattern: APT-41 signature on critical infrastructure nodes', source: 'CYBER' },
-];
 
 export default function AlertFeed() {
+  const { alerts, loading, error } = useIntelligenceAlerts();
   const [showAllAlerts, setShowAllAlerts] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-5 animate-pulse">
+        <div className="h-6 w-32 bg-black/10 dark:bg-white/10 rounded mb-4" />
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <div key={i} className="h-16 bg-black/5 dark:bg-white/5 rounded" />)}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <div
-        className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: '1px solid rgba(0,212,255,0.08)' }}
+        className="flex items-center justify-between px-4 py-3 bg-black/[0.02]"
       >
         <div className="flex items-center gap-3">
-          <span style={{ color: '#c4cdd8', fontSize: '0.82rem', fontWeight: 600 }}>Intelligence Alerts</span>
-          <span
-            className="px-2 py-0.5 rounded live-indicator"
-            style={{
-              background: 'rgba(184,74,74,0.08)',
-              border: '1px solid rgba(184,74,74,0.2)',
-              color: '#b84a4a',
-              fontSize: '0.58rem',
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-            }}
-          >
+          <span className="text-primary text-sm font-black uppercase tracking-tight">Intelligence Alerts</span>
+          <span className="status-online flex items-center gap-1.5 uppercase">
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-emerald" />
             LIVE
           </span>
         </div>
         <div className="flex items-center gap-3">
           {(['critical', 'high', 'medium', 'low'] as const).map(sev => (
             <div key={sev} className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: SEVERITY_COLORS[sev] }} />
-              <span style={{ color: '#3a4e62', fontSize: '0.62rem', textTransform: 'capitalize' }}>{sev}</span>
+              <span className="w-2 h-2 rounded-full" style={{ background: SEVERITY_COLORS[sev] }} />
+              <span className="text-secondary text-[10px] uppercase font-black">{sev}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="overflow-y-auto" style={{ maxHeight: '340px' }}>
-        {alerts.map((alert, i) => (
-        <div
-            key={alert.id}
-            className="flex items-start gap-4 px-5 py-3 transition-colors cursor-pointer"
-            style={{
-              borderBottom: i < alerts.length - 1 ? '1px solid rgba(0,212,255,0.05)' : 'none',
-              borderLeft: `2px solid ${SEVERITY_COLORS[alert.severity]}`,
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.02)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <div className="shrink-0 pt-0.5">
-              <span
-                className="font-mono"
-                style={{ color: '#2a3d52', fontSize: '0.62rem' }}
-              >
-                {alert.time}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="px-1.5 py-0.5 rounded font-bold uppercase"
-                  style={{
-                    background: SEVERITY_BG[alert.severity],
-                    color: SEVERITY_COLORS[alert.severity],
-                    fontSize: '0.58rem',
-                    letterSpacing: '0.08em',
-                  }}
-                >
-                  {alert.severity}
-                </span>
-                <span
-                  className="px-1.5 py-0.5 rounded font-mono"
-                  style={{ background: 'rgba(0,212,255,0.05)', color: 'rgba(0,212,255,0.4)', fontSize: '0.58rem' }}
-                >
-                  {alert.region}
-                </span>
-                <span
-                  className="px-1.5 py-0.5 rounded ml-auto"
-                  style={{ color: '#2a3d52', fontSize: '0.58rem' }}
-                >
-                  [{alert.source}]
-                </span>
-              </div>
-              <p style={{ color: '#6a7e92', fontSize: '0.75rem', lineHeight: '1.5' }}>
-                {alert.message}
-              </p>
-            </div>
+      <div className="table-scroll-container">
+        {error ? (
+          <div className="text-crimson text-center py-10 font-black uppercase text-xs">
+            CONNECTION_TIMEOUT: API Server Unreachable
           </div>
-        ))}
+        ) : alerts.length === 0 ? (
+          <div className="text-muted text-center py-10 italic">
+            No active threat threads detected in this sector.
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse mb-0 table-fixed min-w-[700px]">
+            <thead 
+              className="text-[9px] font-bold uppercase tracking-[0.2em]"
+              style={{ backgroundColor: 'var(--table-header-bg)', color: 'var(--table-header-text)' }}
+            >
+              <tr>
+                <th className="pl-4 py-3 font-mono w-[80px]">Timestamp</th>
+                <th className="px-2 py-3 w-[60px]">Sev</th>
+                <th className="px-2 py-3 w-[80px]">Region</th>
+                <th className="px-4 py-3">Intelligence Summary</th>
+                <th className="px-2 py-3 w-[100px]">Source</th>
+                <th className="pr-4 py-3 text-right w-[60px]">Conf</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5 dark:divide-white/5">
+              {alerts.map((alert, aidx) => {
+                const sevColor = SEVERITY_COLORS[alert.severity as keyof typeof SEVERITY_COLORS] || 'var(--accent-steel)';
+                const sevBg = SEVERITY_BG[alert.severity as keyof typeof SEVERITY_BG] || 'transparent';
+                
+                return (
+                  <tr 
+                    key={aidx} 
+                    className="group transition-colors hover:bg-gold/5"
+                    style={{ backgroundColor: sevBg }}
+                  >
+                    <td className="pl-4 py-3 text-[10px] font-mono text-primary">
+                      {alert.time}
+                    </td>
+                    <td className="px-2 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: sevColor }} />
+                        <span className="text-[9px] font-black uppercase" style={{ color: sevColor }}>
+                          {alert.severity.substring(0, 3)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-3">
+                      <span className="text-[10px] text-secondary">
+                        {alert.region}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TacticalMarquee>
+                        <span className="text-[11px] text-primary leading-normal">
+                          {alert.message}
+                        </span>
+                      </TacticalMarquee>
+                    </td>
+                    <td className="px-2 py-3">
+                      {alert.url ? (
+                        <a 
+                          href={alert.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-lavender hover:underline underline-offset-1"
+                        >
+                          {alert.source} ↗
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-muted">{alert.source}</span>
+                      )}
+                    </td>
+                    <td className="pr-4 py-3 text-right">
+                      <span className="text-[10px] font-mono font-bold text-emerald-700">
+                        {(alert.confidence * 100).toFixed(0)}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div
-        className="px-5 py-3 text-center"
-        style={{ borderTop: '1px solid rgba(0,212,255,0.07)' }}
+        className="px-4 py-3 text-center bg-black/[0.01]"
       >
         <button 
           onClick={() => setShowAllAlerts(!showAllAlerts)}
-          style={{ color: showAllAlerts ? 'rgba(0,212,255,0.6)' : 'rgba(0,212,255,0.3)', fontSize: '0.68rem', transition: 'color 0.2s' }} 
-          className="hover:underline"
+          className="text-gold hover:text-black font-black uppercase text-[10px] tracking-widest transition-all"
         >
-          {showAllAlerts ? 'Collapse alerts' : 'View all 2,847 alerts'} →
+          {showAllAlerts ? 'Collapse Data Stream' : 'Decrypt Full Intelligence Stream'} →
         </button>
       </div>
     </div>

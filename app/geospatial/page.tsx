@@ -30,7 +30,7 @@ export default function GeospatialPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="glass-card rounded-xl p-4">
             <div className="text-xs" style={{ color: '#94a3b8' }}>Hotspots</div>
             <div className="text-2xl font-bold" style={{ color: '#00d4ff' }}>{data.hotspots.length}</div>
@@ -96,7 +96,7 @@ export default function GeospatialPage() {
           {!loading && data.hotspots.length === 0 && <p className="text-xs mt-3" style={{ color: '#64748b' }}>No live hotspots returned by API.</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="glass-card rounded-xl p-5">
             <h3 className="font-semibold text-sm mb-3" style={{ color: '#e2e8f0' }}>Climate Indicators</h3>
             <div className="overflow-y-auto" style={{ maxHeight: '500px' }}>

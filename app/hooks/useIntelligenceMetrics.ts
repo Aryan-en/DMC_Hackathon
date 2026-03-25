@@ -8,6 +8,7 @@ type ExtractedEntity = {
   type: string;
   confidence: number;
   mentions: number;
+  url?: string | null;
 };
 
 type LanguageDistribution = {
@@ -36,6 +37,7 @@ type StrategicBrief = {
   model: string;
   confidence: number;
   dateGen: string | null;
+  url?: string | null;
 };
 
 type PipelineModel = {
@@ -52,6 +54,7 @@ type MEARelation = {
   key_issues: string[];
   confidence: number;
   intelligence_priority: string;
+  url?: string | null;
 };
 
 type RegionalHotspot = {
@@ -60,6 +63,7 @@ type RegionalHotspot = {
   tension_level: string;
   intelligence_assessment: string;
   strategic_importance: string;
+  url?: string | null;
 };
 
 type StrategicSummary = {
@@ -108,12 +112,12 @@ function dedupeByKey<T>(items: T[], getKey: (item: T) => string): T[] {
 
 // Fallback sample data
 const SAMPLE_ENTITIES: ExtractedEntity[] = [
-  { entity: 'United Nations', type: 'ORG', confidence: 0.97, mentions: 1842 },
-  { entity: 'European Union', type: 'ORG', confidence: 0.96, mentions: 1567 },
-  { entity: 'South China Sea', type: 'LOC', confidence: 0.94, mentions: 1203 },
-  { entity: 'NATO', type: 'ORG', confidence: 0.95, mentions: 1089 },
-  { entity: 'Vladimir Putin', type: 'PER', confidence: 0.98, mentions: 956 },
-  { entity: 'Belt and Road Initiative', type: 'EVENT', confidence: 0.91, mentions: 823 },
+  { entity: 'United Nations', type: 'ORG', confidence: 0.97, mentions: 1842, url: null },
+  { entity: 'European Union', type: 'ORG', confidence: 0.96, mentions: 1567, url: null },
+  { entity: 'South China Sea', type: 'LOC', confidence: 0.94, mentions: 1203, url: null },
+  { entity: 'NATO', type: 'ORG', confidence: 0.95, mentions: 1089, url: null },
+  { entity: 'Vladimir Putin', type: 'PER', confidence: 0.98, mentions: 956, url: null },
+  { entity: 'Belt and Road Initiative', type: 'EVENT', confidence: 0.91, mentions: 823, url: null },
 ];
 
 const SAMPLE_LANGUAGES: LanguageDistribution[] = [
@@ -188,25 +192,42 @@ const SAMPLE_CLIMATE_REGIONS: ClimateRegion[] = [
   },
 ];
 
+let _cachedIntelData: IntelligenceMetrics | null = null;
+let _lastIntelFetch: number = 0;
+const INTEL_CACHE_TTL = 30000;
+
 export function useIntelligenceMetrics() {
-  const [data, setData] = useState<IntelligenceMetrics>({
-    entities: SAMPLE_ENTITIES,
-    languages: SAMPLE_LANGUAGES,
-    keywords: SAMPLE_KEYWORDS,
-    sentimentRadar: SAMPLE_SENTIMENT_RADAR,
-    briefs: SAMPLE_BRIEFS,
-    models: SAMPLE_MODELS,
-    climateRegions: SAMPLE_CLIMATE_REGIONS,
+  const [data, setData] = useState<IntelligenceMetrics>(() => {
+    if (_cachedIntelData) return _cachedIntelData;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ontora_intelligence_metrics');
+      if (saved) return JSON.parse(saved);
+    }
+    return {
+      entities: SAMPLE_ENTITIES,
+      languages: SAMPLE_LANGUAGES,
+      keywords: SAMPLE_KEYWORDS,
+      sentimentRadar: SAMPLE_SENTIMENT_RADAR,
+      briefs: SAMPLE_BRIEFS,
+      models: SAMPLE_MODELS,
+      climateRegions: SAMPLE_CLIMATE_REGIONS,
+    };
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!_cachedIntelData && data.entities === SAMPLE_ENTITIES);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let active = true;
 
-    async function load() {
-      if (active) setLoading(true);
+    async function load(force = false) {
+      if (!force && _cachedIntelData && (Date.now() - _lastIntelFetch < INTEL_CACHE_TTL)) {
+        if (loading) setLoading(false);
+        return;
+      }
+
+      const isInitial = data.entities === SAMPLE_ENTITIES;
+      if (active && isInitial) setLoading(true);
       try {
         const modeFromUrl =
           typeof window !== 'undefined'
@@ -254,6 +275,11 @@ export function useIntelligenceMetrics() {
           regionalHotspots: meaRes.status === 'fulfilled' && meaRes.value?.regional_hotspots ? meaRes.value.regional_hotspots : undefined,
         };
 
+        _cachedIntelData = newData;
+        _lastIntelFetch = Date.now();
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ontora_intelligence_metrics', JSON.stringify(newData));
+        }
         setData(newData);
 
         // Only show error if all endpoints failed
