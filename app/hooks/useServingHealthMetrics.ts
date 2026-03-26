@@ -74,7 +74,7 @@ export function useServingHealthMetrics() {
 
     const fetchLiveMatrix = async () => {
       try {
-        const result = await apiGet<ServingLiveMatrixResponse>('/api/predictions/serving-live-matrix?points=60');
+        const result = await apiGet<ServingLiveMatrixResponse>('/api/predictions/serving-live-matrix?points=180');
 
         if (!isMounted) return;
 
@@ -135,7 +135,7 @@ export function useServingHealthMetrics() {
               uptime_pct: legacy.uptime_pct || 0,
             };
 
-            const updated = [...prev.data, nextPoint].slice(-60);
+            const updated = [...prev.data, nextPoint].slice(-180);
             return {
               cpu_model: prev.cpu_model,
               data: updated,
@@ -167,7 +167,7 @@ export function useServingHealthMetrics() {
 
     fetchLiveMatrix();
 
-    const interval = setInterval(fetchLiveMatrix, 1000);
+    const interval = setInterval(fetchLiveMatrix, 10000);
 
     return () => {
       isMounted = false;

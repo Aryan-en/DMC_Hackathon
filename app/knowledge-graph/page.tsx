@@ -1,7 +1,9 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import { Filter, RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import StatCard from '@/components/StatCard';
+import { getSafeExternalUrl } from '@/app/lib/source-links';
+import { AlertTriangle, Filter, GitBranch, Network, RefreshCw, Route, Search, ShieldAlert, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useKnowledgeGraphMetrics } from '@/app/hooks/useKnowledgeGraphMetrics';
 
@@ -15,13 +17,106 @@ type Relationship = {
   object_properties?: any;
 };
 
+type PathEntry = {
+  chain: string[];
+  strength: number;
+  hops?: number;
+};
+
+type NodeStats = {
+  incomingConnections: number;
+  outgoingConnections: number;
+  avgStrength: string;
+};
+
+type Category = {
+  label: string;
+  color: string;
+  entities: string[];
+};
+
+type RelationshipType = {
+  type: string;
+  description: string;
+  color: string;
+  strength: string;
+};
+
+type QuerySuggestion = {
+  value: string;
+  score: number;
+};
+
+const ENTITY_CATEGORIES: Category[] = [
+  { label: 'Geopolitical', color: '#14b8ff', entities: ['Country', 'State/Region', 'City', 'Territory'] },
+  { label: 'Actors', color: '#6ea8ff', entities: ['Leaders', 'Organizations', 'Governments', 'NGOs'] },
+  { label: 'Governance', color: '#2ed7b3', entities: ['Policies', 'Schemes', 'Treaties', 'Laws'] },
+  { label: 'Economy', color: '#ffb662', entities: ['GDP', 'Trade', 'Industry', 'Inflation'] },
+  { label: 'Environment', color: '#53d3ff', entities: ['Flood', 'Cyclone', 'Climate Events', 'Disasters'] },
+  { label: 'Events', color: '#ff8a8a', entities: ['News', 'Agreements', 'Conflicts', 'Incidents'] },
+  { label: 'Social', color: '#7dc4ff', entities: ['Sentiment', 'Population', 'Public Opinion', 'Culture'] },
+];
+
+const RELATIONSHIP_TYPES: RelationshipType[] = [
+  { type: 'trades_with', description: 'Commercial exchange', color: '#ffb662', strength: 'economic' },
+  { type: 'allies_with', description: 'Political alliance', color: '#2ed7b3', strength: 'diplomatic' },
+  { type: 'conflicts_with', description: 'Active conflict', color: '#ff8a8a', strength: 'critical' },
+  { type: 'affects', description: 'Direct influence', color: '#7dc4ff', strength: 'high' },
+  { type: 'impacts', description: 'Cascading effect', color: '#53d3ff', strength: 'medium' },
+  { type: 'located_in', description: 'Geographic relation', color: '#14b8ff', strength: 'structural' },
+  { type: 'belongs_to', description: 'Organizational membership', color: '#6ea8ff', strength: 'structural' },
+  { type: 'invests_in', description: 'Financial investment', color: '#ffb662', strength: 'economic' },
+];
+
+function buildNGramVector(input: string, n = 3): Map<string, number> {
+  const normalized = input.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const value = ` ${normalized} `;
+  const vector = new Map<string, number>();
+
+  if (!normalized) return vector;
+  if (value.length <= n) {
+    vector.set(value, 1);
+    return vector;
+  }
+
+  for (let i = 0; i <= value.length - n; i += 1) {
+    const gram = value.slice(i, i + n);
+    vector.set(gram, (vector.get(gram) ?? 0) + 1);
+  }
+
+  return vector;
+}
+
+function cosineSimilarity(a: string, b: string): number {
+  if (!a.trim() || !b.trim()) return 0;
+
+  const va = buildNGramVector(a);
+  const vb = buildNGramVector(b);
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  va.forEach((countA, gram) => {
+    normA += countA * countA;
+    dot += countA * (vb.get(gram) ?? 0);
+  });
+
+  vb.forEach((countB) => {
+    normB += countB * countB;
+  });
+
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denom === 0) return 0;
+  return dot / denom;
+}
+
 function GraphCanvas({
   relationships,
   zoom,
   onZoomIn,
   onZoomOut,
   onReset,
-  onRefresh,
   onNodeClick,
   highlightedPathChain,
   layoutType = 'force',
@@ -31,7 +126,6 @@ function GraphCanvas({
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
-  onRefresh: () => void;
   onNodeClick: (nodeId: string) => void;
   highlightedPathChain: string[];
   layoutType?: 'force' | 'circular';
@@ -40,6 +134,10 @@ function GraphCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const dragRef = useRef({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 });
   const [isClickingNode, setIsClickingNode] = useState(false);
+  const viewWidth = 900;
+  const viewHeight = 420;
+  const centerX = viewWidth / 2;
+  const centerY = viewHeight / 2;
 
   const graph = useMemo(() => {
     const nodeMap = new Map<string, { id: string; degree: number }>();
@@ -51,39 +149,42 @@ function GraphCanvas({
       nodeMap.get(edge.target)!.degree += 1;
     }
 
-    const nodes = Array.from(nodeMap.values()).slice(0, 150);
+    const nodes = Array.from(nodeMap.values())
+      .sort((a, b) => b.degree - a.degree)
+      .slice(0, layoutType === 'circular' ? 70 : 110);
     const nodeIds = new Set(nodes.map((n) => n.id));
     const edges = relationships.filter((r) => nodeIds.has(r.source) && nodeIds.has(r.target)).slice(0, 300);
 
-    const w = 900;
-    const h = 420;
+    const w = viewWidth;
+    const h = viewHeight;
     const cx = w / 2;
     const cy = h / 2;
+    const paddingX = layoutType === 'circular' ? 150 : 40;
+    const paddingY = layoutType === 'circular' ? 120 : 32;
 
     const positions = new Map<string, { x: number; y: number }>();
-    
+
     if (layoutType === 'circular') {
+      const radius = Math.max(110, Math.min(w / 2 - paddingX, h / 2 - paddingY));
       nodes.forEach((n, i) => {
-        const angle = (i / nodes.length) * Math.PI * 2;
-        const radius = 175;
+        const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
         positions.set(n.id, {
           x: cx + Math.cos(angle) * radius,
-          y: cy + Math.sin(angle) * radius
+          y: cy + Math.sin(angle) * radius,
         });
       });
     } else {
-      // Force-directed layout
       nodes.forEach((n, i) => {
-        const angle = (i / nodes.length) * Math.PI * 2;
+        const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
         positions.set(n.id, {
-          x: cx + Math.cos(angle) * 160 + (Math.random() - 0.5) * 40,
-          y: cy + Math.sin(angle) * 160 + (Math.random() - 0.5) * 40
+          x: cx + Math.cos(angle) * (160 - paddingX) + (Math.random() - 0.5) * 40,
+          y: cy + Math.sin(angle) * (160 - paddingY) + (Math.random() - 0.5) * 40,
         });
       });
 
-      for (let iter = 0; iter < 50; iter++) {
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
+      for (let iter = 0; iter < 50; iter += 1) {
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
             const p1 = positions.get(nodes[i].id)!;
             const p2 = positions.get(nodes[j].id)!;
             const dx = p1.x - p2.x;
@@ -96,6 +197,7 @@ function GraphCanvas({
             positions.set(nodes[j].id, { x: p2.x - fx, y: p2.y - fy });
           }
         }
+
         for (const edge of edges) {
           const p1 = positions.get(edge.source)!;
           const p2 = positions.get(edge.target)!;
@@ -103,9 +205,10 @@ function GraphCanvas({
           const dy = p1.y - p2.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const force = (dist - 100) * 0.08;
-          positions.set(edge.source, { x: p1.x - (dx/dist)*force, y: p1.y - (dy/dist)*force });
-          positions.set(edge.target, { x: p2.x + (dx/dist)*force, y: p2.y + (dy/dist)*force });
+          positions.set(edge.source, { x: p1.x - (dx / dist) * force, y: p1.y - (dy / dist) * force });
+          positions.set(edge.target, { x: p2.x + (dx / dist) * force, y: p2.y + (dy / dist) * force });
         }
+
         for (const n of nodes) {
           const p = positions.get(n.id)!;
           positions.set(n.id, { x: p.x + (cx - p.x) * 0.05, y: p.y + (cy - p.y) * 0.05 });
@@ -115,43 +218,35 @@ function GraphCanvas({
 
     const positioned = nodes.map((n) => ({
       ...n,
-      ...(positions.get(n.id) || { x: cx, y: cy })
+      ...(positions.get(n.id) || { x: cx, y: cy }),
     }));
 
     const lookup = new Map(positioned.map((n) => [n.id, n]));
     return { positioned, edges, lookup };
-  }, [relationships, layoutType]);
+  }, [relationships, layoutType, viewWidth, viewHeight]);
 
   const highlightedEdgeKeys = useMemo(() => {
     const set = new Set<string>();
     for (let i = 0; i < highlightedPathChain.length - 1; i += 1) {
       const a = highlightedPathChain[i]?.toLowerCase();
       const b = highlightedPathChain[i + 1]?.toLowerCase();
-      if (a && b) {
-        set.add(`${a}=>${b}`);
-      }
+      if (a && b) set.add(`${a}=>${b}`);
     }
     return set;
   }, [highlightedPathChain]);
 
-  const highlightedNodeKeys = useMemo(() => {
-    return new Set(highlightedPathChain.map((n) => n.toLowerCase()));
-  }, [highlightedPathChain]);
+  const highlightedNodeKeys = useMemo(() => new Set(highlightedPathChain.map((n) => n.toLowerCase())), [highlightedPathChain]);
 
   const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (event) => {
     const target = event.target as Element;
-    
-    // Don't start panning if clicking on a button
-    if (target.tagName === 'BUTTON' || target.closest('button')) {
-      return;
-    }
-    
-    // Don't start panning if clicking on an SVG element (node or edge)
+
+    if (target.tagName === 'BUTTON' || target.closest('button')) return;
+
     if (target.tagName === 'g' || target.tagName === 'circle' || target.tagName === 'text') {
       setIsClickingNode(true);
       return;
     }
-    
+
     dragRef.current = {
       active: true,
       startX: event.clientX,
@@ -179,28 +274,18 @@ function GraphCanvas({
 
   return (
     <div
-      className="relative w-full h-full rounded-xl overflow-hidden glass-card"
-      style={{ border: '1px solid var(--border-color)', cursor: isPanning ? 'grabbing' : 'grab' }}
+      className="relative w-full h-full rounded-xl overflow-hidden kg-canvas"
+      style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
     >
-      <svg 
-        className="absolute inset-0 w-full h-full" 
-        viewBox="0 0 900 420" 
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 900 420"
         preserveAspectRatio="xMidYMid meet"
-        style={{ pointerEvents: 'auto' }}
-        onClick={(e) => {
-          // Detect if a node was clicked
-          if ((e.target as Element).closest('g')?.getAttribute('data-node-id')) {
-            const nodeId = (e.target as Element).closest('g')?.getAttribute('data-node-id');
-            if (nodeId) {
-              onNodeClick(nodeId);
-              e.stopPropagation();
-            }
-          }
-        }}
+        style={{ pointerEvents: 'auto', background: 'var(--card-bg)' }}
       >
         <g transform={`translate(${pan.x} ${pan.y}) translate(450 210) scale(${zoom}) translate(-450 -210)`}>
           {graph.edges.map((edge, i) => {
@@ -210,6 +295,13 @@ function GraphCanvas({
 
             const edgeKey = `${edge.source.toLowerCase()}=>${edge.target.toLowerCase()}`;
             const isHighlighted = highlightedEdgeKeys.has(edgeKey);
+
+            // Use accent variables for edge colors
+            let edgeColor = 'var(--accent-steel)';
+            if (isHighlighted) edgeColor = 'var(--accent-emerald)';
+            else if (edge.strength >= 80) edgeColor = 'var(--accent-crimson)';
+            else if (edge.strength >= 60) edgeColor = 'var(--accent-gold)';
+            else edgeColor = 'var(--accent-steel)';
             return (
               <line
                 key={`${edge.source}-${edge.target}-${i}`}
@@ -217,88 +309,1115 @@ function GraphCanvas({
                 y1={s.y}
                 x2={t.x}
                 y2={t.y}
-                stroke={isHighlighted ? '#00ff88' : edge.strength >= 80 ? '#ef4444' : edge.strength >= 60 ? '#f59e0b' : '#00d4ff'}
-                strokeOpacity={isHighlighted ? 0.95 : 0.45}
+                stroke={edgeColor}
+                strokeOpacity={isHighlighted ? 0.95 : 0.44}
                 strokeWidth={isHighlighted ? 2.6 : 1.2}
               />
             );
           })}
 
-          {graph.positioned.map((node) => (
-            <g 
-              key={node.id} 
-              data-node-id={node.id}
-              style={{ cursor: 'pointer' }} 
-              onClick={(e) => {
-                e.stopPropagation();
-                onNodeClick(node.id);
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              {highlightedNodeKeys.has(node.id.toLowerCase()) && (
-                <circle cx={node.x} cy={node.y} r={16} fill="rgba(0,255,136,0.15)" stroke="#00ff88" strokeWidth={1.5} />
-              )}
-              <circle
-                cx={node.x}
-                cy={node.y}
-                r={Math.max(4, Math.min(12, 4 + node.degree * 0.6))}
-                fill={highlightedNodeKeys.has(node.id.toLowerCase()) ? 'rgba(0,255,136,0.28)' : 'rgba(0,212,255,0.2)'}
-                stroke={highlightedNodeKeys.has(node.id.toLowerCase()) ? '#00ff88' : '#00d4ff'}
-                strokeWidth={highlightedNodeKeys.has(node.id.toLowerCase()) ? 1.6 : 1.1}
-                style={{ transition: 'all 0.2s ease', pointerEvents: 'auto' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as SVGCircleElement).setAttribute('r', String(Math.max(6, Math.min(14, 6 + node.degree * 0.6))));
-                  (e.currentTarget as SVGCircleElement).setAttribute('stroke-width', '2');
+          {graph.positioned.map((node) => {
+            const isHighlighted = highlightedNodeKeys.has(node.id.toLowerCase());
+            const defaultR = Math.max(4, Math.min(12, 4 + node.degree * 0.6));
+            const hoverR = Math.max(6, Math.min(14, 6 + node.degree * 0.6));
+            const shouldShowLabel = true;
+            const angle = Math.atan2(node.y - centerY, node.x - centerX);
+            const labelOffset = layoutType === 'circular' ? 18 : 18;
+            const labelX = layoutType === 'circular' ? node.x + Math.cos(angle) * labelOffset : node.x;
+            const labelY = layoutType === 'circular' ? node.y + Math.sin(angle) * labelOffset : node.y + 18;
+            const angleDeg = (angle * 180) / Math.PI;
+            const flipLabel = angleDeg > 90 || angleDeg < -90;
+            const labelRotation = flipLabel ? angleDeg + 180 : angleDeg;
+            const labelAnchor = layoutType === 'circular' ? (flipLabel ? 'end' : 'start') : 'middle';
+            const labelDx = layoutType === 'circular' ? (flipLabel ? -6 : 6) : 0;
+            const labelText = layoutType === 'circular' ? node.id : node.id.length > 14 ? `${node.id.slice(0, 12)}...` : node.id;
+
+            return (
+              <g
+                key={node.id}
+                data-node-id={node.id}
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNodeClick(node.id);
                 }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as SVGCircleElement).setAttribute('r', String(Math.max(4, Math.min(12, 4 + node.degree * 0.6))));
-                  (e.currentTarget as SVGCircleElement).setAttribute('stroke-width', highlightedNodeKeys.has(node.id.toLowerCase()) ? '1.6' : '1.1');
-                }}
-              />
-               <text x={node.x} y={node.y + 18} textAnchor="middle" fill="var(--text-muted)" fontSize={9} style={{ pointerEvents: 'none', fontWeight: 600 }}>
-                {node.id.length > 14 ? `${node.id.slice(0, 12)}...` : node.id}
-              </text>
-            </g>
-          ))}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {isHighlighted && (
+                  <circle cx={node.x} cy={node.y} r={16} fill="var(--accent-emerald)" fillOpacity={0.14} stroke="var(--accent-emerald)" strokeWidth={1.5} />
+                )}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={defaultR}
+                  fill={isHighlighted ? 'var(--accent-emerald)' : 'var(--accent-steel)'}
+                  fillOpacity={isHighlighted ? 0.26 : 0.18}
+                  stroke={isHighlighted ? 'var(--accent-emerald)' : 'var(--accent-steel)'}
+                  strokeWidth={isHighlighted ? 1.6 : 1.1}
+                  style={{ transition: 'all 0.2s ease', pointerEvents: 'auto' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.setAttribute('r', String(hoverR));
+                    e.currentTarget.setAttribute('stroke-width', '2');
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.setAttribute('r', String(defaultR));
+                    e.currentTarget.setAttribute('stroke-width', isHighlighted ? '1.6' : '1.1');
+                  }}
+                />
+                {shouldShowLabel && (
+                  <text
+                    x={labelX}
+                    y={labelY}
+                    dx={labelDx}
+                    dy={layoutType === 'circular' ? 3 : 0}
+                    textAnchor={labelAnchor}
+                    fill="var(--text-primary)"
+                    fontSize={layoutType === 'circular' ? 7.2 : 9}
+                    transform={layoutType === 'circular' ? `rotate(${labelRotation} ${labelX} ${labelY})` : undefined}
+                    style={{
+                      pointerEvents: 'none',
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                      paintOrder: 'stroke',
+                      stroke: 'var(--card-bg)',
+                      strokeWidth: 2.8,
+                      strokeLinecap: 'round',
+                      strokeLinejoin: 'round',
+                    }}
+                  >
+                    {labelText}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </g>
       </svg>
 
       <div className="absolute top-4 right-4 flex flex-col gap-2" style={{ zIndex: 50, pointerEvents: 'auto' }}>
-        <button 
-          type="button"
-          onClick={onZoomIn} 
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95" 
-          style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f', cursor: 'pointer', pointerEvents: 'auto' }}
-          title="Zoom In (⌘+)"
-        >
-          <ZoomIn size={13} style={{ color: '#00d4ff' }} />
+        <button type="button" onClick={onZoomIn} className="kg-canvas-btn" title="Zoom In (Ctrl+)">
+          <ZoomIn size={13} />
         </button>
-        <button 
-          type="button"
-          onClick={onZoomOut} 
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95" 
-          style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f', cursor: 'pointer', pointerEvents: 'auto' }}
-          title="Zoom Out (⌘-)"
-        >
-          <ZoomOut size={13} style={{ color: '#00d4ff' }} />
+        <button type="button" onClick={onZoomOut} className="kg-canvas-btn" title="Zoom Out (Ctrl-)">
+          <ZoomOut size={13} />
         </button>
-        <button 
-          type="button"
-          onClick={onReset} 
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95" 
-          style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f', cursor: 'pointer', pointerEvents: 'auto' }}
-          title="Reset Zoom (⌘0)"
-        >
-          <RefreshCw size={13} style={{ color: '#00d4ff' }} />
+        <button type="button" onClick={onReset} className="kg-canvas-btn" title="Reset Zoom (Ctrl+0)">
+          <RefreshCw size={13} />
         </button>
       </div>
 
-      <div className="absolute bottom-3 left-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.9)', border: '1px solid #1e3a5f' }}>
-        <div className="text-xs font-mono" style={{ color: '#00d4ff' }}>
+      <div className="absolute bottom-3 left-3 px-3 py-2 rounded-lg kg-chip">
+        <div className="text-xs font-mono" style={{ color: 'var(--kg-cyan)' }}>
           {graph.positioned.length.toLocaleString()} nodes · {graph.edges.length.toLocaleString()} edges
         </div>
       </div>
     </div>
+  );
+}
+
+function QueryControls({
+  queryInput,
+  setQueryInput,
+  sourceInput,
+  setSourceInput,
+  targetInput,
+  setTargetInput,
+  minStrength,
+  setMinStrength,
+  layoutType,
+  setLayoutType,
+  loading,
+  suggestions,
+  onSelectSuggestion,
+  onApply,
+  onReload,
+  source,
+  target,
+  relationshipCount,
+  pathCount,
+  isFallback,
+  error,
+}: {
+  queryInput: string;
+  setQueryInput: (value: string) => void;
+  sourceInput: string;
+  setSourceInput: (value: string) => void;
+  targetInput: string;
+  setTargetInput: (value: string) => void;
+  minStrength: number;
+  setMinStrength: (value: number) => void;
+  layoutType: 'force' | 'circular';
+  setLayoutType: (value: 'force' | 'circular') => void;
+  loading: boolean;
+  suggestions: QuerySuggestion[];
+  onSelectSuggestion: (value: string) => void;
+  onApply: () => void;
+  onReload: () => void;
+  source: string;
+  target: string;
+  relationshipCount: number;
+  pathCount: number;
+  isFallback: boolean;
+  error: string | null;
+}) {
+  const hasCustomQuery = source !== 'Russia' || target !== 'EU' || queryInput.length > 0 || minStrength > 0;
+  return (
+    <section className="glass-card rounded-xl animate-in overflow-hidden kg-command-shell" style={{ animationDelay: '0ms' }}>
+      <div className="kg-query-shell flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-4 lg:p-5" style={{ background: 'var(--card-bg)' }}>
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 px-3 h-10 rounded-lg kg-input-shell kg-query-input min-w-[240px] flex-1 md:flex-none" style={{ background: 'var(--background)', border: '1px solid var(--border-color)' }}>
+            <Search size={14} style={{ color: 'var(--accent-steel)' }} />
+            <input
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onApply();
+              }}
+              placeholder="Search source/target/relation"
+              className="bg-transparent text-sm outline-none w-full kg-query-input-field"
+              style={{ color: 'var(--text-primary)' }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 px-3 h-10 rounded-lg kg-input-shell kg-query-input kg-query-route" style={{ background: 'var(--background)', border: '1px solid var(--border-color)' }}>
+            <input
+              value={sourceInput}
+              onChange={(e) => setSourceInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onApply();
+              }}
+              placeholder="Source"
+              className="bg-transparent text-sm outline-none w-24 kg-query-input-field"
+              style={{ color: 'var(--kg-title)' }}
+            />
+            <span className="text-sm font-bold" style={{ color: 'var(--accent-gold)' }}>{'->'}</span>
+            <input
+              value={targetInput}
+              onChange={(e) => setTargetInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onApply();
+              }}
+              placeholder="Target"
+              className="bg-transparent text-sm outline-none w-24 kg-query-input-field"
+              style={{ color: 'var(--text-primary)' }}
+            />
+          </div>
+
+          <button
+            onClick={onApply}
+            disabled={loading}
+            className="px-4 h-10 rounded-lg text-xs font-bold transition-all kg-cta whitespace-nowrap"
+            style={{
+              opacity: loading ? 0.6 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              background: 'var(--accent-gold)',
+              color: 'var(--background)',
+              border: 'none',
+            }}
+          >
+            {loading ? 'LOADING...' : 'APPLY QUERY'}
+          </button>
+
+          <div className="flex p-1 h-10 rounded-lg kg-layout-toggle items-center" style={{ background: 'var(--background)', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setLayoutType('force')}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${layoutType === 'force' ? '' : ''}`}
+              style={{
+                background: layoutType === 'force' ? 'var(--accent-steel)' : 'transparent',
+                color: layoutType === 'force' ? 'var(--background)' : 'var(--text-primary)',
+                border: layoutType === 'force' ? '1.5px solid var(--accent-steel)' : '1px solid var(--border-color)',
+              }}
+            >
+              ORB
+            </button>
+            <button
+              onClick={() => setLayoutType('circular')}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${layoutType === 'circular' ? '' : ''}`}
+              style={{
+                background: layoutType === 'circular' ? 'var(--accent-gold)' : 'transparent',
+                color: layoutType === 'circular' ? 'var(--background)' : 'var(--text-primary)',
+                border: layoutType === 'circular' ? '1.5px solid var(--accent-gold)' : '1px solid var(--border-color)',
+              }}
+            >
+              RADIUS
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-end xl:self-auto">
+          <div className="flex items-center gap-2 px-3 h-10 rounded-lg kg-input-shell kg-query-input kg-query-filter" style={{ background: 'var(--background)', border: '1px solid var(--border-color)' }}>
+            <Filter size={12} style={{ color: 'var(--accent-steel)' }} />
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent-steel)' }}>Min Strength</label>
+            <select
+              value={minStrength}
+              onChange={(e) => setMinStrength(Number(e.target.value))}
+              className="bg-transparent text-sm outline-none kg-query-select"
+              style={{ color: 'var(--text-primary)', cursor: 'pointer' }}
+            >
+              <option value={0}>0</option>
+              <option value={40}>40</option>
+              <option value={60}>60</option>
+              <option value={80}>80</option>
+            </select>
+          </div>
+
+          <button
+            onClick={onReload}
+            disabled={loading}
+            className="kg-refresh-btn px-3 h-10 rounded-lg text-sm font-semibold transition-all"
+            style={{
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--accent-steel)',
+              color: 'var(--background)',
+              border: 'none',
+            }}
+          >
+            {loading ? 'SYNCING...' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {(hasCustomQuery || (queryInput.trim().length > 0 && suggestions.length > 0)) && (
+        <div className="px-4 lg:px-5 pb-4 pt-1 flex flex-col gap-3 kg-command-footer">
+          {hasCustomQuery && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--kg-cyan)' }}>
+                Active Query
+              </span>
+              <span className="kg-command-pill">Path: {source} {'->'} {target}</span>
+              {minStrength > 0 && <span className="kg-command-pill">Min Strength: {minStrength}%</span>}
+              <span className="kg-command-pill">{relationshipCount} links</span>
+              <span className="kg-command-pill">{pathCount} paths</span>
+            </div>
+          )}
+
+          {queryInput.trim().length > 0 && suggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--kg-muted)' }}>
+                Similar Suggestions
+              </span>
+              {suggestions.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => onSelectSuggestion(item.value)}
+                  className="px-2.5 py-1 rounded-md text-xs font-semibold transition-all kg-command-pill kg-command-suggestion"
+                >
+                  {item.value} ({Math.round(item.score * 100)}%)
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QueryStatus({
+  source,
+  target,
+  queryInput,
+  minStrength,
+  relationshipCount,
+  pathCount,
+}: {
+  source: string;
+  target: string;
+  queryInput: string;
+  minStrength: number;
+  relationshipCount: number;
+  pathCount: number;
+}) {
+  const hasCustomQuery = source !== 'Russia' || target !== 'EU' || queryInput.length > 0 || minStrength > 0;
+  if (!hasCustomQuery) return null;
+
+  return (
+    <div className="px-4 py-3 rounded-lg mt-4" style={{ background: 'var(--kg-surface-soft)', border: '1px solid var(--kg-border)' }}>
+      <div className="text-xs" style={{ color: 'var(--kg-cyan)', fontWeight: 700, marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+        ACTIVE QUERY
+      </div>
+      <div className="text-xs space-y-1" style={{ color: 'var(--kg-text-soft)' }}>
+        <div>
+          <span style={{ color: 'var(--kg-muted)' }}>Paths:</span> {source} {'->'} {target}
+        </div>
+        {queryInput && (
+          <div>
+            <span style={{ color: 'var(--kg-muted)' }}>Search:</span> {queryInput}
+          </div>
+        )}
+        {minStrength > 0 && (
+          <div>
+            <span style={{ color: 'var(--kg-muted)' }}>Min Strength:</span> {minStrength}%
+          </div>
+        )}
+        <div style={{ color: 'var(--kg-muted)', fontSize: '0.65rem', marginTop: '0.5rem' }}>
+          Found {relationshipCount} relationships • {pathCount} path(s)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DataSourceBanner({
+  loading,
+  isFallback,
+  error,
+}: {
+  loading: boolean;
+  isFallback: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-primary text-[10px] font-black uppercase tracking-widest">Graph Feed Status</div>
+          <div className="text-secondary text-xs mt-1">Loading knowledge graph endpoints and relation metrics...</div>
+        </div>
+        <span className="status-warning">SYNCING</span>
+      </div>
+    );
+  }
+
+  if (isFallback) {
+    return (
+      <div className="glass-card rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-primary text-[10px] font-black uppercase tracking-widest">Sample Data Active</div>
+          <div className="text-secondary text-xs mt-1">
+            Live knowledge graph API unavailable{error ? `: ${error}` : ''}. Current nodes, paths, and relationships are mock fallback data.
+          </div>
+        </div>
+        <span className="status-critical">SAMPLE</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+      <div>
+        <div className="text-primary text-[10px] font-black uppercase tracking-widest">Graph Status</div>
+        <div className="text-secondary text-xs mt-1">Knowledge graph metrics, paths, and relationships are coming from backend APIs.</div>
+      </div>
+      <span className="status-online">LIVE</span>
+    </div>
+  );
+}
+
+function MetricsStrip({
+  totalNodes,
+  relationshipCount,
+  shaclViolations,
+  conflictRatio,
+  graphDepth,
+}: {
+  totalNodes: number;
+  relationshipCount: number;
+  shaclViolations: number;
+  conflictRatio: number | string;
+  graphDepth: number;
+}) {
+  const cards = [
+    { label: 'Total Nodes', value: totalNodes.toLocaleString(), subValue: 'Entity graph footprint', bgColor: '#bfdbfe', textColor: '#1e3a8a', icon: Network },
+    { label: 'Loaded Relationships', value: relationshipCount.toLocaleString(), subValue: 'Current edge slice', bgColor: '#ddd6fe', textColor: '#4c1d95', icon: GitBranch },
+    { label: 'SHACL Violations', value: shaclViolations.toLocaleString(), subValue: 'Schema quality alerts', bgColor: shaclViolations > 0 ? '#fde68a' : '#bbf7d0', textColor: shaclViolations > 0 ? '#78350f' : '#166534', icon: ShieldAlert },
+    { label: 'Conflict Risk Ratio', value: `${conflictRatio}%`, subValue: 'High-risk edges', bgColor: '#fecaca', textColor: '#991b1b', icon: AlertTriangle },
+    { label: 'Path Depth', value: graphDepth.toString(), subValue: 'Resolved traversal hops', bgColor: '#a7f3d0', textColor: '#064e3b', icon: Route },
+  ];
+
+  return (
+    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in" style={{ animationDelay: '80ms' }}>
+      {cards.map((card) => (
+        <StatCard
+          key={card.label}
+          label={card.label}
+          value={card.value}
+          subValue={card.subValue}
+          icon={card.icon}
+          bgColor={card.bgColor}
+          textColor={card.textColor}
+        />
+      ))}
+    </section>
+  );
+}
+
+function GraphPanel({
+  relationships,
+  zoom,
+  setZoom,
+  onNodeClick,
+  highlightedPathChain,
+  layoutType,
+  isMounted,
+}: {
+  relationships: Relationship[];
+  zoom: number;
+  setZoom: (value: number | ((prev: number) => number)) => void;
+  onNodeClick: (nodeId: string) => void;
+  highlightedPathChain: string[];
+  layoutType: 'force' | 'circular';
+  isMounted: boolean;
+}) {
+  return (
+    <div className="lg:col-span-8 glass-card rounded-xl p-0 overflow-hidden h-[430px] lg:h-[520px]">
+      <div className="p-4 flex items-center justify-between bg-black/[0.04]">
+        <h3 className="font-bold text-sm text-primary uppercase">Interactive Network Surface</h3>
+        <div className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--kg-muted)' }}>click node to inspect</div>
+      </div>
+      <div className="h-[374px] lg:h-[458px] rounded-xl overflow-hidden kg-graph-wrap m-4 mt-0">
+        {isMounted ? (
+          <GraphCanvas
+            relationships={relationships}
+            zoom={zoom}
+            onZoomIn={() => setZoom((z) => Math.min(2.2, z + 0.12))}
+            onZoomOut={() => setZoom((z) => Math.max(0.5, z - 0.12))}
+            onReset={() => setZoom(1)}
+            onNodeClick={onNodeClick}
+            highlightedPathChain={highlightedPathChain}
+            layoutType={layoutType}
+          />
+        ) : (
+          <div className="relative w-full h-full rounded-xl flex items-center justify-center" style={{ border: '1px solid var(--kg-border)' }}>
+            <span className="text-xs font-mono animate-pulse" style={{ color: 'var(--kg-cyan)' }}>Initializing Neural Overlays...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RelationshipPanel({
+  relationships,
+  loading,
+  onSelectRelationship,
+  className = 'lg:col-span-4',
+}: {
+  relationships: Relationship[];
+  loading: boolean;
+  onSelectRelationship: (relationship: Relationship) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`${className} glass-card rounded-xl p-0 overflow-hidden flex flex-col h-[430px] lg:h-[520px]`}>
+      <div className="p-4 flex items-center justify-between bg-black/[0.04]">
+        <h3 className="font-bold text-sm text-primary uppercase tracking-wider">Active Relationships</h3>
+        <span className="text-[10px] font-black uppercase text-secondary">{relationships.length}</span>
+      </div>
+      <div className="flex-1 overflow-hidden p-4 pt-3">
+        <div className="table-scroll-container rounded-lg" style={{ border: '1px solid var(--kg-border)' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Link</th>
+                <th style={{ textAlign: 'left' }}>Type</th>
+                <th style={{ textAlign: 'left' }}>Strength</th>
+                <th style={{ textAlign: 'left' }}>Source Link</th>
+                <th style={{ textAlign: 'left' }}>Trace</th>
+              </tr>
+            </thead>
+            <tbody>
+              {relationships.map((rel, idx) => {
+                const safeRelUrl = getSafeExternalUrl(rel.url);
+                return (
+                <tr
+                  key={`${rel.source}-${rel.target}-${idx}`}
+                  onClick={() => onSelectRelationship(rel)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td>
+                    <div className="font-semibold text-xs" style={{ color: 'var(--kg-text)' }}>{rel.source} {'->'} {rel.target}</div>
+                  </td>
+                  <td>
+                    <span className="text-[11px] font-semibold" style={{ color: 'var(--kg-cyan)' }}>{rel.relation}</span>
+                  </td>
+                  <td>
+                    <span
+                      className="font-mono text-xs font-bold"
+                      style={{ color: rel.strength >= 80 ? '#ff8a8a' : rel.strength >= 60 ? '#ffb662' : '#2ed7b3' }}
+                    >
+                      {rel.strength}%
+                    </span>
+                  </td>
+                  <td>
+                    {safeRelUrl ? (
+                      <a
+                        href={safeRelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[11px] font-semibold hover:underline"
+                        style={{ color: 'var(--kg-cyan)' }}
+                      >
+                        OPEN
+                      </a>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: 'var(--kg-muted)' }}>N/A</span>
+                    )}
+                  </td>
+                  <td>
+                    {safeRelUrl ? (
+                      <a href={safeRelUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: 'var(--kg-cyan)' }}>
+                        <ZoomIn size={12} />
+                      </a>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: 'var(--kg-muted)' }}>N/A</span>
+                    )}
+                  </td>
+                </tr>
+              )})}
+            </tbody>
+          </table>
+        </div>
+
+        {!loading && relationships.length === 0 && (
+          <div className="text-xs mt-3" style={{ color: 'var(--kg-muted)' }}>No relationships for the current filter/query.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PathsPanel({
+  paths,
+  source,
+  target,
+  selectedPathIndex,
+  setSelectedPathIndex,
+  loading,
+  className = 'xl:col-span-2',
+}: {
+  paths: PathEntry[];
+  source: string;
+  target: string;
+  selectedPathIndex: number;
+  setSelectedPathIndex: (value: number) => void;
+  loading: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`${className} glass-card rounded-xl p-0 overflow-hidden`}>
+      <div className="flex items-center justify-between p-4 bg-black/[0.04]">
+        <h3 className="font-bold text-sm text-primary uppercase">{`Discovered Paths (${source} -> ${target})`}</h3>
+        <span className="text-xs" style={{ color: 'var(--kg-muted)' }}>{paths.length} path(s) • click to highlight</span>
+      </div>
+
+      <div className="space-y-3 max-h-[420px] overflow-y-auto p-4 pt-3">
+        {paths.map((path, i) => {
+          const selected = selectedPathIndex === i;
+          return (
+            <button
+              key={i}
+              onClick={() => setSelectedPathIndex(i)}
+              className="w-full text-left p-3 rounded-lg transition-all"
+              style={{
+                background: selected ? 'var(--kg-path-selected-bg)' : 'var(--kg-path-bg)',
+                border: selected ? '1px solid var(--kg-path-selected-border)' : '1px solid var(--kg-border)',
+              }}
+            >
+              <div className="text-[10px] mb-1 font-bold" style={{ color: 'var(--kg-muted)' }}>
+                Strength {path.strength}% · Hops {path.hops ?? Math.max(0, path.chain.length - 1)}
+              </div>
+              <div className="text-xs font-bold" style={{ color: selected ? '#1cb896' : 'var(--kg-cyan)' }}>
+                {path.chain.join(' -> ')}
+              </div>
+            </button>
+          );
+        })}
+
+        {!loading && paths.length === 0 && (
+          <div className="text-xs mt-3" style={{ color: 'var(--kg-muted)' }}>No path found for this source/target in current graph sample.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LegendPanel() {
+  return (
+    <div className="glass-card rounded-xl p-0 overflow-hidden">
+      <div className="p-4 bg-black/[0.04]">
+        <h3 className="font-bold text-sm text-primary uppercase">Entity/Edge Legend</h3>
+      </div>
+      <div className="space-y-3 max-h-[420px] overflow-y-auto p-4 pt-3">
+        {ENTITY_CATEGORIES.map((cat) => (
+          <div key={cat.label} className="rounded-lg p-3" style={{ background: 'var(--kg-panel-bg)', border: '1px solid var(--kg-border)' }}>
+            <div className="text-xs font-bold mb-1" style={{ color: cat.color }}>{cat.label}</div>
+            <div className="text-[10px] leading-relaxed" style={{ color: 'var(--kg-muted)' }}>{cat.entities.join(' • ')}</div>
+          </div>
+        ))}
+
+        <div className="table-scroll-container rounded-lg" style={{ border: '1px solid var(--kg-border)' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Relation Type</th>
+                <th style={{ textAlign: 'left' }}>Description</th>
+                <th style={{ textAlign: 'left' }}>Class</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RELATIONSHIP_TYPES.slice(0, 6).map((rel) => (
+                <tr key={rel.type}>
+                  <td>
+                    <span className="text-xs font-semibold" style={{ color: rel.color }}>{rel.type}</span>
+                  </td>
+                  <td>
+                    <span className="text-[11px]" style={{ color: 'var(--kg-muted)' }}>{rel.description}</span>
+                  </td>
+                  <td>
+                    <span className="text-[11px] uppercase" style={{ color: 'var(--kg-text)' }}>{rel.strength}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NodeAnalysisPanel({
+  selectedNodeId,
+  selectedNodeStats,
+  selectedNodeRelationships,
+  dataRelationships,
+  selectedRelationship,
+  onClose,
+}: {
+  selectedNodeId: string;
+  selectedNodeStats: NodeStats | null;
+  selectedNodeRelationships: Relationship[];
+  dataRelationships: Relationship[];
+  selectedRelationship: Relationship | null;
+  onClose: () => void;
+}) {
+  const selectedNodeTraceUrl = getSafeExternalUrl(
+    dataRelationships.find((r) => r.source === selectedNodeId || r.target === selectedNodeId)?.url
+  );
+  return (
+    <section className="glass-card kg-analysis-shell rounded-xl overflow-hidden animate-in w-full" style={{ animationDelay: '260ms' }}>
+      <div className="p-5 flex items-center justify-between bg-black/[0.04] kg-analysis-header">
+        <div>
+          <h3 className="font-bold text-sm text-primary uppercase">Node Analysis</h3>
+          <p className="text-xs mt-1 text-secondary">
+            {selectedRelationship
+              ? `${selectedRelationship.source} -> ${selectedRelationship.target} (${selectedRelationship.relation})`
+              : `${selectedNodeId} relationship drilldown`}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 rounded-lg text-xs font-bold"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', cursor: 'pointer' }}
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 p-5 pt-4 kg-analysis-content">
+        <div className="xl:col-span-1 space-y-3">
+          <div className="rounded-xl p-4 kg-analysis-block" style={{ background: 'var(--kg-panel-bg)', border: '1px solid var(--kg-border)' }}>
+            <h4 className="font-bold text-xs uppercase tracking-wider mb-3" style={{ color: 'var(--kg-cyan)' }}>Node Properties</h4>
+            <div className="table-scroll-container rounded-lg" style={{ border: '1px solid var(--kg-border)' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Property</th>
+                    <th style={{ textAlign: 'left' }}>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span className="text-xs" style={{ color: 'var(--kg-muted)' }}>Name</span></td>
+                    <td><span className="text-xs font-semibold" style={{ color: 'var(--kg-text)' }}>{selectedNodeId}</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="text-xs" style={{ color: 'var(--kg-muted)' }}>Actor Code</span></td>
+                    <td>
+                      <span className="text-xs font-mono" style={{ color: '#9ecbff' }}>
+                        {dataRelationships.find((r) => r.source === selectedNodeId)?.subject_properties?.actor_code ||
+                          dataRelationships.find((r) => r.target === selectedNodeId)?.object_properties?.actor_code ||
+                          'N/A'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span className="text-xs" style={{ color: 'var(--kg-muted)' }}>Confidence</span></td>
+                    <td><span className="text-xs font-mono" style={{ color: '#2ed7b3' }}>92.4%</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="text-xs" style={{ color: 'var(--kg-muted)' }}>Source Doc</span></td>
+                    <td><span className="text-xs font-mono uppercase" style={{ color: '#ffb662' }}>GDELT 2.0</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="text-xs" style={{ color: 'var(--kg-muted)' }}>Trace URL</span></td>
+                    <td>
+                      {selectedNodeTraceUrl ? (
+                        <a
+                          href={selectedNodeTraceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:underline text-xs font-mono"
+                          style={{ color: 'var(--kg-cyan)' }}
+                        >
+                          LINK
+                        </a>
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--kg-muted)' }}>NONE</span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {selectedNodeStats && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-3">
+              <div className="p-3 rounded-lg kg-analysis-block" style={{ background: 'var(--kg-panel-bg)', border: '1px solid var(--kg-border)' }}>
+                <div className="text-xs" style={{ color: 'var(--kg-muted)' }}>Incoming Connections</div>
+                <div className="text-lg font-bold" style={{ color: '#37c9ff' }}>{selectedNodeStats.incomingConnections}</div>
+              </div>
+              <div className="p-3 rounded-lg kg-analysis-block" style={{ background: 'var(--kg-panel-bg)', border: '1px solid var(--kg-border)' }}>
+                <div className="text-xs" style={{ color: 'var(--kg-muted)' }}>Outgoing Connections</div>
+                <div className="text-lg font-bold" style={{ color: '#6ea8ff' }}>{selectedNodeStats.outgoingConnections}</div>
+              </div>
+              <div className="p-3 rounded-lg kg-analysis-block" style={{ background: 'var(--kg-panel-bg)', border: '1px solid var(--kg-border)' }}>
+                <div className="text-xs" style={{ color: 'var(--kg-muted)' }}>Avg Connection Strength</div>
+                <div className="text-lg font-bold" style={{ color: '#ffb662' }}>{selectedNodeStats.avgStrength}%</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="xl:col-span-2">
+          <h4 className="font-bold text-xs mb-3 uppercase tracking-wider" style={{ color: 'var(--kg-cyan)' }}>Connected Relationships</h4>
+          <div className="max-h-[560px] overflow-hidden">
+            <div className="table-scroll-container rounded-lg kg-analysis-block" style={{ border: '1px solid var(--kg-border)', maxHeight: '100%' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Link</th>
+                    <th style={{ textAlign: 'left' }}>Type</th>
+                    <th style={{ textAlign: 'left' }}>Strength</th>
+                    <th style={{ textAlign: 'left' }}>Source</th>
+                    <th style={{ textAlign: 'left' }}>Trace</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedNodeRelationships.map((rel, idx) => {
+                    const safeRelUrl = getSafeExternalUrl(rel.url);
+                    const relType = RELATIONSHIP_TYPES.find((rt) => rt.type.toLowerCase() === rel.relation.toLowerCase());
+                    return (
+                      <tr key={idx}>
+                        <td>
+                          <span className="text-xs font-semibold" style={{ color: 'var(--kg-text)' }}>
+                            {rel.source} {'->'} {rel.target}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-xs font-semibold" style={{ color: relType?.color || '#6ea8ff' }}>{rel.relation}</span>
+                        </td>
+                        <td>
+                          <span
+                            className="text-xs font-mono font-bold"
+                            style={{ color: rel.strength >= 80 ? '#ff8a8a' : rel.strength >= 60 ? '#ffb662' : '#2ed7b3' }}
+                          >
+                            {rel.strength}%
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-xs font-mono uppercase" style={{ color: '#6ea8ff' }}>GDELT 2.0</span>
+                        </td>
+                        <td>
+                          {safeRelUrl ? (
+                            <a href={safeRelUrl} target="_blank" rel="noreferrer" className="hover:underline text-xs" style={{ color: 'var(--kg-cyan)' }}>
+                              DOC
+                            </a>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--kg-muted)' }}>N/A</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+        {selectedNodeRelationships.length === 0 && (
+          <div className="text-xs mt-3" style={{ color: 'var(--kg-muted)' }}>No relationships found for this node.</div>
+        )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function KnowledgeGraphThemeStyles() {
+  return (
+    <style jsx>{`
+      .kg-shell {
+        --kg-text: var(--text-primary);
+        --kg-text-soft: var(--text-secondary);
+        --kg-title: var(--text-primary);
+        --kg-muted: var(--text-muted);
+        --kg-label: var(--text-primary);
+        --kg-blue: color-mix(in srgb, var(--accent-steel) 70%, #3b82f6 30%);
+        --kg-cyan: var(--accent-gold);
+        --kg-border: var(--border-color);
+        --kg-surface: var(--card-bg);
+        --kg-surface-soft: color-mix(in srgb, var(--card-bg) 92%, var(--accent-gold-dim));
+        --kg-panel-bg: color-mix(in srgb, var(--card-bg) 88%, var(--accent-gold-dim));
+        --kg-input-bg: color-mix(in srgb, var(--card-bg) 84%, var(--accent-gold-dim));
+        --kg-refresh-bg: color-mix(in srgb, var(--accent-gold-dim) 80%, transparent);
+        --kg-refresh-border: color-mix(in srgb, var(--accent-gold) 30%, transparent);
+        --kg-path-bg: color-mix(in srgb, var(--card-bg) 86%, var(--accent-gold-dim));
+        --kg-path-selected-bg: color-mix(in srgb, var(--accent-emerald) 16%, var(--card-bg));
+        --kg-path-selected-border: color-mix(in srgb, var(--accent-emerald) 42%, var(--border-color));
+        background: transparent;
+      }
+
+      .kg-shell :global(.text-primary) {
+        color: var(--kg-title) !important;
+      }
+
+      .kg-shell :global(.text-secondary) {
+        color: var(--kg-text-soft) !important;
+      }
+
+      .kg-main {
+        color: var(--kg-text);
+      }
+
+      .kg-card {
+        background: var(--kg-surface);
+        border: 1px solid color-mix(in srgb, var(--accent-gold) 35%, var(--kg-border));
+        box-shadow: 0 4px 12px rgba(178, 144, 79, 0.15);
+        transition: all 0.2s ease;
+      }
+
+      .kg-analysis-shell {
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--card-bg) 98%, #000), color-mix(in srgb, var(--card-bg) 92%, var(--accent-gold-dim))),
+          radial-gradient(420px 180px at 18% 0%, color-mix(in srgb, var(--accent-gold-dim) 80%, transparent), transparent 72%);
+        border: 1px solid color-mix(in srgb, var(--accent-gold) 24%, var(--border-color));
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.26), 0 0 0 1px color-mix(in srgb, var(--accent-gold) 8%, transparent) inset;
+      }
+
+      .kg-analysis-header {
+        border-bottom: 1px solid color-mix(in srgb, var(--accent-gold) 22%, var(--kg-border));
+      }
+
+      .kg-analysis-content {
+        align-items: start;
+      }
+
+      .kg-analysis-block {
+        background: color-mix(in srgb, var(--kg-panel-bg) 88%, #000);
+      }
+
+      .kg-hero {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .kg-hero::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(120deg, transparent 0%, color-mix(in srgb, var(--accent-gold-dim) 65%, transparent) 45%, transparent 100%);
+      }
+
+      .kg-input-shell {
+        background: var(--kg-input-bg);
+        border: 1px solid var(--kg-border);
+      }
+
+      .kg-query-shell {
+        background: transparent;
+        border-top: 1px solid var(--kg-border);
+      }
+
+      .kg-query-input {
+        border: 1px solid var(--kg-border);
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .kg-query-input:focus-within {
+        border-color: color-mix(in srgb, var(--accent-gold) 70%, white 10%);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-gold) 20%, transparent);
+      }
+
+      .kg-query-input-field::placeholder {
+        color: var(--kg-muted);
+      }
+
+      .kg-query-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        padding-right: 0.2rem;
+        font-weight: 700;
+        color: var(--kg-text) !important;
+      }
+
+      .kg-refresh-btn {
+        background: transparent;
+        border: 1px solid var(--kg-border);
+        color: var(--kg-blue);
+      }
+
+      .kg-refresh-btn:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--accent-gold) 75%, white 10%);
+        box-shadow: 0 8px 16px rgba(178, 144, 79, 0.2);
+      }
+
+      .kg-cta {
+        background: var(--accent-gold);
+        color: #0f0a00;
+        border: 1px solid var(--accent-gold);
+        letter-spacing: 0.06em;
+        box-shadow: none;
+      }
+
+      :global(html.light) .kg-cta {
+        color: #1b1305;
+      }
+
+      .kg-cta:hover {
+        transform: translateY(-1px);
+      }
+
+      .kg-layout-toggle {
+        background: transparent;
+        border: 1px solid var(--kg-border);
+      }
+
+      .kg-layout-active {
+        background: var(--accent-gold);
+        color: #1b1305;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-gold) 72%, white);
+      }
+
+      .kg-layout-inactive {
+        color: var(--kg-blue);
+      }
+
+      .kg-layout-inactive:hover {
+        color: var(--kg-text);
+      }
+
+      .kg-graph-wrap {
+        border: 1px solid color-mix(in srgb, var(--accent-gold) 35%, var(--kg-border));
+        background:
+          radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent-gold-dim) 75%, transparent), transparent 60%),
+          radial-gradient(circle at 50% 50%, rgba(69, 124, 196, 0.1), transparent 72%),
+          linear-gradient(180deg, #081121, #040914);
+      }
+
+      .kg-canvas {
+        border: 1px solid color-mix(in srgb, var(--accent-gold) 35%, var(--kg-border));
+        background: transparent;
+      }
+
+      .kg-canvas-btn {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--kg-cyan);
+        background: var(--kg-input-bg);
+        border: 1px solid var(--kg-border);
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+      }
+
+      .kg-canvas-btn:hover {
+        transform: translateY(-1px);
+        border-color: var(--accent-gold);
+      }
+
+      .kg-chip {
+        background: var(--kg-input-bg);
+        border: 1px solid var(--kg-border);
+      }
+
+      .kg-command-shell {
+        border: 1px solid var(--kg-border);
+        box-shadow: none;
+      }
+
+      .kg-command-hero {
+        background: transparent;
+      }
+
+      .kg-command-footer {
+        border-top: 1px solid var(--kg-border);
+      }
+
+      .kg-command-pill {
+        padding: 0.38rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid var(--kg-border);
+        background: transparent;
+        color: var(--kg-text-soft);
+        font-size: 0.76rem;
+        font-weight: 600;
+      }
+
+      .kg-command-suggestion:hover {
+        border-color: var(--accent-gold);
+        color: var(--kg-title);
+      }
+
+      .kg-rel-item {
+        background: var(--kg-panel-bg);
+        border: 1px solid var(--kg-border);
+      }
+
+      .kg-rel-item:hover {
+        background: var(--table-row-hover);
+        border-color: color-mix(in srgb, var(--accent-gold) 45%, transparent);
+        transform: translateX(2px);
+      }
+
+      .kg-metric-value {
+        text-shadow: none;
+      }
+
+      .animate-in {
+        opacity: 0;
+        transform: translateY(8px);
+        animation: kgFadeIn 0.5s ease forwards;
+      }
+
+      @keyframes kgFadeIn {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .kg-main {
+          padding-left: 0.9rem;
+          padding-right: 0.9rem;
+        }
+      }
+    `}</style>
   );
 }
 
@@ -313,6 +1432,7 @@ export default function KnowledgeGraphPage() {
   const [zoom, setZoom] = useState(1);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number>(-1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedRelationship, setSelectedRelationship] = useState<Relationship | null>(null);
   const [layoutType, setLayoutType] = useState<'force' | 'circular'>('force');
   const [isMounted, setIsMounted] = useState(false);
   const nodeAnalysisRef = useRef<HTMLDivElement>(null);
@@ -321,113 +1441,6 @@ export default function KnowledgeGraphPage() {
     setIsMounted(true);
   }, []);
 
-  // Entity category system
-  const entityCategories = [
-    {
-      emoji: '',
-      label: 'Geopolitical',
-      color: '#00d4ff',
-      entities: ['Country', 'State/Region', 'City', 'Territory'],
-    },
-    {
-      emoji: '',
-      label: 'Actors',
-      color: '#8b5cf6',
-      entities: ['Leaders', 'Organizations', 'Governments', 'NGOs'],
-    },
-    {
-      emoji: '',
-      label: 'Governance',
-      color: '#00ff88',
-      entities: ['Policies', 'Schemes', 'Treaties', 'Laws'],
-    },
-    {
-      emoji: '',
-      label: 'Economy',
-      color: '#f59e0b',
-      entities: ['GDP', 'Trade', 'Industry', 'Inflation'],
-    },
-    {
-      emoji: '',
-      label: 'Environment',
-      color: '#06b6d4',
-      entities: ['Flood', 'Cyclone', 'Climate Events', 'Disasters'],
-    },
-    {
-      emoji: '',
-      label: 'Events',
-      color: '#ef4444',
-      entities: ['News', 'Agreements', 'Conflicts', 'Incidents'],
-    },
-    {
-      emoji: '',
-      label: 'Social',
-      color: '#ec4899',
-      entities: ['Sentiment', 'Population', 'Public Opinion', 'Culture'],
-    },
-  ];
-
-  // Relationship types - most important connections
-  const relationshipTypes = [
-    {
-      icon: '',
-      type: 'trades_with',
-      description: 'Commercial exchange',
-      color: '#f59e0b',
-      strength: 'economic',
-    },
-    {
-      icon: '',
-      type: 'allies_with',
-      description: 'Political alliance',
-      color: '#00ff88',
-      strength: 'diplomatic',
-    },
-    {
-      icon: '',
-      type: 'conflicts_with',
-      description: 'Active conflict',
-      color: '#ef4444',
-      strength: 'critical',
-    },
-    {
-      icon: '',
-      type: 'affects',
-      description: 'Direct influence',
-      color: '#8b5cf6',
-      strength: 'high',
-    },
-    {
-      icon: '',
-      type: 'impacts',
-      description: 'Cascading effect',
-      color: '#06b6d4',
-      strength: 'medium',
-    },
-    {
-      icon: '',
-      type: 'located_in',
-      description: 'Geographic relation',
-      color: '#00d4ff',
-      strength: 'structural',
-    },
-    {
-      icon: '',
-      type: 'belongs_to',
-      description: 'Organizational membership',
-      color: '#8b5cf6',
-      strength: 'structural',
-    },
-    {
-      icon: '',
-      type: 'invests_in',
-      description: 'Financial investment',
-      color: '#f59e0b',
-      strength: 'economic',
-    },
-  ];
-
-  // Handle keyboard shortcuts for zoom
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) {
@@ -443,18 +1456,24 @@ export default function KnowledgeGraphPage() {
         }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Scroll to Node Analysis section when a node is clicked
+  // Live query mode: automatically apply search/source/target as user types.
   useEffect(() => {
-    if (selectedNodeId && nodeAnalysisRef.current) {
-      nodeAnalysisRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [selectedNodeId]);
+    const timer = setTimeout(() => {
+      setSearchQuery(queryInput.trim());
+      setSource(sourceInput.trim() || 'Russia');
+      setTarget(targetInput.trim() || 'EU');
+      setSelectedPathIndex(-1);
+    }, 350);
 
-  const { data, loading, error, reload } = useKnowledgeGraphMetrics({
+    return () => clearTimeout(timer);
+  }, [queryInput, sourceInput, targetInput]);
+
+  const { data, loading, error, reload, isFallback } = useKnowledgeGraphMetrics({
     source,
     target,
     searchQuery,
@@ -464,397 +1483,212 @@ export default function KnowledgeGraphPage() {
     maxPaths: 4,
   });
 
+  useEffect(() => {
+    if (selectedNodeId && nodeAnalysisRef.current) {
+      nodeAnalysisRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedNodeId]);
+
+  const relationships = useMemo(() => {
+    const map = new Map<string, Relationship>();
+
+    data.relationships.forEach((rel) => {
+      const key = [
+        rel.source.trim().toLowerCase(),
+        rel.target.trim().toLowerCase(),
+        rel.relation.trim().toLowerCase(),
+      ].join('|');
+
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, rel);
+        return;
+      }
+
+      const next: Relationship =
+        rel.strength > existing.strength
+          ? { ...rel, url: rel.url ?? existing.url }
+          : { ...existing, url: existing.url ?? rel.url };
+
+      map.set(key, next);
+    });
+
+    return Array.from(map.values());
+  }, [data.relationships]);
+
+  const paths = useMemo(() => {
+    const seen = new Set<string>();
+    return (data.paths as PathEntry[]).filter((path) => {
+      const key = [
+        path.chain.map((node) => node.trim().toLowerCase()).join('>'),
+        String(path.hops ?? Math.max(0, path.chain.length - 1)),
+        String(path.strength),
+      ].join('|');
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [data.paths]);
+
+  const querySuggestions = useMemo(() => {
+    const q = queryInput.trim();
+    if (!q) return [];
+
+    const pool = new Set<string>();
+    relationships.forEach((rel) => {
+      pool.add(rel.source);
+      pool.add(rel.target);
+      pool.add(rel.relation);
+    });
+
+    return Array.from(pool)
+      .map((value) => ({ value, score: cosineSimilarity(q, value) }))
+      .filter((item) => item.score >= 0.2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 7);
+  }, [queryInput, relationships]);
+
+  useEffect(() => {
+    if (paths.length === 0) {
+      setSelectedPathIndex(-1);
+      return;
+    }
+    if (selectedPathIndex >= paths.length) {
+      setSelectedPathIndex(0);
+    }
+  }, [paths, selectedPathIndex]);
+
   const totalNodes = data.nodeTypes.reduce((acc, n) => acc + n.count, 0);
+  const graphDepth = paths.length ? Math.max(...paths.map((p) => p.hops ?? Math.max(0, p.chain.length - 1))) : 0;
+  const highlightedPathChain = selectedPathIndex >= 0 ? (paths[selectedPathIndex]?.chain ?? []) : [];
 
-  const graphDepth = data.paths.length ? Math.max(...data.paths.map((p) => p.hops ?? Math.max(0, p.chain.length - 1))) : 0;
-  const highlightedPathChain = selectedPathIndex >= 0 ? (data.paths[selectedPathIndex]?.chain ?? []) : [];
-
-  // Get relationships for selected node
-  const selectedNodeRelationships = selectedNodeId 
-    ? data.relationships.filter(
+  const selectedNodeRelationships: Relationship[] = selectedNodeId
+    ? relationships.filter(
         (rel) => rel.source.toLowerCase() === selectedNodeId.toLowerCase() || rel.target.toLowerCase() === selectedNodeId.toLowerCase()
       )
     : [];
 
-  const selectedNodeStats = selectedNodeId
+  const selectedNodeStats: NodeStats | null = selectedNodeId
     ? {
-        incomingConnections: data.relationships.filter((rel) => rel.target.toLowerCase() === selectedNodeId.toLowerCase()).length,
-        outgoingConnections: data.relationships.filter((rel) => rel.source.toLowerCase() === selectedNodeId.toLowerCase()).length,
-        avgStrength: selectedNodeRelationships.length > 0 ? (selectedNodeRelationships.reduce((acc, r) => acc + r.strength, 0) / selectedNodeRelationships.length).toFixed(1) : '0',
+        incomingConnections: relationships.filter((rel) => rel.target.toLowerCase() === selectedNodeId.toLowerCase()).length,
+        outgoingConnections: relationships.filter((rel) => rel.source.toLowerCase() === selectedNodeId.toLowerCase()).length,
+        avgStrength:
+          selectedNodeRelationships.length > 0
+            ? (selectedNodeRelationships.reduce((acc, r) => acc + r.strength, 0) / selectedNodeRelationships.length).toFixed(1)
+            : '0',
       }
     : null;
-
-  useEffect(() => {
-    if (data.paths.length === 0) {
-      setSelectedPathIndex(-1);
-      return;
-    }
-    if (selectedPathIndex >= data.paths.length) {
-      setSelectedPathIndex(0);
-    }
-  }, [data.paths, selectedPathIndex]);
 
   const applyQuery = () => {
     setSearchQuery(queryInput.trim());
     setSource(sourceInput.trim() || 'Russia');
     setTarget(targetInput.trim() || 'EU');
     setSelectedPathIndex(-1);
-    // Trigger reload to fetch new data with updated query
     reload();
   };
 
   return (
-    <div className="flex flex-col min-h-screen grid-bg">
-      <TopBar title="Knowledge Graph" subtitle="Interactive explorer with live pathing, SHACL summaries, and relationship filtering" />
-      <main className="flex-1 px-6 py-6 space-y-6">
-        {error && (
-          <div className="px-4 py-2 rounded-xl" style={{ background: 'rgba(184,74,74,0.08)', border: '1px solid rgba(184,74,74,0.2)', color: '#b84a4a', fontSize: '0.72rem' }}>
-            Live knowledge graph data unavailable: {error}
-          </div>
-        )}
+    <div className="kg-shell flex flex-col min-h-screen grid-bg">
+      <TopBar title="Knowledge Graph" subtitle="Interactive relation intelligence with live pathing and SHACL compliance overlays" />
 
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(13,30,53,0.8)', border: '1px solid #1e3a5f' }}>
-              <Search size={13} style={{ color: '#475569' }} />
-              <input
-                value={queryInput}
-                onChange={(e) => setQueryInput(e.target.value)}
-                placeholder="Search source/target/relation"
-                className="bg-transparent text-xs outline-none w-48"
-                style={{ color: 'var(--text-muted)' }}
-              />
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
-              <input value={sourceInput} onChange={(e) => setSourceInput(e.target.value)} placeholder="Path source" className="bg-transparent text-xs outline-none w-28" style={{ color: 'var(--text-muted)' }} />
-              <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{'->'}</span>
-              <input value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder="Path target" className="bg-transparent text-xs outline-none w-28" style={{ color: 'var(--text-muted)' }} />
-            </div>
-            <button 
-              onClick={applyQuery} 
-              disabled={loading}
-              className="px-3 py-2 rounded-lg text-xs font-bold transition-all"
-              style={{ 
-                background: loading ? 'var(--accent-gold-dim)' : 'var(--accent-gold)', 
-                border: '1px solid var(--border-color)',
-                color: loading ? 'var(--text-muted)' : 'white',
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? 'RUNNING...' : 'EXECUTE INTEL QUERY'}
-            </button>
-            
-            {/* Layout Toggle */}
-            <div className="flex p-1 bg-slate-200/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-800 rounded-lg">
-              <button 
-                onClick={() => setLayoutType('force')}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${layoutType === 'force' ? 'bg-[#d6b985] text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
-              >
-                ORB
-              </button>
-              <button 
-                onClick={() => setLayoutType('circular')}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${layoutType === 'circular' ? 'bg-[#d6b985] text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
-              >
-                RADIUS
-              </button>
-            </div>
-          </div>
+      <main className="kg-main flex-1 px-4 md:px-6 py-3 space-y-4">
+        <MetricsStrip
+          totalNodes={totalNodes}
+          relationshipCount={relationships.length}
+          shaclViolations={data.shaclSummary.total_violations}
+          conflictRatio={data.conflict.risk_ratio}
+          graphDepth={graphDepth}
+        />
 
-        <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
-              <Filter size={12} style={{ color: 'var(--text-dim)' }} />
-              <label className="text-xs" style={{ color: 'var(--text-dim)' }}>Min Strength</label>
-              <select 
-                value={minStrength} 
-                onChange={(e) => {
-                  const newValue = Number(e.target.value);
-                  setMinStrength(newValue);
-                  // Auto-trigger reload when filter changes
-                  setTimeout(() => reload(), 50);
-                }} 
-                className="bg-transparent text-xs outline-none" 
-                style={{ color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <option value={0}>0</option>
-                <option value={40}>40</option>
-                <option value={60}>60</option>
-                <option value={80}>80</option>
-              </select>
-            </div>
-            <button 
-              onClick={reload}
-              disabled={loading}
-              className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${loading ? 'animate-spin' : ''}`}
-              style={{ 
-                background: loading ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.1)', 
-                border: loading ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(139,92,246,0.3)',
-                color: '#8b5cf6',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transformOrigin: 'center',
-              }}
-            >
-              {loading ? '↻' : '↻ Refresh'}
-            </button>
-          </div>
-        </div>
+        <QueryControls
+          queryInput={queryInput}
+          setQueryInput={setQueryInput}
+          sourceInput={sourceInput}
+          setSourceInput={setSourceInput}
+          targetInput={targetInput}
+          setTargetInput={setTargetInput}
+          minStrength={minStrength}
+          setMinStrength={setMinStrength}
+          layoutType={layoutType}
+          setLayoutType={setLayoutType}
+          loading={loading}
+          suggestions={querySuggestions}
+          onSelectSuggestion={(value) => {
+            setQueryInput(value);
+            setSearchQuery(value);
+          }}
+          onApply={applyQuery}
+          onReload={reload}
+          source={source}
+          target={target}
+          relationshipCount={relationships.length}
+          pathCount={paths.length}
+          isFallback={isFallback}
+          error={error}
+        />
 
-        {/* Active Query Status */}
-        {(source !== 'Russia' || target !== 'EU' || queryInput || minStrength > 0) && (
-          <div className="px-4 py-3 rounded-lg" style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)' }}>
-            <div className="text-xs" style={{ color: '#00d4ff', fontWeight: 600, marginBottom: '0.25rem' }}>
-              Active Query:
-            </div>
-            <div className="text-xs space-y-1" style={{ color: '#cbd5e1' }}>
-              {source && target && (
-                <div>
-                  <span style={{ color: '#94a3b8' }}>Paths:</span> {source} → {target}
-                </div>
-              )}
-              {queryInput && (
-                <div>
-                  <span style={{ color: '#94a3b8' }}>Search:</span> {queryInput}
-                </div>
-              )}
-              {minStrength > 0 && (
-                <div>
-                  <span style={{ color: '#94a3b8' }}>Min Strength:</span> {minStrength}%
-                </div>
-              )}
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.65rem', marginTop: '0.5rem' }}>
-                Found {data.relationships.length} relationships • {data.paths.length} path(s)
-              </div>
-            </div>
-          </div>
-        )}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in" style={{ animationDelay: '140ms' }}>
+          <GraphPanel
+            relationships={relationships}
+            zoom={zoom}
+            setZoom={setZoom}
+            onNodeClick={(nodeId) => {
+              setSelectedNodeId(nodeId);
+              setSelectedRelationship(null);
+            }}
+            highlightedPathChain={highlightedPathChain}
+            layoutType={layoutType}
+            isMounted={isMounted}
+          />
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          {[
-            { label: 'Total Nodes', value: totalNodes.toLocaleString(), color: 'var(--accent-steel)' },
-            { label: 'Loaded Relationships', value: data.relationships.length.toLocaleString(), color: 'var(--accent-lavender)' },
-            { label: 'SHACL Violations', value: data.shaclSummary.total_violations.toLocaleString(), color: data.shaclSummary.total_violations > 0 ? 'var(--accent-orange)' : 'var(--accent-emerald)' },
-            { label: 'Conflict Risk Ratio', value: `${data.conflict.risk_ratio}%`, color: 'var(--accent-maroon)' },
-            { label: 'Path Depth', value: graphDepth.toString(), color: 'var(--accent-gold)' },
-          ].map((card) => (
-            <div key={card.label} className="glass-card rounded-xl px-4 py-4 text-center">
-              <div className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</div>
-              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
-            </div>
-          ))}
-        </div>
+          <PathsPanel
+            className="lg:col-span-4"
+            paths={paths}
+            source={source}
+            target={target}
+            selectedPathIndex={selectedPathIndex}
+            setSelectedPathIndex={setSelectedPathIndex}
+            loading={loading}
+          />
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-[460px]">
-          <div className="lg:col-span-2 h-[400px] lg:h-full">
-            {isMounted ? (
-              <GraphCanvas
-                relationships={data.relationships}
-                zoom={zoom}
-                onZoomIn={() => setZoom((z) => Math.min(2.2, z + 0.12))}
-                onZoomOut={() => setZoom((z) => Math.max(0.5, z - 0.12))}
-                onReset={() => setZoom(1)}
-                onRefresh={reload}
-                onNodeClick={setSelectedNodeId}
-                highlightedPathChain={highlightedPathChain}
-                layoutType={layoutType}
-              />
-            ) : (
-              <div className="relative w-full h-full rounded-xl flex items-center justify-center glass-card" style={{ border: '1px solid var(--border-color)' }}>
-                <span className="text-xs text-[var(--text-muted)] font-mono animate-pulse">Initializing Neural Overlays...</span>
-              </div>
-            )}
-          </div>
-
-          <div className="glass-card rounded-xl p-5 overflow-hidden flex flex-col">
-            <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text-primary)' }}>Active Relationships</h3>
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {data.relationships.map((rel, idx) => (
-                <button
-                  key={`${rel.source}-${rel.target}-${idx}`}
-                  onClick={() => {
-                    setSourceInput(rel.source);
-                    setTargetInput(rel.target);
-                    setSource(rel.source);
-                    setTarget(rel.target);
-                    setSelectedPathIndex(-1);
-                  }}
-                  className="w-full text-left p-3 rounded-lg group hover:border-[var(--accent-gold)]/40 transition-all"
-                  style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{`${rel.source} -> ${rel.target}`}</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--accent-gold)' }}>{rel.relation}</div>
-                    </div>
-                    {rel.url && (
-                      <a href={rel.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="p-1 hover:text-[var(--accent-gold)]">
-                        <ZoomIn size={12} />
-                      </a>
-                    )}
-                  </div>
-                  <div className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>Strength: {rel.strength}%</div>
-                </button>
-              ))}
-              {!loading && data.relationships.length === 0 && (
-                <div className="text-xs" style={{ color: '#64748b' }}>No relationships for the current filter/query.</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{`Discovered Paths (${source} -> ${target})`}</h3>
-            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{data.paths.length} path(s) · click to highlight</span>
-          </div>
-          <div className="space-y-3">
-            {data.paths.map((path, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedPathIndex(i)}
-                className="w-full text-left p-3 rounded-lg"
-                style={{
-                  background: selectedPathIndex === i ? 'var(--accent-emerald-dim)' : 'var(--card-bg)',
-                  border: selectedPathIndex === i ? '1px solid var(--accent-emerald)' : '1px solid var(--border-color)',
-                }}
-              >
-                <div className="text-[10px] mb-1 font-bold" style={{ color: 'var(--text-muted)' }}>Strength {path.strength}% · Hops {path.hops ?? Math.max(0, path.chain.length - 1)}</div>
-                <div className="text-xs font-bold" style={{ color: selectedPathIndex === i ? 'var(--accent-emerald)' : 'var(--accent-gold)' }}>{path.chain.join(' -> ')}</div>
-              </button>
-            ))}
-            {!loading && data.paths.length === 0 && (
-              <div className="text-xs" style={{ color: '#64748b' }}>No path found for this source/target in current graph sample.</div>
-            )}
-          </div>
-        </div>
+        <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in" style={{ animationDelay: '220ms' }}>
+          <RelationshipPanel
+            className="xl:col-span-2"
+            relationships={relationships}
+            loading={loading}
+            onSelectRelationship={(rel) => {
+              setSelectedRelationship(rel);
+              setSelectedNodeId(rel.target || rel.source);
+              setSourceInput(rel.source);
+              setTargetInput(rel.target);
+              setSource(rel.source);
+              setTarget(rel.target);
+              setSelectedPathIndex(-1);
+            }}
+          />
+          <LegendPanel />
+        </section>
 
         {selectedNodeId && (
-          <div ref={nodeAnalysisRef} className="glass-card rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Node Analysis: {selectedNodeId}</h3>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Detailed node and relationship breakdown</p>
-              </div>
-              <button
-                onClick={() => setSelectedNodeId(null)}
-                className="px-2 py-1 rounded text-xs"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-
-            {/* Node Properties */}
-            <div className="mb-5 p-4 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(0,212,255,0.2)' }}>
-              <h4 className="font-semibold text-xs mb-3" style={{ color: '#00d4ff' }}>Node Properties</h4>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-2xs">
-                <div>
-                  <div style={{ color: 'var(--text-muted)' }}>Name</div>
-                  <div className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{selectedNodeId}</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)' }}>Actor Code</div>
-                  <div className="font-mono" style={{ color: 'var(--accent-lavender)' }}>
-                    {data.relationships.find(r => r.source === selectedNodeId)?.subject_properties?.actor_code || 
-                     data.relationships.find(r => r.target === selectedNodeId)?.object_properties?.actor_code || 'N/A'}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)' }}>Confidence</div>
-                  <div className="font-mono" style={{ color: 'var(--accent-emerald)' }}>92.4%</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)' }}>Source Doc</div>
-                  <div className="font-mono uppercase" style={{ color: 'var(--accent-gold)' }}>GDELT 2.0</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)' }}>Trace URL</div>
-                  <div className="truncate">
-                    {data.relationships.find(r => r.source === selectedNodeId || r.target === selectedNodeId)?.url ? (
-                      <a 
-                        href={data.relationships.find(r => r.source === selectedNodeId || r.target === selectedNodeId)?.url || '#'} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-cyan-500 hover:underline font-mono"
-                      >
-                        LINK
-                      </a>
-                    ) : 'NONE'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {selectedNodeStats && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Incoming Connections</div>
-                  <div className="text-lg font-bold" style={{ color: '#00d4ff' }}>{selectedNodeStats.incomingConnections}</div>
-                </div>
-                <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Outgoing Connections</div>
-                  <div className="text-lg font-bold" style={{ color: '#8b5cf6' }}>{selectedNodeStats.outgoingConnections}</div>
-                </div>
-                <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Avg Connection Strength</div>
-                  <div className="text-lg font-bold" style={{ color: '#f59e0b' }}>{selectedNodeStats.avgStrength}%</div>
-                </div>
-              </div>
-            )}
-
-            <h4 className="font-bold text-xs mb-3 uppercase tracking-wider" style={{ color: 'var(--accent-gold)' }}>Connected Relationships</h4>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {selectedNodeRelationships.length > 0 ? (
-                selectedNodeRelationships.map((rel, idx) => {
-                  const relType = relationshipTypes.find(rt => rt.type.toLowerCase() === rel.relation.toLowerCase());
-                  return (
-                    <div key={idx} className="p-3 rounded-lg bg-slate-100/30 dark:bg-slate-900/40" style={{ border: '1px solid var(--border-color)' }}>
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                            {rel.source} → {rel.target}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="text-xs font-semibold" style={{ color: relType?.color || 'var(--accent-steel)' }}>
-                              {relType?.icon || '🔗'} {rel.relation}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-mono font-bold" style={{ color: rel.strength >= 80 ? 'var(--accent-maroon)' : rel.strength >= 60 ? 'var(--accent-orange)' : 'var(--accent-emerald)' }}>
-                            {rel.strength}%
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Edge Properties */}
-                      <div className="grid grid-cols-3 gap-2 text-[10px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                        <div>
-                          <div style={{ color: 'var(--text-muted)' }}>Strength</div>
-                          <div className="font-mono font-bold" style={{ color: 'var(--accent-orange)' }}>{rel.strength}%</div>
-                        </div>
-                        <div>
-                          <div style={{ color: 'var(--text-muted)' }}>Source</div>
-                          <div className="font-mono truncate uppercase" style={{ color: 'var(--accent-gold)' }}>GDELT 2.0</div>
-                        </div>
-                        <div>
-                          <div style={{ color: 'var(--text-muted)' }}>Trace</div>
-                          <div>{rel.url ? <a href={rel.url} target="_blank" rel="noreferrer" className="text-cyan-500 hover:underline">DOC</a> : 'N/A'}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-xs" style={{ color: '#64748b' }}>No relationships found for this node.</div>
-              )}
-            </div>
+          <div ref={nodeAnalysisRef} className="pt-1">
+            <NodeAnalysisPanel
+              selectedNodeId={selectedNodeId}
+              selectedNodeStats={selectedNodeStats}
+              selectedNodeRelationships={selectedNodeRelationships}
+              dataRelationships={relationships}
+              selectedRelationship={selectedRelationship}
+              onClose={() => {
+                setSelectedNodeId(null);
+                setSelectedRelationship(null);
+              }}
+            />
           </div>
         )}
       </main>
+
+      <KnowledgeGraphThemeStyles />
     </div>
   );
 }

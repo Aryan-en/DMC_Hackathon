@@ -18,10 +18,10 @@ class Country(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     iso_code = Column(String(3), unique=True, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    region = Column(String(100), nullable=True)
-    continent = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    name = Column(String(255), nullable=False, index=True)  # Add index for name lookups
+    region = Column(String(100), nullable=True, index=True)  # Add index for region filtering
+    continent = Column(String(50), nullable=True, index=True)  # Add index for continent filtering
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)  # Add index for time-based queries
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
@@ -36,6 +36,12 @@ class Country(Base):
         foreign_keys="CountryRelation.country_b_id",
         back_populates="country_b",
     )
+    
+    # Indexes for common query patterns
+    __table_args__ = (
+        Index("idx_countries_name_region", "name", "region"),
+        Index("idx_countries_continent_name", "continent", "name"),
+    )
 
 
 class CountryRelation(Base):
@@ -43,21 +49,30 @@ class CountryRelation(Base):
     __tablename__ = "country_relations"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    country_a_id = Column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=False)
-    country_b_id = Column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=False)
-    relation_type = Column(String(50), nullable=False)  # 'bilateral', 'multilateral', 'disputed'
-    status = Column(String(50), nullable=False)  # 'stable', 'tense', 'active_dispute', 'conflict'
-    trade_volume = Column(Float, nullable=True)  # USD millions
-    sentiment = Column(String(50), nullable=True)  # 'positive', 'neutral', 'negative'
-    confidence_score = Column(Float, nullable=True)  # 0-1
+    country_a_id = Column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=False, index=True)
+    country_b_id = Column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=False, index=True)
+    relation_type = Column(String(50), nullable=False, index=True)  # 'bilateral', 'multilateral', 'disputed'
+    status = Column(String(50), nullable=False, index=True)  # 'stable', 'tense', 'active_dispute', 'conflict'
+    trade_volume = Column(Float, nullable=True, index=True)  # USD millions
+    sentiment = Column(String(50), nullable=True, index=True)  # 'positive', 'neutral', 'negative'
+    confidence_score = Column(Float, nullable=True, index=True)  # 0-1
     agreements = Column(JSONB, nullable=True)  # List of agreements
     key_issues = Column(JSONB, nullable=True)  # List of current issues
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    source = Column(String(50), default="MEA")
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    source = Column(String(50), default="MEA", index=True)
     
     # Relationships
     country_a = relationship("Country", foreign_keys=[country_a_id], back_populates="relations_as_a")
     country_b = relationship("Country", foreign_keys=[country_b_id], back_populates="relations_as_b")
+    
+    # Indexes for common query patterns in bilateral relations
+    __table_args__ = (
+        Index("idx_country_relations_a_b", "country_a_id", "country_b_id"),
+        Index("idx_country_relations_status", "status"),
+        Index("idx_country_relations_type", "relation_type"),
+        Index("idx_country_relations_confidence", "confidence_score"),
+        Index("idx_country_relations_updated", "last_updated"),
+    )
 
 
 class EconomicIndicator(Base):
@@ -104,14 +119,21 @@ class Entity(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entity_type = Column(String(50), nullable=False, index=True)  # 'PERSON', 'ORG', 'GPE', 'EVENT', 'CONCEPT'
-    name = Column(String(500), nullable=False)
+    name = Column(String(500), nullable=False, index=True)  # Add index for name lookups
     description = Column(Text, nullable=True)
-    confidence_score = Column(Float, nullable=True)
-    mention_count = Column(Integer, default=1)
-    sentiment = Column(String(20), nullable=True)
+    confidence_score = Column(Float, nullable=True, index=True)  # Add index for confidence filtering
+    mention_count = Column(Integer, default=1, index=True)  # Add index for popular entity detection
+    sentiment = Column(String(20), nullable=True, index=True)  # Add index for sentiment filtering
     properties = Column(JSONB, nullable=True)  # Core OWL/Ontology properties
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)  # Add index for time-based queries
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Indexes for common query patterns in knowledge graph
+    __table_args__ = (
+        Index("idx_entities_type_name", "entity_type", "name"),
+        Index("idx_entities_created_at", "created_at"),
+        Index("idx_entities_confidence", "confidence_score"),
+    )
 
 
 class Relationship(Base):
@@ -123,9 +145,18 @@ class Relationship(Base):
     predicate = Column(String(100), nullable=False, index=True)
     object_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False, index=True)
     confidence_score = Column(Float, nullable=True, index=True)
-    source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
+    source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True, index=True)
     url = Column(String(2000), nullable=True) # Direct source link for quick access
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Indexes for common query patterns in knowledge graph traversal
+    __table_args__ = (
+        Index("idx_relationships_subject_predicate", "subject_entity_id", "predicate"),
+        Index("idx_relationships_predicate_object", "predicate", "object_entity_id"),
+        Index("idx_relationships_subject_object", "subject_entity_id", "object_entity_id"),
+        Index("idx_relationships_confidence", "confidence_score"),
+        Index("idx_relationships_created_at", "created_at"),
+    )
 
 
 class AuditLog(Base):
@@ -188,5 +219,16 @@ class BillAnalysis(Base):
     words = Column(Integer, nullable=True)
     source_url = Column(String(2000), nullable=True) # If analyzed from URL
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class OntologyVersion(Base):
+    """Ontology/versioning metadata for schema evolution."""
+    __tablename__ = "ontology_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    version = Column(String(50), nullable=False, unique=True, index=True)
+    applied_at = Column(DateTime, default=datetime.utcnow, index=True)
+    previous_version = Column(String(50), nullable=True)
+    changes = Column(JSONB, nullable=True)
+    current = Column(Boolean, default=True, index=True)
 
 

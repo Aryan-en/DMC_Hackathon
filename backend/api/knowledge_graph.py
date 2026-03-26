@@ -1,20 +1,27 @@
 """Knowledge Graph API Endpoints."""
 
 from collections import defaultdict, deque
+import difflib
+try:
+    from rapidfuzz import fuzz
+except Exception:
+    fuzz = None
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres import get_db_session
+from sqlalchemy import update, delete
 from db.schemas import Entity, Relationship
+from utils.entity_resolution import canonicalize_entity_name
 from utils.sanitize import sanitize_identifier
 from utils.response import build_error, build_success
 
 router = APIRouter()
 
 
-async def _relationship_rows(db: AsyncSession, limit: int = 3000):
+async def _relationship_rows(db: AsyncSession, limit: int = 3000, offset: int = 0):
     """Load relationship rows joined with entity names for graph analytics."""
     s = Entity.__table__.alias("s")
     o = Entity.__table__.alias("o")
@@ -33,8 +40,13 @@ async def _relationship_rows(db: AsyncSession, limit: int = 3000):
         .join(o, Relationship.object_entity_id == o.c.id)
         .order_by(Relationship.created_at.desc())
         .limit(limit)
+        .offset(offset)
     )
     return (await db.execute(stmt)).all()
+
+
+def _canonical_graph_name(name: str | None) -> str:
+    return canonicalize_entity_name(name or "", "COUNTRY")
 
 
 @router.get("/nodes")
@@ -73,36 +85,49 @@ async def get_relationships(
     limit: int = Query(default=3000, ge=1, le=10000),
     query: str | None = Query(default=None, min_length=1, max_length=120),
     min_strength: int = Query(default=0, ge=0, le=100),
+    cursor: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db_session),
 ):
     """GET /api/knowledge-graph/relationships - Relationship types"""
     try:
-        rows = await _relationship_rows(db, limit=limit)
+        offset = int(cursor) if cursor and str(cursor).isdigit() else 0
+        rows = await _relationship_rows(db, limit=limit, offset=offset)
 
         q = query.strip().lower() if query else None
 
-        relationships = []
+        aggregated: dict[tuple[str, str, str], dict] = {}
         for source, target, relation, confidence, url, s_props, o_props in rows:
+            source_name = _canonical_graph_name(source)
+            target_name = _canonical_graph_name(target)
             strength = int((confidence or 0.75) * 100)
             if strength < min_strength:
                 continue
             if q:
-                haystack = f"{source or ''} {target or ''} {relation or ''}".lower()
+                haystack = f"{source_name} {target_name} {relation or ''}".lower()
                 if q not in haystack:
                     continue
-            relationships.append(
-                {
-                    "source": source,
-                    "target": target,
+            key = (source_name, target_name, str(relation or "RELATED_TO"))
+            existing = aggregated.get(key)
+            if existing:
+                existing["strength"] = max(existing["strength"], strength)
+                existing["url"] = existing["url"] or url
+            else:
+                aggregated[key] = {
+                    "source": source_name,
+                    "target": target_name,
                     "relation": relation,
                     "strength": strength,
                     "url": url,
                     "subject_properties": s_props,
                     "object_properties": o_props
                 }
-            )
 
-        return build_success({"relationships": relationships}, meta={"count": len(relationships)})
+        relationships = list(aggregated.values())
+        next_cursor = str(offset + len(relationships)) if len(relationships) == limit else None
+        return build_success(
+            {"relationships": relationships},
+            meta={"count": len(relationships), "next_cursor": next_cursor},
+        )
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch relationships: {exc}")
 
@@ -186,14 +211,14 @@ async def get_conflict_detection(db: AsyncSession = Depends(get_db_session)):
             risk_score = min(100, int((conf * 65) + (25 if is_keyword_match else 0) + 10))
             if is_keyword_match or risk_score >= 70:
                 edge = {
-                    "source": source,
-                    "target": target,
+                    "source": _canonical_graph_name(source),
+                    "target": _canonical_graph_name(target),
                     "predicate": predicate,
                     "risk": risk_score,
                 }
                 high_risk_edges.append(edge)
-                hotspot_counter[source] += 1
-                hotspot_counter[target] += 1
+                hotspot_counter[_canonical_graph_name(source)] += 1
+                hotspot_counter[_canonical_graph_name(target)] += 1
 
         high_risk_edges.sort(key=lambda item: item["risk"], reverse=True)
         hotspots = [
@@ -224,10 +249,12 @@ async def get_centrality_stats(db: AsyncSession = Depends(get_db_session)):
         for source, target, _predicate, _confidence, *rest in rows:
             if not source or not target:
                 continue
-            nodes.add(source)
-            nodes.add(target)
-            degree[source] += 1
-            degree[target] += 1
+            source_name = _canonical_graph_name(source)
+            target_name = _canonical_graph_name(target)
+            nodes.add(source_name)
+            nodes.add(target_name)
+            degree[source_name] += 1
+            degree[target_name] += 1
 
         node_count = len(nodes)
         edge_count = len(rows)
@@ -258,12 +285,13 @@ async def get_paths(
     target: str,
     depth: int = 4,
     max_paths: int = 3,
+    cursor: str | None = None,
     db: AsyncSession = Depends(get_db_session),
 ):
     """GET /api/knowledge-graph/paths/{source}/{target} - Multi-hop causal paths."""
     try:
-        source_safe = sanitize_identifier(source)
-        target_safe = sanitize_identifier(target)
+        source_safe = _canonical_graph_name(sanitize_identifier(source))
+        target_safe = _canonical_graph_name(sanitize_identifier(target))
 
         depth = max(1, min(depth, 6))
         max_paths = max(1, min(max_paths, 5))
@@ -277,10 +305,12 @@ async def get_paths(
         for s_name, o_name, _predicate, confidence, *rest in rows:
             if not s_name or not o_name:
                 continue
-            s_key = s_name.strip().lower()
-            o_key = o_name.strip().lower()
-            canonical[s_key] = s_name
-            canonical[o_key] = o_name
+            s_canonical = _canonical_graph_name(s_name)
+            o_canonical = _canonical_graph_name(o_name)
+            s_key = s_canonical.lower()
+            o_key = o_canonical.lower()
+            canonical[s_key] = s_canonical
+            canonical[o_key] = o_canonical
             adjacency[s_key].append((o_key, float(confidence or 0.7)))
 
         if source_safe.lower() not in canonical or target_safe.lower() not in canonical:
@@ -322,12 +352,87 @@ async def get_paths(
                     queue.append((neighbor, next_chain, next_strengths))
 
         found.sort(key=lambda p: (p["hops"], -p["strength"]))
+        start = int(cursor) if cursor and str(cursor).isdigit() else 0
+        results = found[start : start + max_paths]
+        next_cursor = str(start + len(results)) if (start + len(results)) < len(found) else None
         return build_success(
-            {"paths": found},
-            meta={"depth": depth, "max_paths": max_paths, "paths_found": len(found)},
+            {"paths": results},
+            meta={"depth": depth, "max_paths": max_paths, "paths_found": len(results), "next_cursor": next_cursor},
         )
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch graph paths: {exc}")
+
+@router.post("/merge-entities")
+async def merge_entities(primary_id: str, secondary_id: str, db: AsyncSession = Depends(get_db_session)):
+    """Merge two entities by re-linking relationships and deleting the secondary."""
+    try:
+        # Re-point incoming relationships from secondary to primary
+        await db.execute(
+            update(Relationship).where(Relationship.subject_entity_id == secondary_id).values(subject_entity_id=primary_id)
+        )
+        await db.execute(
+            update(Relationship).where(Relationship.object_entity_id == secondary_id).values(object_entity_id=primary_id)
+        )
+        # Delete the secondary entity
+        await db.execute(delete(Entity).where(Entity.id == secondary_id))
+        await db.commit()
+        return build_success({"message": "Entities merged", "primary_id": primary_id, "secondary_id": secondary_id})
+    except Exception as exc:
+        await db.rollback()
+        return build_error("MERGE_ERROR", str(exc))
+
+
+@router.get("/duplicates")
+async def find_duplicates(db: AsyncSession = Depends(get_db_session), threshold: float = 0.85):
+    """GET /api/knowledge-graph/duplicates - Detect potential duplicates by fuzzy name similarity"""
+    try:
+        rows = await db.execute(select(Entity.id, Entity.name, Entity.entity_type))
+        entities = [
+            {"id": str(r[0]), "name": r[1], "type": r[2]} for r in rows.fetchall()
+        ]
+
+        duplicates = []
+        n = len(entities)
+        for i in range(n):
+            for j in range(i + 1, n):
+                a = entities[i]["name"]
+                b = entities[j]["name"]
+                if fuzz:
+                    score = fuzz.ratio(a, b) / 100.0
+                else:
+                    score = difflib.SequenceMatcher(None, a, b).ratio()
+                if score >= threshold and entities[i]["type"] == entities[j]["type"]:
+                    duplicates.append({
+                        "a_id": entities[i]["id"],
+                        "b_id": entities[j]["id"],
+                        "a_name": a,
+                        "b_name": b,
+                        "type": entities[i]["type"],
+                        "score": round(float(score), 4)
+                    })
+
+        duplicates = sorted(duplicates, key=lambda x: x["score"], reverse=True)
+        return build_success({"duplicates": duplicates, "count": len(duplicates)})
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to detect duplicates: {exc}")
+
+@router.get("/merge-preview")
+async def merge_preview(primary_id: str, secondary_id: str, db: AsyncSession = Depends(get_db_session)):
+    """Preview merge impact for two entities before applying changes"""
+    try:
+        subj_rel_count = (await db.execute(select(func.count(Relationship.id)).where(Relationship.subject_entity_id == secondary_id))).scalar() or 0
+        obj_rel_count = (await db.execute(select(func.count(Relationship.id)).where(Relationship.object_entity_id == secondary_id))).scalar() or 0
+        total = subj_rel_count + obj_rel_count
+        return build_success({
+            "primary_id": primary_id,
+            "secondary_id": secondary_id,
+            "subject_relations": int(subj_rel_count),
+            "object_relations": int(obj_rel_count),
+            "total_relations_to_relink": int(total),
+            "note": "Preview only; confirm merge to apply changes"
+        })
+    except Exception as exc:
+        return build_error("PREVIEW_ERROR", str(exc))
 
 
 @router.post("/seed-data")

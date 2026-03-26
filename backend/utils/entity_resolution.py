@@ -1,102 +1,97 @@
-"""Entity Resolution and Deduplication logic for global intelligence entities."""
+"""Entity resolution and canonical naming helpers."""
+
+from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+import re
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
-# Primary canonical mapping for common country variations
 COUNTRY_ALIASES: Dict[str, str] = {
-    # India variations
     "bharat": "India",
     "republic of india": "India",
     "the republic of india": "India",
-    "india (official)": "India",
+    "india official": "India",
     "ind": "India",
-    
-    # USA variations
     "usa": "United States",
-    "u.s.a.": "United States",
+    "u s a": "United States",
+    "u s": "United States",
     "united states of america": "United States",
-    "u.s.": "United States",
-    "usb": "United States",
+    "united states": "United States",
+    "unitedstates": "United States",
+    "the us": "United States",
+    "the usa": "United States",
     "us": "United States",
-    
-    # UK variations
     "uk": "United Kingdom",
-    "u.k.": "United Kingdom",
+    "u k": "United Kingdom",
     "britain": "United Kingdom",
     "great britain": "United Kingdom",
-    
-    # Russia variations
     "russian federation": "Russia",
     "the russian federation": "Russia",
     "ru": "Russia",
-    
-    # China variations
     "peoples republic of china": "China",
     "prc": "China",
     "mainland china": "China",
-    
-    # UAE variations
     "uae": "United Arab Emirates",
     "the united arab emirates": "United Arab Emirates",
-    
-    # Generic normalization candidates
     "the bahamas": "Bahamas",
     "republic of korea": "South Korea",
     "democrats peoples republic of korea": "North Korea",
     "dprk": "North Korea",
-    "viet nam": "Vietnam"
+    "viet nam": "Vietnam",
+    "eu": "European Union",
 }
+
+
+def _normalize_lookup_key(name: str) -> str:
+    cleaned = re.sub(r"[^\w\s]", " ", (name or "").lower())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"^the\s+", "", cleaned)
+    return cleaned
+
+
+def _title_case(name: str) -> str:
+    return " ".join(part.capitalize() for part in name.split())
+
+
+def canonicalize_entity_name(name: str, entity_type: str | None = None) -> str:
+    """Collapse common aliases like 'US', 'USA', and 'The US' to one canonical label."""
+    if not name:
+        return ""
+
+    clean_name = " ".join(name.strip().split())
+    lookup = _normalize_lookup_key(clean_name)
+    compact = lookup.replace(" ", "")
+
+    if lookup in COUNTRY_ALIASES:
+        return COUNTRY_ALIASES[lookup]
+    if compact in COUNTRY_ALIASES:
+        return COUNTRY_ALIASES[compact]
+
+    if entity_type and entity_type.upper() in {"COUNTRY", "ACTOR", "LOCATION", "GPE"}:
+        return _title_case(lookup) if lookup else clean_name
+
+    return clean_name
 
 
 def normalize_country_name(name: str) -> str:
     """Normalize a country name to its canonical version."""
-    if not name:
-        return ""
-    
-    # Standardize whitespace and casing
-    clean_name = " ".join(name.lower().split())
-    
-    # Check direct alias
-    if clean_name in COUNTRY_ALIASES:
-        return COUNTRY_ALIASES[clean_name]
-    
-    # Partial match logic (e.g., if a name contains a canonical version)
-    # Be careful with short names like 'Mali'
-    # Simplified for now: just return title case if no alias
-    return name.strip().title()
+    return canonicalize_entity_name(name, "COUNTRY")
 
 
 def resolve_entity(data: Dict, entity_type: str = "country") -> Dict:
-    """
-    Apply entity resolution rules to a record before database insertion.
-    
-    Args:
-        data: The entity record (dictionary)
-        entity_type: Category (default: 'country')
-        
-    Returns:
-        The record with normalized fields.
-    """
     resolved = data.copy()
-    
-    if entity_type == "country":
-        name_key = "country_name" if "country_name" in resolved else "country" if "country" in resolved else "name"
-        if name_key in resolved:
-            original = resolved[name_key]
-            resolved[name_key] = normalize_country_name(original)
-            if original != resolved[name_key]:
-                logger.debug(f"Resolved entity: '{original}' -> '{resolved[name_key]}'")
-                
+    name_key = "country_name" if "country_name" in resolved else "country" if "country" in resolved else "name"
+    if name_key in resolved:
+        original = resolved[name_key]
+        resolved[name_key] = canonicalize_entity_name(original, entity_type)
+        if original != resolved[name_key]:
+            logger.debug("Resolved entity: '%s' -> '%s'", original, resolved[name_key])
     return resolved
 
 
 def merge_entities(primary: Dict, secondary: Dict) -> Dict:
-    """Combine data from two sources for the same resolved entity."""
-    # Logic to prioritize source or merge attributes
-    # Example: If both have 'gdp', average them or take the most recent
     merged = primary.copy()
     merged.update(secondary)
     return merged

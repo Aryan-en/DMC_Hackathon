@@ -19,6 +19,7 @@ celery_app.conf.update(
 )
 
 # Auto-discover tasks from the 'tasks' directory
+import tasks.ingestion
 celery_app.autodiscover_tasks(["tasks"])
 
 celery_app.conf.beat_schedule = {

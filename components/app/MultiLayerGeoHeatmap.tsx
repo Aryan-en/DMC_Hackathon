@@ -195,7 +195,9 @@ function inferContinentFromLatLng(lat: number, lng: number): string | null {
 
 function drawWorldGuides(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   ctx.save();
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  // Grid lines
+  ctx.strokeStyle = 'var(--border-subtle)';
+  ctx.globalAlpha = 0.12;
   ctx.lineWidth = 1;
 
   [30, 60, 90, 120, 150].forEach((segment) => {
@@ -224,7 +226,10 @@ function drawWorldGuides(ctx: CanvasRenderingContext2D, width: number, height: n
     ctx.stroke();
   });
 
-  ctx.strokeStyle = 'rgba(200, 168, 74, 0.28)';
+  // Equator Line - Using metric accent
+  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--metric-accent').trim() || '#c8a84a';
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = accentColor;
   ctx.beginPath();
   ctx.moveTo(0, height / 2);
   ctx.lineTo(width, height / 2);
@@ -599,16 +604,21 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
       sceneCtx.lineTo(left, top + labelRadius);
       sceneCtx.quadraticCurveTo(left, top, left + labelRadius, top);
       sceneCtx.closePath();
-      sceneCtx.fillStyle = selectedContinent === label.name ? 'rgba(200, 168, 74, 0.25)' : 'rgba(15, 23, 42, 0.78)';
+      // Use metric-accent for selected vs unselected
+      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--metric-accent').trim() || '#c8a84a';
+      sceneCtx.fillStyle = selectedContinent === label.name ? 'rgba(200, 168, 74, 0.25)' : 'rgba(15, 23, 42, 0.78)'; // Keep some base for contrast
+      if (selectedContinent === label.name) {
+          sceneCtx.fillStyle = `color-mix(in srgb, ${accentColor}, transparent 75%)`;
+      }
       sceneCtx.fill();
-      sceneCtx.strokeStyle = selectedContinent === label.name ? 'rgba(200, 168, 74, 0.65)' : 'rgba(148, 163, 184, 0.4)';
+      sceneCtx.strokeStyle = selectedContinent === label.name ? accentColor : 'var(--border-color)';
       sceneCtx.lineWidth = 1;
       sceneCtx.stroke();
 
       sceneCtx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       sceneCtx.fillText(text, x + 1, y + 1);
 
-      sceneCtx.fillStyle = 'rgba(248, 250, 252, 0.95)';
+      sceneCtx.fillStyle = 'var(--text-primary)';
       sceneCtx.fillText(text, x, y);
       sceneCtx.restore();
     });
@@ -773,16 +783,16 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
 
   return (
     <div className="space-y-4">
-      <div className="glass-card rounded-xl p-5" ref={hostRef}>
+      <div className="tactical-card rounded-xl p-5" ref={hostRef} style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
         <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
           <div>
-            <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Multi-Layer Geospatial Heatmap</h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '0.2rem' }}>
+            <h3 className="font-black text-[10px] uppercase tracking-widest" style={{ color: 'var(--text-primary)' }}>Multi-Layer Geospatial Heatmap</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '0.4rem' }}>
               Population pressure, climate stress, and economic activity blended on one operational map.
             </p>
           </div>
 
-          <div className="flex items-center gap-2" style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+          <div className="flex items-center gap-2 font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>
             <Layers size={13} />
             <span>{points.length} geo-points fused</span>
           </div>
@@ -790,16 +800,16 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
           <div>
-            <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(2,8,23,0.45)', border: '1px solid rgba(30,58,95,0.45)' }}>
+            <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--bg-card-elevated)', border: '1px solid var(--border-color)' }}>
               <div className="flex items-center gap-4 flex-wrap">
                 <button
                   onClick={() => setShowPopulation((v) => !v)}
-                  className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold tracking-widest uppercase transition-all"
                   style={{
-                    border: '1px solid rgba(34,197,94,0.3)',
-                    background: showPopulation ? 'rgba(34,197,94,0.18)' : 'rgba(15,23,42,0.7)',
-                    color: '#22c55e',
-                    fontSize: '0.7rem',
+                    border: showPopulation ? '1px solid var(--accent-emerald)' : '1px solid var(--border-color)',
+                    background: showPopulation ? 'color-mix(in srgb, var(--accent-emerald), transparent 85%)' : 'var(--metric-1)',
+                    color: showPopulation ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                    fontSize: '9px',
                   }}
                 >
                   <Users size={13} /> Population
@@ -807,12 +817,12 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
 
                 <button
                   onClick={() => setShowClimate((v) => !v)}
-                  className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold tracking-widest uppercase transition-all"
                   style={{
-                    border: '1px solid rgba(56,189,248,0.3)',
-                    background: showClimate ? 'rgba(56,189,248,0.18)' : 'rgba(15,23,42,0.7)',
-                    color: '#38bdf8',
-                    fontSize: '0.7rem',
+                    border: showClimate ? '1px solid var(--accent-steel)' : '1px solid var(--border-color)',
+                    background: showClimate ? 'color-mix(in srgb, var(--accent-steel), transparent 85%)' : 'var(--metric-1)',
+                    color: showClimate ? 'var(--accent-steel)' : 'var(--text-muted)',
+                    fontSize: '9px',
                   }}
                 >
                   <Flame size={13} /> Climate
@@ -820,12 +830,12 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
 
                 <button
                   onClick={() => setShowEconomy((v) => !v)}
-                  className="px-3 py-1.5 rounded-lg flex items-center gap-2"
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold tracking-widest uppercase transition-all"
                   style={{
-                    border: '1px solid rgba(245,158,11,0.3)',
-                    background: showEconomy ? 'rgba(245,158,11,0.18)' : 'rgba(15,23,42,0.7)',
-                    color: '#f59e0b',
-                    fontSize: '0.7rem',
+                    border: showEconomy ? '1px solid var(--accent-amber)' : '1px solid var(--border-color)',
+                    background: showEconomy ? 'color-mix(in srgb, var(--accent-amber), transparent 85%)' : 'var(--metric-1)',
+                    color: showEconomy ? 'var(--accent-amber)' : 'var(--text-muted)',
+                    fontSize: '9px',
                   }}
                 >
                   <LineChart size={13} /> Economy
@@ -834,7 +844,7 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
 
             </div>
 
-            <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
+            <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-color)' }}>
               <canvas
                 ref={canvasRef}
                 width={size.width}
@@ -856,7 +866,7 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
                     setPan((prev) => clampPan(prev, nextZoom));
                   }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid rgba(148,163,184,0.35)', color: '#e2e8f0' }}
+                  style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                 >
                   <Plus size={14} />
                 </button>
@@ -868,7 +878,7 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
                     setPan((prev) => clampPan(prev, nextZoom));
                   }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid rgba(148,163,184,0.35)', color: '#e2e8f0' }}
+                  style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                 >
                   <Minus size={14} />
                 </button>
@@ -880,12 +890,12 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
                     setSelectedContinent(null);
                     setSelectedCountry(null);
                   }}
-                  className="px-3 h-8 rounded-lg flex items-center gap-1.5"
-                  style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid rgba(148,163,184,0.35)', color: '#e2e8f0', fontSize: '0.75rem' }}
+                  className="px-3 h-8 rounded-lg flex items-center gap-1.5 transition-all hover:bg-white/5 font-bold uppercase tracking-widest"
+                  style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', fontSize: '9px' }}
                 >
                   <RotateCcw size={13} /> Reset
                 </button>
-                <div className="px-2 h-8 rounded-lg flex items-center" style={{ background: 'rgba(2,8,23,0.8)', border: '1px solid rgba(148,163,184,0.35)', color: '#e2e8f0', fontSize: '0.75rem', fontWeight: 700 }}>
+                <div className="px-2 h-8 rounded-lg flex items-center border font-mono" style={{ background: 'var(--card-bg)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)', fontSize: '10px', fontWeight: 700 }}>
                   {Math.round(zoom * 100)}%
                 </div>
               </div>
@@ -896,8 +906,8 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
                   <button
                     type="button"
                     onClick={() => setPan((prev) => clampPan({ x: prev.x, y: prev.y - 28 }, zoom))}
-                    className="w-7 h-7 rounded-md flex items-center justify-center"
-                    style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(148,163,184,0.28)', color: '#d1d5db' }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center transition-all hover:bg-white/5"
+                    style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
                   >
                     <ArrowUp size={12} />
                   </button>
@@ -1013,19 +1023,19 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
             </div>
           </div>
 
-          <aside className="rounded-xl p-4" style={{ background: 'rgba(2,8,23,0.45)', border: '1px solid rgba(30,58,95,0.45)' }}>
-            <h4 style={{ color: '#94a3b8', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.75rem', letterSpacing: '0.08em' }}>
-              TOP BLENDED CELLS
+          <aside className="rounded-xl p-4" style={{ background: 'var(--metric-1)', border: '1px solid var(--border-color)' }}>
+            <h4 style={{ color: 'var(--text-muted)', fontSize: '9px', fontWeight: 900, marginBottom: '1rem', letterSpacing: '0.1em' }} className="uppercase">
+              Top Blended Signals
             </h4>
 
             <div className="space-y-2" style={{ maxHeight: '370px', overflowY: 'auto', paddingRight: '2px' }}>
               {topBlendedCells.map((point) => (
-                <div key={point.id} className="rounded-lg p-3" style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(148,163,184,0.14)' }}>
+                <div key={point.id} className="rounded-lg p-3 transition-all hover:bg-white/5 border border-white/5" style={{ background: 'var(--card-bg)' }}>
                   <div className="flex items-center justify-between gap-2">
-                    <div style={{ color: '#e2e8f0', fontSize: '0.72rem', fontWeight: 600 }}>{point.name}</div>
-                    <div style={{ color: '#c8a84a', fontSize: '0.9rem', fontWeight: 700 }}>{point.blended.toFixed(2)}</div>
+                    <div className="uppercase tracking-tight" style={{ color: 'var(--text-primary)', fontSize: '11px', fontWeight: 900 }}>{point.name}</div>
+                    <div style={{ color: 'var(--metric-accent)', fontSize: '12px', fontWeight: 900 }}>{point.blended.toFixed(2)}</div>
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: '0.18rem' }}>
+                  <div className="font-mono" style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '0.2rem' }}>
                     {Math.round(point.lat)}°, {Math.round(point.lng)}°
                   </div>
                 </div>
@@ -1036,45 +1046,49 @@ export default function MultiLayerGeoHeatmap({ hotspots, climateRegions, economi
       </div>
 
       {selectedCountry && selectedCountryMetrics && (
-        <div ref={analysisRef} className="glass-card rounded-xl p-5" style={{ border: '1px solid rgba(30,58,95,0.45)' }}>
-          <div className="flex items-center justify-between mb-4">
+        <div ref={analysisRef} className="tactical-card rounded-xl p-6" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <div style={{ color: '#c8a84a', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em' }}>COUNTRY ANALYSIS</div>
-              <div style={{ color: '#e2e8f0', fontSize: '1.4rem', fontWeight: 700, lineHeight: 1.2 }}>{selectedCountry.name}</div>
-              <div style={{ color: '#8ab4d9', fontSize: '0.8rem' }}>{selectedCountry.continent} • {selectedCountry.lat.toFixed(1)}°, {selectedCountry.lng.toFixed(1)}°</div>
+              <div style={{ color: 'var(--metric-accent)', fontSize: '10px', fontWeight: 900, marginBottom: '0.25rem' }} className="uppercase tracking-widest">Country Intelligence Brief</div>
+              <div style={{ color: 'var(--text-primary)', fontSize: '1.5rem', fontWeight: 900, lineHeight: 1 }}>{selectedCountry.name}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '0.4rem' }} className="font-mono uppercase tracking-widest">{selectedCountry.continent} • {selectedCountry.lat.toFixed(4)}°, {selectedCountry.lng.toFixed(4)}°</div>
             </div>
             <button
               type="button"
               onClick={() => setSelectedCountry(null)}
-              className="px-3 py-2 rounded-lg"
-              style={{ background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(148,163,184,0.28)', color: '#d1d5db', fontSize: '0.78rem', fontWeight: 600 }}
+              className="px-4 py-2 rounded-lg font-black uppercase tracking-widest transition-all hover:bg-white/5"
+              style={{ background: 'var(--metric-1)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '10px' }}
             >
-              Clear Country
+              Close Analysis
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl p-4" style={{ background: 'rgba(122,34,50,0.14)', border: '1px solid rgba(239,68,68,0.24)' }}>
-              <div style={{ color: '#f3b3bc', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.55rem' }}>POPULATION PRESSURE</div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700 }}>Hotspots: <span style={{ color: '#fca5a5' }}>{selectedCountryMetrics.hotspots}</span></div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700, marginTop: '0.25rem' }}>Critical Signals: <span style={{ color: '#fca5a5' }}>{selectedCountryMetrics.criticalSignals}</span></div>
-              <div style={{ color: '#d1d5db', fontSize: '0.92rem', fontWeight: 700, marginTop: '0.25rem' }}>Avg Pressure Value: {selectedCountryMetrics.pressure.toFixed(1)}</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="rounded-xl p-4 border-l-4" style={{ background: 'color-mix(in srgb, var(--accent-crimson), transparent 95%)', borderColor: 'var(--accent-crimson)' }}>
+              <div style={{ color: 'var(--accent-crimson)', fontSize: '10px', fontWeight: 900, marginBottom: '1rem' }} className="uppercase tracking-widest">Population Pressure</div>
+              <div className="space-y-2 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                <div>Hotspots: <span className="font-black text-lg ml-2">{selectedCountryMetrics.hotspots}</span></div>
+                <div>Critical Signals: <span className="font-black text-lg ml-2">{selectedCountryMetrics.criticalSignals}</span></div>
+                <div className="pt-2 mt-2 border-t border-white/5 opacity-70">Metric Score: {selectedCountryMetrics.pressure.toFixed(1)}</div>
+              </div>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: 'rgba(12,88,78,0.18)', border: '1px solid rgba(16,185,129,0.24)' }}>
-              <div style={{ color: '#6ee7b7', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.55rem' }}>CLIMATE SIGNAL</div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700 }}>Region: <span style={{ color: '#a7f3d0' }}>{selectedCountryMetrics.climateRegion}</span></div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700, marginTop: '0.25rem' }}>Temp Delta: <span style={{ color: '#a7f3d0' }}>+{(selectedCountryMetrics.climate / 18).toFixed(1)}°C</span></div>
-              <div style={{ color: '#d1d5db', fontSize: '0.92rem', fontWeight: 700, marginTop: '0.25rem' }}>Drought: {selectedCountryMetrics.drought.toLowerCase()}</div>
-              <div style={{ color: '#d1d5db', fontSize: '0.92rem', fontWeight: 700, marginTop: '0.15rem' }}>Flood: {selectedCountryMetrics.flood.toLowerCase()}</div>
+            <div className="rounded-xl p-4 border-l-4" style={{ background: 'color-mix(in srgb, var(--accent-emerald), transparent 95%)', borderColor: 'var(--accent-emerald)' }}>
+              <div style={{ color: 'var(--accent-emerald)', fontSize: '10px', fontWeight: 900, marginBottom: '1rem' }} className="uppercase tracking-widest">Climate Stress</div>
+              <div className="space-y-2 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                <div>Region: <span className="ml-2">{selectedCountryMetrics.climateRegion}</span></div>
+                <div>Anomalies: <span className="ml-2">+{(selectedCountryMetrics.climate / 18).toFixed(1)}°C</span></div>
+                <div className="pt-2 mt-2 border-t border-white/5 opacity-70">Stress Index: {selectedCountryMetrics.climate.toFixed(1)}</div>
+              </div>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: 'rgba(102,56,17,0.2)', border: '1px solid rgba(245,158,11,0.24)' }}>
-              <div style={{ color: '#fcd34d', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.55rem' }}>ECONOMIC SIGNAL</div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700 }}>Region: <span style={{ color: '#fde68a' }}>{selectedCountry.name}</span></div>
-              <div style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: 700, marginTop: '0.25rem' }}>GDP: <span style={{ color: '#fde68a' }}>{selectedCountryMetrics.gdp.toFixed(2)}T USD</span></div>
-              <div style={{ color: '#d1d5db', fontSize: '0.92rem', fontWeight: 700, marginTop: '0.25rem' }}>Growth: {selectedCountryMetrics.growth.toFixed(2)}%</div>
-              <div style={{ color: '#d1d5db', fontSize: '0.92rem', fontWeight: 700, marginTop: '0.15rem' }}>Employment: {selectedCountryMetrics.employment.toFixed(1)}%</div>
+            <div className="rounded-xl p-4 border-l-4" style={{ background: 'color-mix(in srgb, var(--accent-amber), transparent 95%)', borderColor: 'var(--accent-amber)' }}>
+              <div style={{ color: 'var(--accent-amber)', fontSize: '10px', fontWeight: 900, marginBottom: '1rem' }} className="uppercase tracking-widest">Economic Risk</div>
+              <div className="space-y-2 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                <div>GDP Focus: <span className="ml-2">${selectedCountryMetrics.gdp.toFixed(2)}T</span></div>
+                <div>Growth: <span className="ml-2">{selectedCountryMetrics.growth.toFixed(1)}%</span></div>
+                <div className="pt-2 mt-2 border-t border-white/5 opacity-70">Resilience: {selectedCountryMetrics.economy.toFixed(1)}</div>
+              </div>
             </div>
           </div>
         </div>

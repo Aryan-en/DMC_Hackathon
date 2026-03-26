@@ -13,9 +13,16 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import PlainTextResponse
 
 from core.config import settings
+from sqlalchemy import select
+from datetime import datetime
+
+from db.schemas import OntologyVersion
+from db.postgres import AsyncSessionLocal
 from db.postgres import init_db as init_postgres_db
 from db.neo4j_driver import init_driver as init_neo4j_driver, verify_connection as verify_neo4j_connection
-from api import metrics, intelligence, knowledge_graph, geospatial, predictions, streams, data_lake, security, auth, users, security_monitoring, bill_analysis, tasks, search
+from api import metrics, intelligence, knowledge_graph, geospatial, predictions, streams, data_lake, security, auth, users, security_monitoring, bill_analysis, tasks, search, services
+from api import ontology as ontology_api
+from api import neo4j_traversal, neo4j_sync
 from services.llm_classifier import LLMClassifierService
 from middleware.security_hardening import ProductionSecurityConfig
 
@@ -58,6 +65,25 @@ async def lifespan(app: FastAPI):
     try:
         await init_postgres_db()
         logger.info("PostgreSQL initialized")
+        # Seed initial ontology version if not present (guarded for CI/CD pipelines)
+        try:
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(OntologyVersion).order_by(OntologyVersion.applied_at.desc()).limit(1)
+                )
+                current_version = result.scalar_one_or_none()
+                if current_version is None:
+                    new_ver = OntologyVersion(
+                        version="v1.0.0",
+                        applied_at=datetime.utcnow(),
+                        changes={},
+                        current=True,
+                    )
+                    session.add(new_ver)
+                    await session.commit()
+                    logger.info("Seeded initial OntologyVersion v1.0.0")
+        except Exception as _e:
+            logger.debug(f"OntologyVersion seeding skipped or failed: {_e}")
     except Exception as e:
         logger.error(f"PostgreSQL initialization failed: {e}")
     
@@ -76,9 +102,9 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning("Ollama not reachable at startup: %s", settings.OLLAMA_HOST)
     except Exception as e:
-        logger.error(f"Ollama preflight failed: {e}")
+        logger.error(f"System preflight failed: {e}")
     
-    logger.info("ONTORA Backend ready!")
+    logger.info("ONTORA Backend ready (Infrastructure Management Mode enabled)")
     yield
     
     logger.info("Shutting down ONTORA Backend...")
@@ -234,6 +260,10 @@ app.include_router(security_monitoring.router, prefix="/api/security-monitoring"
 app.include_router(bill_analysis.router, prefix="/api/bill-analysis", tags=["Bill Analysis"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Task Management"])
 app.include_router(search.router, prefix="/api/search", tags=["Global Search"])
+app.include_router(ontology_api.router, prefix="/api/ontology", tags=["Ontology"])
+app.include_router(neo4j_traversal.router, prefix="/api/neo4j", tags=["Neo4j"])
+app.include_router(neo4j_sync.router, prefix="/api/neo4j", tags=["Neo4j"])
+app.include_router(services.router, prefix="/api/services", tags=["Service Management"])
 
 
 # Global exception handler
@@ -267,9 +297,8 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        app,
         host=settings.API_HOST,
         port=settings.API_PORT,
-        reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower()
     )

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useIntelligenceAlerts } from '@/app/hooks/useIntelligenceAlerts';
+import { getSafeExternalUrl } from '@/app/lib/source-links';
 import TacticalMarquee from './TacticalMarquee';
 
 const SEVERITY_COLORS = {
@@ -12,10 +13,10 @@ const SEVERITY_COLORS = {
 };
 
 const SEVERITY_BG = {
-  critical: 'rgba(153, 27, 27, 0.05)',
-  high: 'rgba(180, 83, 9, 0.05)',
-  medium: 'rgba(0, 0, 0, 0.02)',
-  low: 'rgba(21, 128, 61, 0.05)',
+  critical: 'rgba(var(--accent-crimson), 0.08)',
+  high: 'rgba(var(--accent-amber), 0.08)',
+  medium: 'var(--nested-surface)',
+  low: 'rgba(var(--accent-emerald), 0.08)',
 };
 
 
@@ -58,7 +59,7 @@ export default function AlertFeed() {
       <div className="table-scroll-container">
         {error ? (
           <div className="text-crimson text-center py-10 font-black uppercase text-xs">
-            CONNECTION_TIMEOUT: API Server Unreachable
+            Data source unavailable. Please retry.
           </div>
         ) : alerts.length === 0 ? (
           <div className="text-muted text-center py-10 italic">
@@ -81,6 +82,7 @@ export default function AlertFeed() {
             </thead>
             <tbody className="divide-y divide-black/5 dark:divide-white/5">
               {alerts.map((alert, aidx) => {
+                const safeAlertUrl = getSafeExternalUrl(alert.url);
                 const sevColor = SEVERITY_COLORS[alert.severity as keyof typeof SEVERITY_COLORS] || 'var(--accent-steel)';
                 const sevBg = SEVERITY_BG[alert.severity as keyof typeof SEVERITY_BG] || 'transparent';
                 
@@ -114,9 +116,9 @@ export default function AlertFeed() {
                       </TacticalMarquee>
                     </td>
                     <td className="px-2 py-3">
-                      {alert.url ? (
+                      {safeAlertUrl ? (
                         <a 
-                          href={alert.url} 
+                          href={safeAlertUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-[10px] text-lavender hover:underline underline-offset-1"
@@ -147,7 +149,7 @@ export default function AlertFeed() {
           onClick={() => setShowAllAlerts(!showAllAlerts)}
           className="text-gold hover:text-black font-black uppercase text-[10px] tracking-widest transition-all"
         >
-          {showAllAlerts ? 'Collapse Data Stream' : 'Decrypt Full Intelligence Stream'} →
+          {showAllAlerts ? 'Collapse' : 'View all alerts'} →
         </button>
       </div>
     </div>

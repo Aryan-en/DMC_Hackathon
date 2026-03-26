@@ -20,9 +20,9 @@ export default function StatCard({
   change,
   changeLabel,
   icon: Icon,
-  accentColor = '#d6b985',
-  bgColor,
-  textColor = 'white',
+  accentColor = 'var(--accent-gold)',
+  bgColor = 'var(--card-bg)',
+  textColor = 'var(--text-primary)',
   loading = false,
 }: StatCardProps) {
   const isPositive = change !== undefined && change > 0;
@@ -33,18 +33,13 @@ export default function StatCard({
 
   return (
     <div
-      className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-200 shadow-xl`}
+      className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-200`}
       style={{ 
-        background: finalBg,
-        border: `1px solid rgba(0,0,0,0.05)`,
-        boxShadow: `0 12px 30px -10px rgba(0,0,0,0.2)`
+        background: bgColor,
+        border: `1px solid ${accentColor}40`,
+        boxShadow: `4px 4px 0px rgba(0,0,0,0.1)`
       }}
     >
-      {/* Subtle top-edge gold shimmer */}
-      <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{ background: `linear-gradient(90deg, transparent, ${accentColor}40, transparent)` }}
-      />
 
       {/* Corner accent */}
       <div
@@ -75,13 +70,13 @@ export default function StatCard({
 
       {/* Value */}
       <div
-        className={`font-black count-up ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
-        style={{ color: textColor, lineHeight: 1, fontSize: '2rem', letterSpacing: '-0.04em' }}
+        className={`font-black count-up tracking-tight ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
+        style={{ color: textColor, lineHeight: 1, fontSize: '2.5rem', letterSpacing: '-0.05em' }}
       >
         {!loading && value}
       </div>
       {subValue && (
-        <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: textColor, opacity: 0.75, fontSize: '0.75rem', fontWeight: 600, marginTop: '8px', letterSpacing: '0.05em' }}>
+        <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: textColor, opacity: 0.8, fontSize: '0.62rem', fontWeight: 900, marginTop: '8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           {!loading && subValue}
         </div>
       )}

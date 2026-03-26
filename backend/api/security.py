@@ -11,6 +11,7 @@ from db.postgres import get_db_session
 from db.schemas import AuditLog
 from utils.response import build_error
 from utils.response import build_success
+from utils.audit import record_audit_log
 from services.security_monitor import security_monitor
 from services.data_classification import classifier
 from services.export_approval import export_approval
@@ -104,12 +105,24 @@ async def get_violations_trend(db: AsyncSession = Depends(get_db_session)):
 
 
 @router.post("/access-check")
-async def access_check(payload: AccessCheckRequest):
+async def access_check(payload: AccessCheckRequest, db: AsyncSession = Depends(get_db_session)):
     clearance = payload.clearance_level.upper()
     required = payload.classification.upper()
     ordering = ["UNCLASS", "FOUO", "SECRET", "TS", "TS/SCI"]
     allowed = ordering.index(clearance) >= ordering.index(required) if clearance in ordering and required in ordering else False
     reason = "clearance_sufficient" if allowed else "clearance_insufficient"
+    
+    await record_audit_log(
+        db,
+        user_id="anonymous", # In real app, get from current_user dependency
+        action="ACCESS_CHECK",
+        resource=f"security/clearance/{required}",
+        status="ALLOW" if allowed else "DENY",
+        classification=required,
+        details={"requested": clearance, "required": required, "reason": reason}
+    )
+    await db.commit()
+    
     return build_success({"allowed": allowed, "reason": reason}, source="service")
 
 

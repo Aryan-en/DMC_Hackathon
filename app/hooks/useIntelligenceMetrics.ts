@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/app/lib/api';
+import { canonicalizeEntityLabel } from '@/app/lib/entity-canonical';
 
 type ExtractedEntity = {
   entity: string;
@@ -28,6 +29,14 @@ type SentimentRadarPoint = {
   subject: string;
   score: number;
   fullMark: number;
+  documents?: number;
+  sources?: number;
+};
+
+type RadarIntegrity = {
+  window_hours: number;
+  dimensions: string[];
+  debiased: boolean;
 };
 
 type StrategicBrief = {
@@ -94,6 +103,7 @@ type IntelligenceMetrics = {
   briefs: StrategicBrief[];
   models: PipelineModel[];
   climateRegions: ClimateRegion[];
+  radarIntegrity?: RadarIntegrity;
   meaSummary?: StrategicSummary;
   meaRelations?: MEARelation[];
   regionalHotspots?: RegionalHotspot[];
@@ -245,7 +255,7 @@ export function useIntelligenceMetrics() {
           apiGet<{ entities: ExtractedEntity[] }>('/api/intelligence/entity-extraction'),
           apiGet<{ languages: LanguageDistribution[] }>('/api/intelligence/language-distribution'),
           apiGet<{ keywords: TrendingKeyword[] }>('/api/intelligence/trending-keywords'),
-          apiGet<{ radar: SentimentRadarPoint[] }>('/api/intelligence/sentiment-radar'),
+          apiGet<{ radar: SentimentRadarPoint[]; integrity?: RadarIntegrity }>('/api/intelligence/sentiment-radar'),
           apiGet<{ briefs: StrategicBrief[] }>('/api/intelligence/strategic-briefs'),
           apiGet<{ models: PipelineModel[] }>(`/api/intelligence/pipeline-status?mode=${pipelineMode}`),
           apiGet<{ regions: ClimateRegion[] }>('/api/intelligence/climate-intelligence'),
@@ -263,13 +273,17 @@ export function useIntelligenceMetrics() {
         const climateRegionsRaw = climateRes.status === 'fulfilled' && climateRes.value?.regions ? climateRes.value.regions : SAMPLE_CLIMATE_REGIONS;
 
         const newData: IntelligenceMetrics = {
-          entities: dedupeByKey(entitiesRaw, (item) => `${item.entity}|${item.type}`),
+          entities: dedupeByKey(
+            entitiesRaw.map((item) => ({ ...item, entity: canonicalizeEntityLabel(item.entity) })),
+            (item) => `${item.entity}|${item.type}`
+          ),
           languages: dedupeByKey(languagesRaw, (item) => item.lang),
           keywords: dedupeByKey(keywordsRaw, (item) => item.keyword),
           sentimentRadar: sentimentRes.status === 'fulfilled' && sentimentRes.value?.radar ? sentimentRes.value.radar : SAMPLE_SENTIMENT_RADAR,
           briefs: dedupeByKey(briefsRaw, (item) => `${item.title}|${item.dateGen ?? ''}`),
           models: dedupeByKey(modelsRaw, (item) => item.name),
           climateRegions: dedupeByKey(climateRegionsRaw, (item) => item.region),
+          radarIntegrity: sentimentRes.status === 'fulfilled' ? sentimentRes.value?.integrity : undefined,
           meaSummary: meaRes.status === 'fulfilled' && meaRes.value?.summary ? meaRes.value.summary : undefined,
           meaRelations: meaRes.status === 'fulfilled' && meaRes.value?.key_relations ? meaRes.value.key_relations : undefined,
           regionalHotspots: meaRes.status === 'fulfilled' && meaRes.value?.regional_hotspots ? meaRes.value.regional_hotspots : undefined,
@@ -298,6 +312,7 @@ export function useIntelligenceMetrics() {
           briefs: SAMPLE_BRIEFS,
           models: SAMPLE_MODELS,
           climateRegions: SAMPLE_CLIMATE_REGIONS,
+          radarIntegrity: undefined,
           meaSummary: undefined,
           meaRelations: undefined,
           regionalHotspots: undefined,

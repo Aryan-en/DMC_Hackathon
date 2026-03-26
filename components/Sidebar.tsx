@@ -15,7 +15,6 @@ const navItems = [
   { href: '/bill-analysis', label: 'Bill Amendment', icon: FileText, group: 'COMMAND' },
   { href: '/knowledge-graph', label: 'Knowledge Graph', icon: Share2, group: 'ANALYSIS' },
   { href: '/geospatial', label: 'Geospatial Intel', icon: Map, group: 'ANALYSIS' },
-  { href: '/heatmap', label: 'Heatmap', icon: Layers, group: 'ANALYSIS' },
   { href: '/predictions', label: 'Predictions Engine', icon: Zap, group: 'ANALYSIS' },
   { href: '/data-streams', label: 'Data Streams', icon: Activity, group: 'INFRASTRUCTURE' },
   { href: '/control-panel', label: 'Control Panel', icon: Settings, group: 'INFRASTRUCTURE' },
@@ -41,7 +40,7 @@ export default function Sidebar() {
         style={{
           background: 'var(--sidebar-bg)',
           borderRight: '1px solid var(--border-color)',
-          boxShadow: '4px 0 32px rgba(0,0,0,0.05)',
+          boxShadow: '4px 0 24px rgba(0,0,0,0.02)',
         }}
       >
         {/* Logo */}
@@ -81,18 +80,21 @@ export default function Sidebar() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
-          {groups.map(group => {
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-7">
+          {groups.map((group, groupIdx) => {
             const items = navItems.filter(i => i.group === group);
             return (
-              <div key={group}>
+              <div key={group} className="relative">
+                {groupIdx > 0 && (
+                  <div className="absolute -top-3.5 left-3 right-3 h-[1px] bg-[var(--border-color)] opacity-40" />
+                )}
                 <div
-                  className="px-3 mb-2 font-semibold tracking-widest"
-                  style={{ color: 'var(--text-dim)', fontSize: '0.58rem', letterSpacing: '0.18em' }}
+                  className="px-3 mb-3 font-black tracking-[0.2em] uppercase"
+                  style={{ color: 'var(--text-dim)', fontSize: '0.6rem', opacity: 0.7 }}
                 >
                   {group}
                 </div>
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   {items.map(item => {
                     const isActive = pathname === item.href;
                     const Icon = item.icon;
@@ -101,7 +103,7 @@ export default function Sidebar() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setSidebarOpen(false)}
-                        className={`sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'active' : ''}`}
+                        className={`sidebar-link relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${isActive ? 'active shadow-sm' : 'hover:bg-[var(--nested-surface-hover)]'}`}
                         style={{
                           background: isActive
                             ? 'var(--accent-gold-dim)'
@@ -109,25 +111,28 @@ export default function Sidebar() {
                           color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
                         }}
                       >
+                        {isActive && (
+                          <div className="absolute left-0 top-2 bottom-2 w-1 bg-[var(--accent-gold)] rounded-r-full shadow-[0_0_8px_var(--accent-gold)]" />
+                        )}
                         <Icon
-                          size={15}
+                          size={16}
+                          className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110 opacity-70 group-hover:opacity-100'}`}
                           style={{ color: isActive ? 'var(--accent-gold)' : 'var(--text-muted)', flexShrink: 0 }}
                         />
                         <span
                           style={{
                             flex: 1,
-                            fontSize: '0.75rem',
-                            letterSpacing: '0.02em',
-                            fontWeight: isActive ? 600 : 400,
+                            fontSize: '0.78rem',
+                            letterSpacing: '0.01em',
+                            fontWeight: isActive ? 750 : 500,
                           }}
                         >
                           {item.label}
                         </span>
                         {isActive && (
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: 'var(--accent-gold)', opacity: 0.9 }}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)] animate-pulse" />
+                          </div>
                         )}
                       </Link>
                     );
@@ -137,6 +142,20 @@ export default function Sidebar() {
             );
           })}
         </nav>
+
+        {/* Footer / User */}
+        <div className="px-4 py-6 border-t border-[var(--border-color)] bg-[var(--nested-surface)]/30">
+          <div className="flex items-center gap-3 p-2 group cursor-pointer">
+            <div className="w-9 h-9 rounded-full bg-[var(--accent-gold-dim)] border border-[var(--accent-gold)]/20 flex items-center justify-center text-[var(--accent-gold)] font-black text-xs">
+              JD
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <div className="text-[11px] font-bold text-[var(--text-primary)] truncate uppercase tracking-widest">Operator-01</div>
+              <div className="text-[9px] text-[var(--text-muted)] font-mono truncate">SYSTEM_ADMIN_AUTH</div>
+            </div>
+            <Settings size={14} className="text-[var(--text-muted)] group-hover:rotate-90 transition-transform duration-500" />
+          </div>
+        </div>
 
       </aside>
     </>

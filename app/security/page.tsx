@@ -1,6 +1,8 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
+import StatCard from '@/components/StatCard';
+import { Shield, Lock, AlertOctagon, Activity, Fingerprint } from 'lucide-react';
 import { useSecurityMetrics } from '@/app/hooks/useSecurityMetrics';
 
 export default function SecurityPage() {
@@ -19,15 +21,55 @@ export default function SecurityPage() {
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: 'var(--text-muted)' }}>Audit Entries</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-gold)' }}>{data.logs.length}</div></div>
-          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: 'var(--text-muted)' }}>Login Events</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-gold)' }}>{loginEvents.length}</div></div>
-          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: 'var(--text-muted)' }}>Denied Actions</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-crimson)' }}>{denies}</div></div>
-          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: 'var(--text-muted)' }}>Trend Points</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-amber)' }}>{data.trend.length}</div></div>
-          <div className="glass-card rounded-xl p-4"><div className="text-xs" style={{ color: 'var(--text-muted)' }}>Access Check</div><div className="text-2xl font-bold" style={{ color: data.accessCheck.allowed ? 'var(--accent-emerald)' : 'var(--accent-crimson)' }}>{data.accessCheck.allowed ? 'ALLOW' : 'DENY'}</div></div>
+          <StatCard
+            label="Audit Entries"
+            value={data.logs.length.toString()}
+            subValue="Telemetry events"
+            icon={Shield}
+            bgColor="#fef08a"
+            textColor="#854d0e"
+            loading={loading}
+          />
+          <StatCard
+            label="Login Events"
+            value={loginEvents.length.toString()}
+            subValue="User authorizations"
+            icon={Fingerprint}
+            bgColor="#ddd6fe"
+            textColor="#4c1d95"
+            loading={loading}
+          />
+          <StatCard
+            label="Denied Actions"
+            value={denies.toString()}
+            subValue="Security violations"
+            icon={AlertOctagon}
+            bgColor="#fecaca"
+            textColor="#991b1b"
+            loading={loading}
+          />
+          <StatCard
+            label="Trend Points"
+            value={data.trend.length.toString()}
+            subValue="Anomaly tracking"
+            icon={Activity}
+            bgColor="#fde68a"
+            textColor="#92400e"
+            loading={loading}
+          />
+          <StatCard
+            label="Access Check"
+            value={data.accessCheck.allowed ? 'ALLOW' : 'DENY'}
+            subValue="System validator"
+            icon={Lock}
+            bgColor={data.accessCheck.allowed ? '#a7f3d0' : '#fecaca'}
+            textColor={data.accessCheck.allowed ? '#064e3b' : '#991b1b'}
+            loading={loading}
+          />
         </div>
 
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text-primary)' }}>Audit Log</h3>
+        <div className="tactical-card rounded-xl p-5">
+          <h3 className="font-black text-[10px] uppercase tracking-widest mb-3" style={{ color: 'var(--text-primary)' }}>Audit Log</h3>
           <div className="overflow-x-auto">
             <table className="w-full data-table">
               <thead>
@@ -57,8 +99,8 @@ export default function SecurityPage() {
           {!loading && data.logs.length === 0 && <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>No live audit logs returned by API.</p>}
         </div>
 
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text-primary)' }}>Recent Authentication Activity</h3>
+        <div className="tactical-card rounded-xl p-5">
+          <h3 className="font-black text-[10px] uppercase tracking-widest mb-3" style={{ color: 'var(--text-primary)' }}>Recent Authentication Activity</h3>
           <div className="overflow-x-auto">
             <table className="w-full data-table">
               <thead>
@@ -84,14 +126,22 @@ export default function SecurityPage() {
           {!loading && loginEvents.length === 0 && <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>No login activity captured yet.</p>}
         </div>
 
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--text-primary)' }}>Violations Trend</h3>
+        <div className="tactical-card rounded-xl p-5">
+          <h3 className="font-black text-[10px] uppercase tracking-widest mb-3" style={{ color: 'var(--text-primary)' }}>Violations Trend</h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {data.trend.map((t) => (
-              <div key={t.day} className="p-2 rounded bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-                <div className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>{t.day}</div>
-                <div className="text-sm font-bold" style={{ color: 'var(--accent-crimson)' }}>{t.violation_count}</div>
-                <div className="text-[9px] font-medium" style={{ color: 'var(--accent-gold)' }}>warn {t.warning_count}</div>
+              <div 
+                key={t.day} 
+                className="p-3 rounded-lg border flex flex-col items-center justify-center text-center transition-all hover:translate-y-[-2px] hover:shadow-lg" 
+                style={{ 
+                  background: 'var(--nested-surface)', 
+                  borderColor: 'var(--border-color)',
+                  boxShadow: 'var(--tactical-shadow)' 
+                }}
+              >
+                <div className="text-[10px] uppercase font-black tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>{t.day}</div>
+                <div className="text-xl font-black" style={{ color: 'var(--accent-crimson)' }}>{t.violation_count}</div>
+                <div className="text-[9px] font-bold uppercase" style={{ color: 'var(--accent-gold)' }}>{t.warning_count} WARNS</div>
               </div>
             ))}
           </div>

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.nlp_processor import NLPProcessor
+from utils.entity_resolution import canonicalize_entity_name
 
 
 ENTITY_TYPE_MAP = {
@@ -33,7 +34,7 @@ class EntityExtractionService:
 
             entities.append(
                 {
-                    "name": item.get("text", "").strip(),
+                    "name": canonicalize_entity_name(item.get("text", ""), entity_type),
                     "entity_type": entity_type,
                     "confidence_score": round(confidence, 4),
                     "mention_count": 1,
@@ -69,5 +70,5 @@ class EntityExtractionService:
 
     @staticmethod
     def _entity_link_key(name: str, entity_type: str) -> str:
-        norm = " ".join(name.lower().split())
+        norm = canonicalize_entity_name(name, entity_type).lower()
         return f"{entity_type}:{norm}"

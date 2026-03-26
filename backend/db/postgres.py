@@ -39,8 +39,8 @@ async def init_db():
         
         logger.info("PostgreSQL database initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize PostgreSQL: {e}")
-        raise
+        logger.warning(f"PostgreSQL initialization deferred (DB likely offline): {e}")
+        # DO NOT RAISE - Allow API to start for infrastructure management
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting database session"""

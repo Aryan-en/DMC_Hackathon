@@ -1,23 +1,33 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import { Brain, MessageSquare, Tag, Search, Layers, MapPin, Activity, Shield, Info, Link as LinkIcon, AlertTriangle, CloudRain, Thermometer, Globe } from 'lucide-react';
+import StatCard from '@/components/StatCard';
+import { Brain, MessageSquare, Tag, Search, Layers, Globe, Activity, TrendingUp, TrendingDown, Clock, AlertTriangle, Link as LinkIcon } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useIntelligenceMetrics } from '@/app/hooks/useIntelligenceMetrics';
 import { useIntelligenceAlerts } from '@/app/hooks/useIntelligenceAlerts';
 import { apiPost } from '@/app/lib/api';
+import { getSafeExternalUrl } from '@/app/lib/source-links';
 import { useState } from 'react';
 import TacticalMarquee from '@/components/TacticalMarquee';
 
 const TYPE_C: Record<string, string> = {
-  ECON: '#f59e0b', GEOPOL: '#ef4444', FIN: '#00d4ff', TECH: '#8b5cf6', MIL: '#ef4444', TRADE: '#f59e0b', ORG: '#00d4ff', PERSON: '#00ff88', LOC: '#ef4444',
+  ECON: 'var(--accent-gold)',
+  GEOPOL: 'var(--accent-crimson)',
+  FIN: 'var(--accent-steel)',
+  TECH: 'var(--accent-lavender)',
+  MIL: 'var(--accent-crimson)',
+  TRADE: 'var(--accent-amber)',
+  ORG: 'var(--accent-steel)',
+  PERSON: 'var(--accent-emerald)',
+  LOC: 'var(--accent-crimson)',
 };
 
 const CLSF_COLORS: Record<string, string> = {
-  'SECRET': '#6b21a8',
-  'TOP SECRET': '#991b1b',
-  'SECRET//REL': '#b45309',
-  'CONFIDENTIAL': '#15803d',
+  'SECRET': 'var(--accent-lavender)',
+  'TOP SECRET': 'var(--accent-crimson)',
+  'SECRET//REL': 'var(--accent-amber)',
+  'CONFIDENTIAL': 'var(--accent-emerald)',
 };
 
 export default function IntelligencePage() {
@@ -78,31 +88,42 @@ export default function IntelligencePage() {
       <main className="flex-1 px-4 py-3 space-y-3">
         {/* Stats Grid - MOVED TO TOP */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Documents Processed Today', value: compact(totalDocs), sub: `${data.languages.length} languages`, bg: '#bfdbfe', text: '#1e3a8a', icon: Layers }, // Light Blue / Dark Blue
-            { label: 'NER Entities Extracted', value: compact(totalMentions), sub: 'spaCy + custom models', bg: '#ddd6fe', text: '#4c1d95', icon: Tag }, // Light Purple / Dark Purple
-            { label: 'Sentiment Analyses', value: compact(totalDocs * 6), sub: 'Global media & social', bg: '#fde68a', text: '#78350f', icon: MessageSquare }, // Light Amber / Dark Amber
-            { label: 'Vector Similarity Searches', value: compact(totalMentions * 4), sub: 'Pinecone / Qdrant', bg: '#a7f3d0', text: '#064e3b', icon: Search }, // Light Green / Dark Green
-          ].map(s => (
-            <div key={s.label} className="rounded-2xl p-6 flex flex-col gap-4 shadow-lg relative overflow-hidden" 
-                 style={{ 
-                   background: s.bg, 
-                   border: `1px solid rgba(0,0,0,0.04)`,
-                 }}>
-              <div className="flex items-center justify-between">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" 
-                     style={{ background: 'rgba(0,0,0,0.08)' }}>
-                  <s.icon size={22} style={{ color: s.text }} />
-                </div>
-                <div className="text-[10px] font-black uppercase tracking-widest" style={{ color: s.text, opacity: 0.7 }}>{s.sub}</div>
-              </div>
-              <div className="mt-2">
-                <div className="text-4xl font-black tracking-tighter leading-none" style={{ color: s.text }}>{s.value}</div>
-                <div className="text-[11px] font-black uppercase tracking-widest block mt-3 opacity-90" style={{ color: s.text }}>{s.label}</div>
-              </div>
-              <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mb-16 blur-2xl" />
-            </div>
-          ))}
+          <StatCard
+            label="Documents Processed Today"
+            value={compact(totalDocs)}
+            subValue={`${data.languages.length} languages tracked`}
+            icon={Layers}
+            bgColor="#ddd6fe"
+            textColor="#4c1d95"
+            loading={loading}
+          />
+          <StatCard
+            label="NER Entities Extracted"
+            value={compact(totalMentions)}
+            subValue="spaCy + custom models"
+            icon={Tag}
+            bgColor="#fef08a"
+            textColor="#854d0e"
+            loading={loading}
+          />
+          <StatCard
+            label="Sentiment Analyses"
+            value={compact(totalDocs * 6)}
+            subValue="Global media & social"
+            icon={MessageSquare}
+            bgColor="#fde68a"
+            textColor="#92400e"
+            loading={loading}
+          />
+          <StatCard
+            label="Vector Similarity Searches"
+            value={compact(totalMentions * 4)}
+            subValue="Pinecone / Qdrant"
+            icon={Search}
+            bgColor="#a7f3d0"
+            textColor="#064e3b"
+            loading={loading}
+          />
         </div>
 
         {error && (
@@ -112,17 +133,17 @@ export default function IntelligencePage() {
         )}
 
         {/* Intelligence Alerts */}
-        <div className="glass-card rounded-xl p-0 overflow-hidden">
+        <div className="tactical-card rounded-xl p-0 overflow-hidden">
           <div className="flex items-center justify-between p-4 bg-black/[0.02]">
             <h3 className="font-bold text-sm text-primary uppercase tracking-wider">Intelligence Alerts</h3>
             <span className="status-online flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-emerald-500" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               LIVE
             </span>
           </div>
           <div className="table-scroll-container">
             {alertsLoading ? (
-              <div className="flex flex-col gap-2 p-4 animate-pulse">
+              <div className="flex flex-col gap-2 p-4">
                 {[1, 2, 3].map(i => <div key={i} className="h-4 bg-black/5 dark:bg-white/5 rounded" />)}
               </div>
             ) : alertsError ? (
@@ -145,6 +166,7 @@ export default function IntelligencePage() {
                 </thead>
                 <tbody className="divide-y divide-black/[0.05] dark:divide-white/[0.03]">
                   {alertsList.slice(0, 25).map((alert, idx) => {
+                    const safeAlertUrl = getSafeExternalUrl(alert.url);
                     const s = alert.severity.toLowerCase();
                     const severityColor = s === 'critical' ? 'var(--accent-crimson)' : s === 'high' ? 'var(--accent-amber)' : s === 'medium' ? 'var(--accent-steel)' : 'var(--text-muted)';
                     
@@ -178,9 +200,9 @@ export default function IntelligencePage() {
                             <span className="text-[10px] font-mono font-black text-emerald">
                               {(alert.confidence * 100).toFixed(0)}%
                             </span>
-                            {alert.url ? (
+                            {safeAlertUrl ? (
                               <a 
-                                href={alert.url} 
+                                href={safeAlertUrl} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-[10px] font-bold text-lavender hover:underline underline-offset-2"
@@ -224,13 +246,14 @@ export default function IntelligencePage() {
                 </thead>
                 <tbody className="divide-y divide-black/5">
                   {data.entities.map(e => {
+                    const safeEntityUrl = getSafeExternalUrl(e.url);
                     const sentiment = inferSentiment(e.type, e.mentions);
                     const sentColor = sentiment === 'positive' ? 'var(--accent-emerald)' : sentiment === 'negative' ? 'var(--accent-crimson)' : 'var(--text-muted)';
                     return (
                       <tr key={e.entity} className="hover:bg-gold/5 transition-colors">
                         <td className="text-primary font-bold">
-                          {e.url ? (
-                            <a href={e.url} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors flex items-center gap-1.5 underline-offset-4 hover:underline">
+                          {safeEntityUrl ? (
+                            <a href={safeEntityUrl} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors flex items-center gap-1.5 underline-offset-4 hover:underline">
                               {e.entity}
                               <LinkIcon size={10} className="text-gold/60" />
                             </a>
@@ -273,11 +296,31 @@ export default function IntelligencePage() {
                 </RadarChart>
               </ResponsiveContainer>
               <div className="text-[10px] mt-4 p-4 rounded-xl bg-[#b2904f]10 border border-[#b2904f]20 text-primary font-bold leading-relaxed shadow-inner" style={{ background: 'rgba(178, 144, 79, 0.08)' }}>
-                <span className="text-gold">ℹ️ DATA INTEGRITY:</span> All intelligence dimensions reflect <strong>Global Tactical Metrics</strong> across 216 monitored nodes.
+                <span className="text-gold font-black">INTEGRITY ADVISORY:</span> Radar scores are <strong>dimension-balanced</strong> across Geopolitical, Economic, Climate, Social, Cyber, and Military using recent source coverage + ontology signals
+                {data.radarIntegrity?.window_hours ? ` (last ${data.radarIntegrity.window_hours}h)` : ''}.
+              </div>
+
+              <div className="mt-3 rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-color)', background: 'rgba(0,0,0,0.04)' }}>
+                <div className="grid grid-cols-4 px-3 py-2 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+                  <span>Dimension</span>
+                  <span className="text-right">Score</span>
+                  <span className="text-right">Docs</span>
+                  <span className="text-right">Sources</span>
+                </div>
+                <div className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+                  {radarData.map((row) => (
+                    <div key={row.subject} className="grid grid-cols-4 px-3 py-2 text-[10px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      <span>{row.subject}</span>
+                      <span className="text-right">{row.score}</span>
+                      <span className="text-right">{row.documents ?? 0}</span>
+                      <span className="text-right">{row.sources ?? 0}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="glass-card rounded-xl p-4">
+            <div className="tactical-card rounded-xl p-4">
               <h3 className="font-bold text-sm text-primary uppercase mb-4">Language Distribution</h3>
               <div className="space-y-3">
                 {data.languages.map(l => (
@@ -331,7 +374,7 @@ export default function IntelligencePage() {
         </div>
 
         {/* AI Briefs */}
-        <div className="glass-card rounded-xl p-0 overflow-hidden">
+        <div className="tactical-card rounded-xl p-0 overflow-hidden">
           <div className="p-4 flex items-center justify-between bg-black/[0.02]">
             <div>
               <h3 className="font-bold text-sm text-primary uppercase">Strategic Intelligence Briefs</h3>
@@ -340,11 +383,12 @@ export default function IntelligencePage() {
             <button 
               onClick={handleGenerateBrief}
               disabled={isGeneratingBriefing}
-              className="px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-wider transition-all" 
+              className="px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border" 
               style={{ 
                 background: isGeneratingBriefing ? 'var(--table-header-bg)' : 'var(--accent-gold)', 
-                color: isGeneratingBriefing ? 'var(--text-muted)' : '#fff',
-                boxShadow: isGeneratingBriefing ? 'none' : '0 10px 20px rgba(178, 144, 79, 0.4)'
+                color: isGeneratingBriefing ? 'var(--text-muted)' : 'var(--text-on-accent)',
+                borderColor: isGeneratingBriefing ? 'var(--border-subtle)' : 'var(--accent-gold-border)',
+                boxShadow: isGeneratingBriefing ? 'none' : 'var(--tactical-shadow)'
               }}
             >
               {isGeneratingBriefing ? 'ANALYZING...' : 'Generate Strategic Brief'}
@@ -366,7 +410,9 @@ export default function IntelligencePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {data.briefs.map((brief, bidx) => (
+                {data.briefs.map((brief, bidx) => {
+                  const safeBriefUrl = getSafeExternalUrl(brief.url);
+                  return (
                   <tr key={bidx} className="group hover:bg-gold/5 transition-colors">
                     <td className="pl-4 py-4">
                       <span className="text-[9px] px-3 py-1 rounded-full font-black uppercase text-white shadow-sm"
@@ -388,17 +434,21 @@ export default function IntelligencePage() {
                       <span className="font-mono text-xs text-emerald-700">{(brief.confidence || 0).toFixed(0)}%</span>
                     </td>
                     <td className="pr-4 py-4 text-right">
-                      <a href={brief.url || undefined} target="_blank" className="text-[10px] font-bold text-lavender hover:underline">Source ↗</a>
+                      {safeBriefUrl ? (
+                        <a href={safeBriefUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-lavender hover:underline">Source ↗</a>
+                      ) : (
+                        <span className="text-[10px] font-bold text-muted uppercase">System</span>
+                      )}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* Climate Radar */}
-        <div className="glass-card rounded-xl p-0 overflow-hidden">
+        <div className="tactical-card rounded-xl p-0 overflow-hidden">
           <div className="p-4 flex items-center justify-between bg-black/[0.02]">
             <h3 className="font-bold text-sm text-primary uppercase">Climate Intelligence Feed</h3>
             <span className="status-warning uppercase text-[8px]">{data.climateRegions.length} Sectors Scanned</span>

@@ -46,28 +46,16 @@ function formatUptime(seconds: number): string {
 export default function ServingHealthChart({ cpuModel, data, snapshot, loading, error }: ServingHealthChartProps) {
   if (error) {
     return (
-      <div
-        className="glass-card rounded-xl p-5 h-96 flex items-center justify-center"
-        style={{
-          background: 'rgba(2,8,23,0.8)',
-          border: '1px solid rgba(30,58,95,0.3)',
-        }}
-      >
-        <div style={{ color: '#ef4444' }}>Serving live matrix unavailable: {error}</div>
+      <div className="tactical-card rounded-xl p-5 h-96 flex items-center justify-center">
+        <div style={{ color: 'var(--accent-crimson)' }}>Serving live matrix unavailable: {error}</div>
       </div>
     );
   }
 
   if (loading || data.length === 0) {
     return (
-      <div
-        className="glass-card rounded-xl p-5 h-96 flex items-center justify-center"
-        style={{
-          background: 'rgba(2,8,23,0.8)',
-          border: '1px solid rgba(30,58,95,0.3)',
-        }}
-      >
-        <div style={{ color: '#94a3b8' }}>Loading serving live matrix...</div>
+      <div className="tactical-card rounded-xl p-5 h-96 flex items-center justify-center">
+        <div style={{ color: 'var(--text-secondary)' }}>Loading serving live matrix...</div>
       </div>
     );
   }
@@ -76,25 +64,19 @@ export default function ServingHealthChart({ cpuModel, data, snapshot, loading, 
   const utilization = snapshot.utilization_pct || latest.cpu_util_pct || 0;
 
   return (
-    <div
-      className="glass-card rounded-xl p-5"
-      style={{
-        background: 'rgba(2,8,23,0.8)',
-        border: '1px solid rgba(30,58,95,0.3)',
-      }}
-    >
-      <div className="flex items-end justify-between mb-2">
+    <div className="tactical-card rounded-xl p-5">
+      <div className="flex items-end justify-between mb-4">
         <div>
-          <h3 className="font-semibold" style={{ color: '#e2e8f0', fontSize: '2rem', lineHeight: 1 }}>CPU</h3>
-          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '0.3rem' }}>% Utilization</p>
+          <h3 className="text-[10px] uppercase tracking-[0.2em] font-black opacity-70" style={{ color: 'var(--text-primary)' }}>Hardware Matrix // CPU</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.2rem' }}>% Total System Utilization</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ color: '#e2e8f0', fontSize: '2rem', fontWeight: 700 }}>{utilization.toFixed(0)}%</div>
-          <div style={{ color: '#94a3b8', fontSize: '0.74rem' }}>{cpuModel}</div>
+          <div style={{ color: 'var(--text-primary)', fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 0.9 }}>{utilization.toFixed(0)}%</div>
+          <div className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', opacity: 0.6 }}>{cpuModel}</div>
         </div>
       </div>
 
-      <div style={{ height: 300, border: '1px solid rgba(148,163,184,0.35)', background: 'rgba(2,8,23,0.6)' }}>
+      <div style={{ height: 300, background: 'var(--background)', borderRadius: '12px', overflow: 'hidden' }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
             <CartesianGrid stroke="rgba(148,163,184,0.2)" vertical={true} horizontal={true} />
@@ -102,10 +84,10 @@ export default function ServingHealthChart({ cpuModel, data, snapshot, loading, 
             <YAxis domain={[0, 100]} tick={false} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{
-                background: 'rgba(2,8,23,0.96)',
-                border: '1px solid rgba(30,58,95,0.6)',
+                background: 'var(--background)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '8px',
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
                 fontSize: '12px',
               }}
               formatter={(value: any, name: any) => {
@@ -113,14 +95,14 @@ export default function ServingHealthChart({ cpuModel, data, snapshot, loading, 
                 if (name === 'cpu_util_pct') return [`${numeric.toFixed(1)}%`, 'CPU'];
                 return [numeric.toFixed(2), String(name)];
               }}
-              labelFormatter={(label) => `Time: ${label}`}
+              labelFormatter={(label) => `SITREP Time: ${label}`}
             />
             <Area
               type="monotone"
               dataKey="cpu_util_pct"
-              stroke="#22d3ee"
-              fill="rgba(34,211,238,0.25)"
-              strokeWidth={2}
+              stroke="var(--metric-accent)"
+              fill="var(--metric-accent-gradient)"
+              strokeWidth={3}
               isAnimationActive={true}
               animationDuration={250}
             />
@@ -128,32 +110,28 @@ export default function ServingHealthChart({ cpuModel, data, snapshot, loading, 
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-between mt-1" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-        <span>60 seconds</span>
+      <div className="flex items-center justify-between mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+        <span>30 minutes</span>
         <span>0</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-8 mt-5">
-        <div>
-          <div className="grid grid-cols-2 gap-y-2" style={{ fontSize: '0.95rem' }}>
-            <div style={{ color: '#94a3b8' }}>Utilization</div>
-            <div style={{ color: '#e2e8f0', fontSize: '2rem', lineHeight: 1 }}>{utilization.toFixed(0)}%</div>
+      <div className="grid grid-cols-2 gap-8 mt-6 pt-6" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="grid grid-cols-2 gap-y-3">
+          <div className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>Utilization</div>
+          <div className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>{utilization.toFixed(1)}%</div>
 
-            <div style={{ color: '#94a3b8' }}>Speed</div>
-            <div style={{ color: '#e2e8f0', fontSize: '2rem', lineHeight: 1 }}>{snapshot.speed_ghz.toFixed(2)} GHz</div>
+          <div className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>Clock Speed</div>
+          <div className="text-xl font-black" style={{ color: 'var(--metric-2-text)' }}>{snapshot.speed_ghz.toFixed(2)} GHz</div>
 
-            <div style={{ color: '#94a3b8' }}>Up time</div>
-            <div style={{ color: '#e2e8f0', fontSize: '1.7rem', lineHeight: 1 }}>{formatUptime(snapshot.uptime_seconds)}</div>
-          </div>
+          <div className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>System Uptime</div>
+          <div className="text-xl font-black" style={{ color: 'var(--accent-emerald)' }}>{formatUptime(snapshot.uptime_seconds)}</div>
         </div>
 
-        <div>
-          <div className="space-y-2" style={{ fontSize: '1rem' }}>
-            <div><span style={{ color: '#94a3b8' }}>Requests/min:</span> <span style={{ color: '#00d4ff' }}>{latest.requests_per_min.toFixed(1)}</span></div>
-            <div><span style={{ color: '#94a3b8' }}>Latency:</span> <span style={{ color: '#f59e0b' }}>{latest.latency_ms.toFixed(1)} ms</span></div>
-            <div><span style={{ color: '#94a3b8' }}>Error rate:</span> <span style={{ color: '#ef4444' }}>{latest.error_rate_pct.toFixed(3)}%</span></div>
-            <div><span style={{ color: '#94a3b8' }}>Uptime:</span> <span style={{ color: '#00ff88' }}>{latest.uptime_pct.toFixed(3)}%</span></div>
-          </div>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center"><span className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>Throughput:</span> <span className="font-black" style={{ color: 'var(--metric-2-text)' }}>{latest.requests_per_min.toFixed(1)} RPM</span></div>
+          <div className="flex justify-between items-center"><span className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>Latency:</span> <span className="font-black" style={{ color: 'var(--accent-amber)' }}>{latest.latency_ms.toFixed(1)} MS</span></div>
+          <div className="flex justify-between items-center"><span className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>Error Rate:</span> <span className="font-black" style={{ color: 'var(--accent-crimson)' }}>{latest.error_rate_pct.toFixed(3)}%</span></div>
+          <div className="flex justify-between items-center"><span className="text-[10px] uppercase font-bold opacity-50" style={{ color: 'var(--text-secondary)' }}>SLA Status:</span> <span className="font-black" style={{ color: 'var(--accent-emerald)' }}>{latest.uptime_pct.toFixed(3)}%</span></div>
         </div>
       </div>
     </div>

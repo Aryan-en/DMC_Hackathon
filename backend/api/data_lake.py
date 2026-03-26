@@ -268,3 +268,69 @@ async def get_materialized_views():
         return build_success({"materialized_views": materialized_views})
     except Exception as e:
         return build_error("QUERY_ERROR", f"Failed to fetch materialized views: {e}")
+
+
+@router.post("/seed")
+async def seed_data_lake(db: AsyncSession = Depends(get_db_session)):
+    """POST /api/data-lake/seed - Seed the data lake with sample intelligence (Week 11)."""
+    try:
+        from datetime import datetime, timedelta
+        import uuid
+        
+        # Sample Documents
+        sample_docs = [
+            {
+                "title": "Geopolitical Stability Assessment: Horn of Africa",
+                "source": "MEA Intelligence Division",
+                "url": "https://www.mea.gov.in/reports/geopol-africa-2026.pdf",
+                "content": "Strategic analysis of regional power dynamics and maritime security corridors in the Horn of Africa. Observed increase in naval activity and infrastructure investment from external state actors. Risk level: ELEVATED.",
+                "doc_metadata": {"classification": "SECRET", "region": "Africa", "priority": "High"}
+            },
+            {
+                "title": "Global Semiconductor Supply Chain Flux",
+                "source": "Economic Observer",
+                "url": "https://economist.com/tech/chips-logistics-flux",
+                "content": "Real-time monitoring of semiconductor manufacturing lead times. Taiwan and South Korea maintaining production levels despite logistical bottlenecks in the Strait of Malacca. Market volatility expected in Q3.",
+                "doc_metadata": {"classification": "CONFIDENTIAL", "region": "Global", "sector": "Technology"}
+            },
+            {
+                "title": "Cyber Threat Landscape: Financial Infrastructure",
+                "source": "Cyber Defense Agency",
+                "url": "https://cda.gov/intelligence/financial-threats",
+                "content": "Identification of novel ransomware strains targeting decentralized finance protocols. Attribution remains ambiguous but patterns align with known APT group 'Obsidian-Spire'. Targeted sectors: Banking, Crypto Exchanges.",
+                "doc_metadata": {"classification": "TOP SECRET", "region": "Global", "threat_actor": "Obsidian-Spire"}
+            },
+            {
+                "title": "Climate Migration Patterns: Southeast Asia",
+                "source": "UN Habitat Security",
+                "url": "https://un.org/habitat/migration-sea-2026",
+                "content": "Longitudinal study of coastline recession and its impact on urban density in Jakarta and Bangkok. Forecast suggests 1.2M displacement events over the next 18 months due to intensified monsoon flooding.",
+                "doc_metadata": {"classification": "UNCLASSIFIED", "region": "Southeast Asia", "impact": "Humanitarian"}
+            }
+        ]
+
+        # Check if already seeded
+        res = await db.execute(select(func.count(Document.id)))
+        doc_count = res.scalar() or 0
+        if doc_count > 0:
+            return build_success({"message": "Data lake already contains data.", "count": doc_count})
+
+        # Add Documents
+        for d in sample_docs:
+            new_doc = Document(
+                id=uuid.uuid4(),
+                title=d["title"],
+                source=d["source"],
+                url=d["url"],
+                content=d["content"],
+                published_date=datetime.utcnow() - timedelta(days=2),
+                created_at=datetime.utcnow(),
+                doc_metadata=d["doc_metadata"]
+            )
+            db.add(new_doc)
+        
+        await db.commit()
+        return build_success({"message": "Data lake seeded successfully", "documents": len(sample_docs)})
+    except Exception as exc:
+        await db.rollback()
+        return build_error("SEED_ERROR", f"Failed to seed data lake: {exc}")

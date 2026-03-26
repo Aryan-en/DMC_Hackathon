@@ -15,8 +15,10 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
   const [loggedIn, setLoggedIn] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
+  const isDarkMode = resolvedTheme === 'dark';
 
   useEffect(() => {
     setMounted(true);
@@ -88,6 +90,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         background: 'var(--background)',
         borderBottom: '1px solid var(--border-color)',
         backdropFilter: 'blur(20px)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.01)',
       }}
     >
       {/* Left: Hamburger + Breadcrumb */}
@@ -97,7 +100,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
           className="lg:hidden p-2 rounded-xl hover:bg-white/5 transition-colors"
           style={{ border: '1px solid var(--border-color)' }}
         >
-          <Menu size={18} style={{ color: 'var(--accent-gold)' }} />
+          <Menu size={18} style={{ color: 'var(--metric-accent)' }} />
         </button>
         
         <div>
@@ -106,7 +109,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
             style={{ fontSize: '0.7rem' }}
           >
             <span style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>Ontora</span>
-            <span style={{ color: 'var(--accent-gold)', opacity: 0.25, fontSize: '0.6rem' }}>›</span>
+            <span style={{ color: 'var(--metric-accent)', opacity: 0.25, fontSize: '0.6rem' }}>›</span>
             <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>{title}</span>
           </div>
           {subtitle && (
@@ -119,35 +122,37 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
       {/* Center: Search (Desktop only) */}
       <div
-        className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-xl group hover:border-[#c8a84a]/30 cursor-pointer"
+        className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-xl group transition-all cursor-pointer shadow-inner"
         style={{
-          background: 'var(--accent-gold-dim)',
+          background: 'var(--nested-surface)',
           border: '1px solid var(--border-color)',
-          width: '280px',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          width: '320px',
         }}
         onClick={() => setShowSearch(true)}
       >
         <Search size={12} style={{ color: 'var(--text-dim)' }} />
-        <input
-          type="text"
-          placeholder="Search..."
-          className="flex-1 bg-transparent outline-none"
-          style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.01em' }}
-        />
-        <CommandPalette />
+        <div 
+          className="flex-1 text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors"
+          style={{ fontSize: '0.75rem', letterSpacing: '0.01em' }}
+        >
+          Universal Command Search
+        </div>
+        <div className="px-1.5 py-0.5 rounded bg-[var(--background)] border border-[var(--border-color)] text-[8px] font-black text-[var(--text-dim)]">
+          ⌘K
+        </div>
       </div>
 
       {/* Right: Actions */}
       <div className="flex items-center gap-3 md:gap-5">
         {/* Theme Toggle */}
         <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-xl transition-all hover:bg-[var(--accent-gold-dim)]"
+          onClick={() => setTheme(isDarkMode ? 'light' : 'dark')}
+          className="p-2 rounded-xl transition-all hover:bg-[var(--metric-1)]"
           style={{ border: '1px solid var(--border-color)' }}
+          aria-label="Toggle theme"
         >
           {mounted ? (
-            theme === 'dark' ? <Sun size={14} style={{ color: 'var(--accent-gold)' }} /> : <Moon size={14} style={{ color: 'var(--accent-gold)' }} />
+            isDarkMode ? <Sun size={14} style={{ color: 'var(--metric-accent)' }} /> : <Moon size={14} style={{ color: 'var(--metric-accent)' }} />
           ) : (
             <div className="w-[14px] h-[14px]" />
           )}
@@ -169,7 +174,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
           <div className="hidden md:block text-right">
             <div
               className="font-mono font-bold"
-              style={{ color: 'var(--accent-gold)', fontSize: '0.82rem', letterSpacing: '0.08em' }}
+              style={{ color: 'var(--metric-accent)', fontSize: '0.82rem', letterSpacing: '0.08em' }}
             >
               {time}
             </div>
@@ -180,10 +185,10 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         {/* User */}
         <button
           onClick={() => { window.location.href = 'http://localhost:3002'; }}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-[var(--border-color)] hover:bg-[var(--accent-gold-dim)] transition-colors"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-[var(--border-color)] hover:bg-[var(--metric-1)] transition-colors"
         >
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[var(--accent-gold-dim)] border border-[var(--accent-gold-dim)]">
-            <User size={11} style={{ color: 'var(--accent-gold)' }} />
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[var(--metric-1)] border border-[var(--metric-1)]">
+            <User size={11} style={{ color: 'var(--metric-accent)' }} />
           </div>
           <span className="hidden sm:inline" style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', fontWeight: 600 }}>{activeUser}</span>
         </button>

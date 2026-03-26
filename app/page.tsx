@@ -16,12 +16,15 @@ import {
 import OntoraLogo from '@/components/OntoraLogo';
 
 const TYPE_COLORS: Record<string, string> = {
-  DOC: '#8b5cf6',
-  MEA: '#b2904f',
-  NEWS: '#ef4444',
-  SOCIAL: '#15803d',
-  METRIC: '#6b21a8',
+  DOC: 'var(--accent-lavender)',
+  MEA: 'var(--accent-gold)',
+  NEWS: 'var(--accent-crimson)',
+  SOCIAL: 'var(--accent-emerald)',
+  METRIC: 'var(--accent-steel)',
 };
+
+const FULL_INGESTION_POLL_ATTEMPTS = 600;
+const FULL_INGESTION_POLL_INTERVAL_MS = 2000;
 
 /**
  * Component that safely renders timestamp without hydration mismatch
@@ -33,6 +36,11 @@ function RelativeTimestamp({ timestamp }: { timestamp: string }) {
 
 export default function Home() {
   const { data, loading, error, refresh } = useStrategicMetrics();
+  const [mounted, setMounted] = React.useState(false);
+  const [syncing, setSyncing] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
   React.useEffect(() => {
     const id = setInterval(refresh, 2000); // 2s polling for "real-time" feel
     return () => clearInterval(id);
@@ -40,9 +48,55 @@ export default function Home() {
   const { events } = useProcessingLog();
   const [showBriefing, setShowBriefing] = React.useState(false);
 
+  const runFullIngestion = React.useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+
+    try {
+      const startRes = await fetch('/api/tasks/full-ingestion', { method: 'POST', cache: 'no-store' });
+      const startPayload = await startRes.json();
+      const taskId = startPayload?.data?.task_id;
+      if (!taskId) {
+        throw new Error('Unable to start full ingestion task.');
+      }
+
+      const maxPolls = FULL_INGESTION_POLL_ATTEMPTS;
+      for (let i = 0; i < maxPolls; i += 1) {
+        const pollRes = await fetch(`/api/tasks/status/${taskId}`, { cache: 'no-store' });
+        const pollPayload = await pollRes.json();
+        const status = String(pollPayload?.data?.status || '').toUpperCase();
+
+        if (status === 'SUCCESS') {
+          localStorage.removeItem('ontora_strategic_metrics');
+          localStorage.removeItem('ontora_intelligence_metrics');
+          localStorage.removeItem('ontora_intelligence_alerts');
+          await refresh(true);
+          window.location.reload();
+          return;
+        }
+
+        if (status === 'FAILURE' || status === 'REVOKED') {
+          throw new Error('Full ingestion task failed. Check backend logs for details.');
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, FULL_INGESTION_POLL_INTERVAL_MS));
+      }
+
+      alert(`Full ingestion is still running in background. Task ID: ${taskId}. Please check again in a few minutes.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  }, [refresh, syncing]);
+
+  const systemBrief = !mounted || loading
+    ? 'Loading current operational metrics...'
+    : `Current status: 99.7% uptime, ${data.globalEntities.breakdown.nations || 216} nations monitored, ${data.threatThreads.total} active threat threads.`;
+
   return (
     <div className="flex flex-col min-h-screen grid-bg">
-      <TopBar title="Strategic Overview" subtitle="Global Intelligence Command Dashboard — CLASSIFICATION: TS/SCI" />
+      <TopBar title="Strategic Overview" subtitle="Operational Intelligence Dashboard" />
       <main className="flex-1 px-6 py-6 space-y-6">
 
         {error && (
@@ -52,37 +106,27 @@ export default function Home() {
         )}
 
         {/* Mission brief banner */}
-        <div className="glass-card flex flex-col sm:flex-row items-center justify-between px-5 py-3 rounded-2xl gap-4 sm:gap-0">
+        <div className="tactical-card flex flex-col sm:flex-row items-center justify-between px-5 py-3 rounded-2xl gap-4 sm:gap-0">
           <div className="flex items-center gap-3">
-            <Radio size={14} className="text-gold animate-pulse shrink-0" />
-            <span className="text-secondary text-[11px] font-bold uppercase tracking-tight">
-              <span className="text-gold font-black">SYSTEM BRIEF:</span>{' '}
-              {loading ? 'Decrypting encrypted signal stream...' : `Ontora operating at 99.7% uptime — ${data.globalEntities.breakdown.nations || 216} nations monitored, ${data.threatThreads.total} active threads.`}
+            <Radio size={14} className="text-gold shrink-0" />
+            <span className="text-primary text-[11px] font-bold uppercase tracking-tight">
+              <span className="text-gold font-black">STATUS:</span>{' '}
+              {systemBrief}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <button
-              disabled={loading}
-              onClick={async (e) => {
-                const btn = e.currentTarget;
-                const originalText = btn.innerText;
-                btn.innerText = 'SYNCING...';
-                try {
-                  await fetch('/api/tasks/full-ingestion', { method: 'POST' });
-                  window.location.reload();
-                } catch(err) {
-                  alert('Sync failed.');
-                } finally {
-                  btn.innerText = originalText;
-                }
-              }}
-              className="px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest bg-[#ef4444] text-white hover:opacity-80 transition-all shadow-lg shadow-red-900/20"
+              disabled={loading || syncing}
+              onClick={runFullIngestion}
+              className="px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest bg-crimson text-white hover:opacity-80 transition-all border border-crimson/20"
+              style={{ boxShadow: 'var(--tactical-shadow)' }}
             >
-              FORCE GLOBAL RE-SYNC
+              {syncing ? 'SYNCING...' : 'RUN FULL INGESTION'}
             </button>
             <button
               onClick={() => setShowBriefing(!showBriefing)}
-              className="px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest bg-[#b2904f] text-black hover:opacity-80 transition-all shadow-lg shadow-gold-900/20"
+              className="px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest bg-gold text-black hover:opacity-80 transition-all border border-gold/20"
+              style={{ boxShadow: 'var(--tactical-shadow)' }}
             >
               {showBriefing ? 'Hide Briefing' : 'View Briefing'}
             </button>
@@ -143,7 +187,7 @@ export default function Home() {
             { label: 'Model Inferences Today', value: data.liveTelemetry?.cpu?.utilization ? `${(data.liveTelemetry.cpu.utilization * 0.12).toFixed(1)}M` : '8.4M', icon: Brain, color: 'var(--accent-emerald)' },
             { label: 'Nations Monitored', value: (data.globalEntities.breakdown.nations || 216).toString(), icon: OntoraLogo, color: 'var(--accent-gold)' },
           ].map(s => (
-            <div key={s.label} className="glass-card rounded-2xl px-5 py-5 flex items-center gap-5" style={{ background: 'var(--card-bg)' }}>
+            <div key={s.label} className="tactical-card rounded-2xl px-5 py-5 flex items-center gap-5" style={{ background: 'var(--card-bg)' }}>
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gold/10">
                 <s.icon size={18} color={s.color} />
               </div>
@@ -156,7 +200,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 glass-card rounded-xl p-4 overflow-hidden">
+          <div className="lg:col-span-2 tactical-card rounded-xl p-4 overflow-hidden">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
               <h3 className="text-primary font-black text-[10px] uppercase tracking-widest">Global Risk Index — Tactical Trend</h3>
               <div className="flex flex-wrap items-center gap-3">
@@ -173,7 +217,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl p-4 overflow-hidden">
+          <div className="tactical-card rounded-xl p-4 overflow-hidden">
             <h3 className="text-primary font-black text-[10px] uppercase tracking-widest mb-4">Regional Risk Matrix</h3>
             <div className="space-y-3">
               {data.regions.map(r => (
@@ -194,13 +238,13 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2"><AlertFeed /></div>
           <div className="space-y-4">
-            <div className="glass-card rounded-xl p-4">
+            <div className="tactical-card rounded-xl p-4">
               <h3 className="text-primary font-black text-[10px] uppercase tracking-widest mb-3">Ontology Distribution</h3>
               <div className="h-[180px] w-full">
                 <EntityBarChart data={data.entityDistribution.length > 0 ? data.entityDistribution : undefined} />
               </div>
             </div>
-            <div className="glass-card rounded-xl p-4">
+            <div className="tactical-card rounded-xl p-4">
               <h3 className="text-primary font-black text-[10px] uppercase tracking-widest mb-3">Infra Health</h3>
               <div className="space-y-2">
                 {data.infraHealth.components.map(s => (
@@ -220,7 +264,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          <div className="glass-card rounded-2xl p-5">
+          <div className="tactical-card rounded-2xl p-5">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-primary font-black text-xs uppercase tracking-widest">Global Media Sentiment</h3>
               <div className="flex items-center gap-4">
@@ -236,7 +280,7 @@ export default function Home() {
               <SentimentChart data={data.sentimentTrend.length > 0 ? data.sentimentTrend : undefined} />
             </div>
           </div>
-          <div className="glass-card rounded-2xl p-0 overflow-hidden flex flex-col">
+          <div className="tactical-card rounded-2xl p-0 overflow-hidden flex flex-col">
             <div className="p-4 bg-black/[0.02]">
               <h3 className="text-primary font-black text-xs uppercase tracking-widest">System Processing Log</h3>
             </div>
@@ -277,11 +321,11 @@ export default function Home() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-3" style={{ borderTop: '2px dashed var(--border-subtle)' }}>
           <span className="text-primary font-black text-[9px] uppercase tracking-[0.2em] text-center">
-            ONTORA v6.0.0 Tactical — CLASSIFICATION: TOP SECRET // SCI — {loading ? 'SIGNAL_SYNC' : 'SIGNAL_STABLE_LIVE'}
+            Ontora Platform - Operational Mode - {loading ? 'Refreshing data' : 'Live monitoring'}
           </span>
           <div className="flex items-center gap-2">
             <Server size={10} className="text-gold" />
-            <span className="text-primary font-black text-[9px] uppercase tracking-tighter">Cluster: US-EAST-INTEL | Uptime: 99.98%</span>
+            <span className="text-primary font-black text-[9px] uppercase tracking-tighter">Cluster: US-EAST | Uptime: 99.98%</span>
           </div>
         </div>
       </main>

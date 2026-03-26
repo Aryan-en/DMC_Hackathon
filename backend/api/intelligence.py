@@ -138,7 +138,7 @@ async def get_trending_keywords(db: AsyncSession = Depends(get_db_session)):
 @router.get("/sentiment-radar")
 @cached_endpoint(ttl=30)
 async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
-    """GET /api/intelligence/sentiment-radar - Enhanced with live climate data"""
+    """GET /api/intelligence/sentiment-radar - Source-balanced tactical radar."""
     try:
         rows = (
             await db.execute(select(Entity.entity_type, func.coalesce(func.sum(Entity.mention_count), 0)).group_by(Entity.entity_type))
@@ -155,34 +155,74 @@ async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
             "Military": ["MIL", "MILITARY", "DEFENSE"],
         }
 
-        radar = []
-        for subject, mapped_types in buckets.items():
-            score = sum(type_totals.get(t, 0) for t in mapped_types)
-            normalized = min(100, max(10, int(score**0.5 * 5))) if score > 0 else 10
-            
-            # Enhance Climate dimension with actual climate risk data
-            if subject == "Climate":
-                # Climate risk assessment: 8 regions, 3 CRITICAL (37.5%), avg temp change 2.8°C
-                critical_regions = 3  # South Asia Plains, Ganges Valley, Southeast Asia, Mekong Delta = 4, but let's be conservative
-                total_regions = 8
-                avg_temp_change = 2.8
-                crop_risk_avg = 76  # Average crop risk across regions
-                
-                # Blend database mentions with actual climate metrics
-                # Critical regions factor (0-40 points)
-                climate_risk_score = (critical_regions / total_regions) * 40
-                # Temperature change factor (0-30 points) - higher change = higher tension
-                climate_risk_score += (avg_temp_change / 4.0) * 30  # 4°C as max
-                # Crop risk factor (0-30 points) - high crop risk = food security tension
-                climate_risk_score += (crop_risk_avg / 100) * 30
-                
-                # Combine with database mentions
-                combined_score = (normalized * 0.4) + climate_risk_score
-                normalized = min(100, max(10, int(combined_score)))
-                
-            radar.append({"subject": subject, "score": normalized, "fullMark": 100})
+        # Build document-based dimension coverage from recent source metadata.
+        since = datetime.utcnow() - timedelta(hours=72)
+        doc_rows = (
+            await db.execute(
+                select(Document.source, Document.doc_metadata)
+                .where(Document.created_at >= since)
+                .order_by(Document.created_at.desc())
+                .limit(1500)
+            )
+        ).all()
 
-        return build_success({"radar": radar})
+        doc_counts = {subject: 0 for subject in buckets.keys()}
+        source_sets = {subject: set() for subject in buckets.keys()}
+
+        for source, metadata in doc_rows:
+            payload = metadata if isinstance(metadata, dict) else {}
+            dim = str(payload.get("dimension") or "").strip()
+            if dim not in doc_counts:
+                continue
+            source_name = str(payload.get("source_name") or source or "UNKNOWN").strip() or "UNKNOWN"
+            doc_counts[dim] += 1
+            source_sets[dim].add(source_name)
+
+        max_docs = max(doc_counts.values()) if doc_counts else 0
+        max_sources = max((len(v) for v in source_sets.values()), default=0)
+
+        radar = []
+        raw_scores = []
+        for subject, mapped_types in buckets.items():
+            entity_total = sum(type_totals.get(t, 0) for t in mapped_types)
+            entity_score = min(100, max(10, int(entity_total**0.5 * 5))) if entity_total > 0 else 10
+
+            doc_score = 10
+            if max_docs > 0:
+                doc_score = min(100, max(10, int((doc_counts[subject] / max_docs) * 100)))
+
+            source_score = 10
+            if max_sources > 0:
+                source_score = min(100, max(10, int((len(source_sets[subject]) / max_sources) * 100)))
+
+            # Blend entity pressure + source coverage. Coverage is weighted higher to reduce ontology bias.
+            blended = int(round((0.40 * entity_score) + (0.35 * doc_score) + (0.25 * source_score)))
+            raw_scores.append((subject, blended))
+
+        # Debias step: pull each dimension partially toward mean so one source-rich class cannot dominate.
+        mean_score = sum(score for _, score in raw_scores) / max(1, len(raw_scores))
+        for subject, score in raw_scores:
+            adjusted = int(round((0.65 * score) + (0.35 * mean_score)))
+            radar.append(
+                {
+                    "subject": subject,
+                    "score": min(100, max(10, adjusted)),
+                    "fullMark": 100,
+                    "documents": doc_counts[subject],
+                    "sources": len(source_sets[subject]),
+                }
+            )
+
+        return build_success(
+            {
+                "radar": radar,
+                "integrity": {
+                    "window_hours": 72,
+                    "dimensions": list(buckets.keys()),
+                    "debiased": True,
+                },
+            }
+        )
     except Exception as exc:
         return build_error("QUERY_ERROR", f"Failed to fetch sentiment radar: {exc}")
 

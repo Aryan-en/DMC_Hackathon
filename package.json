@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev:frontend": "next dev",
+    "dev:backend": "powershell -Command \"cd backend; ..\\.venv\\Scripts\\python.exe main.py\"",
+    "dev": "concurrently -k -p \"[{name}]\" -n \"UI,API\" -c \"cyan,magenta\" \"npm:dev:frontend\" \"npm:dev:backend\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -21,6 +23,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import TopBar from '@/components/TopBar';
+import StatCard from '@/components/StatCard';
 import { useStreamsMetrics } from '@/app/hooks/useStreamsMetrics';
 import { 
   Activity, 
@@ -20,7 +21,8 @@ import {
   Server,
   Filter
 } from 'lucide-react';
-import { API_BASE_URL } from '@/app/lib/api';
+import { API_BASE_URL, apiGet } from '@/app/lib/api';
+import { getSafeExternalUrl } from '@/app/lib/source-links';
 
 type Document = {
   id: string;
@@ -57,16 +59,12 @@ export default function CombinedDataStreamsPage() {
 
   const fetchDocuments = async () => {
     setDocsLoading(true);
+    setDocsError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/data-lake/documents?limit=50`);
-      const data = await res.json();
-      if (data?.status === 'success') {
-        setDocuments(data.data.documents || []);
-      } else {
-        throw new Error(data?.error?.message || 'Failed to fetch documents');
-      }
+      const res = await apiGet<any>('/api/data-lake/documents?limit=50');
+      setDocuments(res.documents || []);
     } catch (err) {
-      console.error(err);
+      console.error('FETCH_DOCUMENTS_ERROR:', err);
       setDocsError(err instanceof Error ? err.message : 'Connection failed');
     } finally {
       setDocsLoading(false);
@@ -97,67 +95,69 @@ export default function CombinedDataStreamsPage() {
       />
 
       <main className="flex-1 px-6 py-6 space-y-6">
-        {/* Header Summary Cards - Slimmer & Integrated */}
+        {/* Header Summary Cards - Standardized */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="glass-card rounded-xl p-4 border-l-2 border-l-cyan-500/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Active Streams</p>
-                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{streamData.topics.length + streamData.pipelines.length}</h3>
-              </div>
-              <Activity size={16} className="text-cyan-500/70" />
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4 border-l-2 border-l-emerald-500/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Throughput</p>
-                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{(totalThroughput / 1000).toFixed(1)}K<span className="text-xs text-[var(--text-muted)] ml-1">msg/s</span></h3>
-              </div>
-              <Zap size={16} className="text-emerald-500/70" />
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4 border-l-2 border-l-amber-500/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">System Lag</p>
-                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{totalLag.toLocaleString()}</h3>
-              </div>
-              <Layers size={16} className="text-amber-500/70" />
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4 border-l-2 border-l-[#d6b985]/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">Intelligence Lake</p>
-                <h3 className="text-xl font-bold text-[var(--text-primary)] mt-1">{documents.length || '---'} <span className="text-xs text-[var(--text-muted)] ml-1">Docs</span></h3>
-              </div>
-              <Database size={16} className="text-[#d6b985]/70" />
-            </div>
-          </div>
+          <StatCard
+            label="Active Streams"
+            value={(streamData.topics.length + streamData.pipelines.length).toString()}
+            subValue="Status monitoring"
+            icon={Activity}
+            bgColor="var(--metric-1)"
+            textColor="var(--metric-1-text)"
+          />
+          <StatCard
+            label="Throughput"
+            value={`${(totalThroughput / 1000).toFixed(1)}K`}
+            subValue="msg/s current"
+            icon={Zap}
+            bgColor="var(--metric-2)"
+            textColor="var(--metric-2-text)"
+          />
+          <StatCard
+            label="System Lag"
+            value={totalLag.toLocaleString()}
+            subValue="Total message delay"
+            icon={Layers}
+            bgColor="var(--metric-3)"
+            textColor="var(--metric-3-text)"
+          />
+          <StatCard
+            label="Intelligence Lake"
+            value={documents.length > 0 ? documents.length.toString() : '---'}
+            subValue="Document count"
+            icon={Database}
+            bgColor="var(--accent-gold-dim)"
+            textColor="var(--accent-gold)"
+          />
         </div>
 
         {/* Tab Selection */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex p-1 bg-slate-200/50 dark:bg-slate-900/50 backdrop-blur border border-slate-300 dark:border-slate-800 rounded-xl">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex p-1.5 bg-[var(--nested-surface)] backdrop-blur-xl border border-[var(--border-color)] rounded-2xl shadow-inner">
             <button 
               onClick={() => setActiveTab('infrastructure')}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-xs font-black transition-all duration-300 ${
                 activeTab === 'infrastructure' 
-                  ? 'bg-[#d6b985] text-white dark:text-black shadow-lg shadow-[#d6b985]/20' 
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'text-white dark:text-black shadow-[0_4px_12px_rgba(214,185,133,0.3)]' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--nested-surface-hover)] scale-95'
               }`}
+              style={{
+                background: activeTab === 'infrastructure' ? 'var(--tactical-gradient-gold)' : 'transparent',
+              }}
             >
               <Server size={14} />
               TACTICAL INFRASTRUCTURE
             </button>
             <button 
               onClick={() => setActiveTab('intelligence')}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-xs font-black transition-all duration-300 ${
                 activeTab === 'intelligence' 
-                  ? 'bg-[#d6b985] text-white dark:text-black shadow-lg shadow-[#d6b985]/20' 
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  ? 'text-white dark:text-black shadow-[0_4px_12px_rgba(214,185,133,0.3)]' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--nested-surface-hover)] scale-95'
               }`}
+              style={{
+                background: activeTab === 'intelligence' ? 'var(--tactical-gradient-gold)' : 'transparent',
+              }}
             >
               <FileText size={14} />
               INTELLIGENCE FEED
@@ -166,12 +166,12 @@ export default function CombinedDataStreamsPage() {
 
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
               LIVE UPDATE: {refreshTime}
             </span>
             <button 
               onClick={activeTab === 'intelligence' ? fetchDocuments : () => window.location.reload()}
-              className="p-2 bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700/50 rounded-lg text-[var(--text-muted)] hover:text-[#d6b985] transition-colors"
+              className="p-2 bg-[var(--nested-surface)] border border-[var(--border-color)] rounded-xl text-[var(--text-muted)] hover:text-[var(--accent-gold)] transition-colors shadow-sm"
             >
               <RefreshCw size={14} className={streamsLoading || docsLoading ? 'animate-spin' : ''} />
             </button>
@@ -184,10 +184,10 @@ export default function CombinedDataStreamsPage() {
             <div className="space-y-6">
               {/* Streams Section */}
               <div className="glass-card rounded-2xl overflow-hidden border border-[var(--border-color)] shadow-2xl">
-                <div className="bg-slate-200/20 dark:bg-slate-900/30 px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                <div className="bg-[var(--nested-surface)] px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-cyan-500/10 rounded-lg">
-                      <BarChart3 size={18} className="text-cyan-400" />
+                    <div className="p-2 bg-[var(--accent-gold-dim)] rounded-lg">
+                      <BarChart3 size={18} className="text-[var(--accent-gold)]" />
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">Kafka Streaming Topics</h3>
@@ -195,7 +195,7 @@ export default function CombinedDataStreamsPage() {
                     </div>
                   </div>
                   {streamsError && (
-                    <span className="text-2xs text-amber-500/80 bg-amber-500/5 px-3 py-1 rounded-full border border-amber-500/10">
+                    <span className="text-2xs text-[var(--accent-amber)] bg-[var(--accent-amber)]/5 px-3 py-1 rounded-full border border-[var(--accent-amber)]/10">
                       {streamsError}
                     </span>
                   )}
@@ -204,7 +204,7 @@ export default function CombinedDataStreamsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-slate-100/50 dark:bg-slate-900/20 text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest border-b border-slate-200 dark:border-slate-800/40">
+                      <tr className="bg-[var(--nested-surface)] text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest border-b border-[var(--border-color)]">
                         <th className="px-6 py-4">Topic Path</th>
                         <th className="px-6 py-4 text-center">Nodes</th>
                         <th className="px-6 py-4 text-center">Lag</th>
@@ -270,7 +270,7 @@ export default function CombinedDataStreamsPage() {
                         </div>
                       </div>
                       <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                        p.status === 'healthy' ? 'text-emerald-500' : p.status === 'warning' ? 'text-amber-400' : 'text-red-500'
+                        p.status === 'healthy' ? 'text-[var(--accent-emerald)]' : p.status === 'warning' ? 'text-[var(--accent-amber)]' : 'text-[var(--accent-crimson)]'
                       }`}>
                          {p.status}
                       </div>
@@ -280,10 +280,10 @@ export default function CombinedDataStreamsPage() {
                         <span>Cluster Health</span>
                         <span>{p.health_score || 98}%</span>
                       </div>
-                      <div className="h-1.5 bg-slate-800/50 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-[var(--nested-surface)] rounded-full overflow-hidden">
                         <div 
                           className={`h-full transition-all duration-1000 shadow-[0_0_8px_rgba(0,0,0,0.5)] ${
-                            (p.health_score || 98) > 80 ? 'bg-emerald-500' : (p.health_score || 98) > 50 ? 'bg-amber-500' : 'bg-red-500'
+                            (p.health_score || 98) > 80 ? 'bg-[var(--accent-emerald)]' : (p.health_score || 98) > 50 ? 'bg-[var(--accent-amber)]' : 'bg-[var(--accent-crimson)]'
                           }`}
                           style={{ width: `${p.health_score || 98}%` }}
                         />
@@ -302,13 +302,13 @@ export default function CombinedDataStreamsPage() {
                   <input 
                     type="text" 
                     placeholder="Filter global intelligence documents, diplomatic reports, news feeds..."
-                    className="w-full bg-slate-100/60 dark:bg-slate-900/60 border border-[var(--border-color)] rounded-xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]/50 transition-all placeholder:text-[var(--text-dim)]"
+                    className="w-full bg-[var(--nested-surface)] border border-[var(--border-color)] rounded-xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]/50 transition-all placeholder:text-[var(--text-dim)] shadow-inner"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 px-4 py-3 bg-slate-200/40 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50 rounded-xl text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+                  <button className="flex items-center gap-2 px-6 py-3 bg-[var(--nested-surface)] border border-[var(--border-color)] rounded-xl text-xs font-black text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-gold)]/30 transition-all shadow-sm">
                     <Filter size={14} />
                     ALL SOURCES
                   </button>
@@ -326,10 +326,9 @@ export default function CombinedDataStreamsPage() {
               <div className="grid grid-cols-1 gap-4">
                 {docsLoading ? (
                   <div className="flex flex-col items-center justify-center py-32 gap-6 glass-card rounded-2xl border-dashed">
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping" />
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#d6b985] relative" />
-                    </div>
+                  <div className="relative">
+                    <div className="rounded-full h-10 w-10 border-t-2 border-b-2 border-[#d6b985] relative" />
+                  </div>
                     <div className="flex flex-col items-center gap-1">
                       <p className="text-[var(--text-primary)] text-sm font-bold tracking-widest uppercase">Deep Scanning Data Lake</p>
                       <p className="text-[var(--text-muted)] text-2xs font-mono">RETRIEVING ENCRYPTED ASSETS...</p>
@@ -348,17 +347,19 @@ export default function CombinedDataStreamsPage() {
                     </div>
                   </div>
                 ) : (
-                  filteredDocs.map((doc) => (
-                    <div key={doc.id} className="glass-card hover:bg-slate-100/50 dark:hover:bg-slate-900/30 hover:border-[#d6b985]/30 transition-all group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800/60 p-5 flex flex-col gap-4 relative">
+                  filteredDocs.map((doc) => {
+                    const safeDocUrl = getSafeExternalUrl(doc.url);
+                    return (
+                    <div key={doc.id} className="glass-card hover:bg-[var(--nested-surface-hover)] hover:border-[var(--accent-gold)]/30 transition-all group rounded-2xl overflow-hidden border border-[var(--border-color)] p-5 flex flex-col gap-4 relative">
                       <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <div className="w-1.5 h-1.5 rounded-full bg-[#d6b985] shadow-[0_0_8px_#d6b985]" />
+                         <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)]" />
                       </div>
                       
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                         <div className="space-y-1.5 flex-1">
                           <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${doc.url?.endsWith('.pdf') ? 'bg-red-500/10 text-red-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
-                              {doc.url?.endsWith('.pdf') ? <FileText size={16} /> : <LinkIcon size={16} />}
+                            <div className={`p-2 rounded-lg ${safeDocUrl?.toLowerCase().endsWith('.pdf') ? 'bg-red-500/10 text-red-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
+                              {safeDocUrl?.toLowerCase().endsWith('.pdf') ? <FileText size={16} /> : <LinkIcon size={16} />}
                             </div>
                             <h3 className="text-[var(--text-primary)] font-bold text-base leading-tight group-hover:text-[#d6b985] transition-colors">
                               {doc.title}
@@ -373,12 +374,12 @@ export default function CombinedDataStreamsPage() {
                         </div>
 
                         <div className="flex items-center gap-2 pl-11 md:pl-0">
-                          {doc.url && (
+                          {safeDocUrl && (
                             <a 
-                              href={doc.url} 
+                              href={safeDocUrl} 
                               target="_blank" 
                               rel="noreferrer" 
-                              className="px-4 py-2 bg-slate-200/50 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/60 rounded-xl hover:bg-[#d6b985]/10 hover:border-[#d6b985]/30 transition-all text-[var(--text-muted)] hover:text-[#d6b985] flex items-center gap-2 text-[10px] font-bold"
+                              className="px-4 py-2 bg-[var(--nested-surface)] border border-[var(--border-color)] rounded-xl hover:bg-[var(--accent-gold)]/10 hover:border-[var(--accent-gold)]/30 transition-all text-[var(--text-muted)] hover:text-[var(--accent-gold)] flex items-center gap-2 text-[10px] font-bold"
                             >
                               SOURCE INTEL
                               <ExternalLink size={12} />
@@ -394,13 +395,14 @@ export default function CombinedDataStreamsPage() {
                       </div>
                       
                       <div className="flex flex-wrap gap-2 pt-1 pl-11">
-                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[var(--text-muted)] font-bold tracking-tighter uppercase group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">RANK: CLASSIFIED_S1</span>
-                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-cyan-950/20 border border-cyan-800/30 text-cyan-500 font-bold tracking-tighter uppercase">VECTORIZED</span>
-                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-emerald-950/20 border border-emerald-800/30 text-emerald-500 font-bold tracking-tighter uppercase">KG_LINKED</span>
-                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-[#d6b985]/10 border border-[#d6b985]/20 text-[#d6b985] font-bold tracking-tighter uppercase">READY</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[var(--text-muted)] font-black tracking-widest uppercase group-hover:border-[var(--accent-gold)] transition-colors">RANK: CLASSIFIED_S1</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 font-black tracking-widest uppercase">VECTORIZED</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-black tracking-widest uppercase">KG_LINKED</span>
+                        <span className="px-2.5 py-1 rounded-md text-[9px] bg-[var(--accent-gold)]/10 border border-[var(--accent-gold)]/30 text-[var(--accent-gold)] font-black tracking-widest uppercase">SYD_READY</span>
                       </div>
                     </div>
-                  ))
+                  );
+                  })
                 )}
               </div>
             </div>

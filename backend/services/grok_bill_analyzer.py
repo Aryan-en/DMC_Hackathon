@@ -3,7 +3,8 @@
 import json
 import logging
 import asyncio
-from typing import Optional
+import re
+from typing import Any, Optional
 from datetime import datetime
 import httpx
 from core.config import Settings
@@ -32,13 +33,58 @@ class GrokBillAnalyzer:
         self.max_retries = settings.GROK_MAX_RETRIES
         self.timeout = settings.GROK_TIMEOUT_SEC
         
-        self.provider = "gemini" if self.gemini_api_key else "grok" if self.api_key else "mock"
+        self.provider = "gemini" if self.gemini_api_key else "mock"
 
         if self.provider == "mock":
-            logger.warning("No LLM API key configured (GEMINI_API_KEY/GROK_API_KEY). Using mock analysis mode.")
+            logger.warning("No LLM API key configured (GEMINI_API_KEY). Using mock analysis mode.")
             self.enabled = False
         else:
             self.enabled = True
+
+    async def analyze_pdf_document(
+        self,
+        pdf_bytes: bytes,
+        filename: str,
+        logs: list,
+        fallback_text: str = "",
+    ) -> tuple[dict, list]:
+        """Analyze an entire PDF using Gemini File API + structured output in one holistic call."""
+
+        if not self.enabled:
+            logs.append("⚠ AI provider disabled - using mock analysis")
+            return await self._mock_analysis(fallback_text or "", logs)
+
+        file_name: Optional[str] = None
+        file_uri: Optional[str] = None
+
+        try:
+            logs.append("✓ Uploading PDF to Gemini File API...")
+            file_name, file_uri = await self._upload_pdf_to_gemini(pdf_bytes, filename)
+            logs.append("✓ PDF upload complete")
+
+            logs.append("✓ Running holistic full-document analysis...")
+            holistic = await self._call_gemini_comprehensive(file_uri)
+            analysis = self._normalize_holistic_analysis(holistic, filename)
+
+            analysis["analysis_provider"] = self.provider
+            analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else "none"
+            logs.append("✓ Holistic analysis complete")
+            return analysis, logs
+        except Exception as e:
+            logger.error(f"Holistic PDF analysis failed: {str(e)}")
+            logs.append(f"✗ Holistic PDF analysis error: {str(e)}")
+
+            # Do not silently downgrade to mock when quota/rate-limit errors occur.
+            if "429" in str(e):
+                raise RuntimeError("Gemini API rate limit reached. Please retry later or use a higher-quota model/key.")
+
+            if fallback_text.strip():
+                logs.append("⚠ Falling back to text-based analysis mode")
+                return await self.analyze_bill(fallback_text, logs)
+            return await self._mock_analysis("", logs)
+        finally:
+            if file_name:
+                await self._delete_uploaded_file(file_name)
     
     async def analyze_bill(self, text: str, logs: list) -> tuple[dict, list]:
         """
@@ -69,6 +115,17 @@ class GrokBillAnalyzer:
             metadata = await self._extract_metadata(text, logs)
             
             # Step 4: Parallel analysis of key sections
+            logs.append("✓ Running unified analysis pass...")
+            unified_result = await self._analyze_unified(chunks, metadata, logs)
+
+            if unified_result:
+                final_analysis = self._merge_unified_analysis(metadata, unified_result)
+                logs.append("✓ Unified analysis complete!")
+                final_analysis["analysis_provider"] = self.provider
+                final_analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else "none"
+                return final_analysis, logs
+
+            logs.append("⚠ Unified pass failed, falling back to section-by-section mode...")
             logs.append("✓ Running parallel analysis of key sections...")
             analysis_tasks = [
                 self._analyze_summary_section(chunks, metadata, logs),
@@ -81,22 +138,34 @@ class GrokBillAnalyzer:
                 self._analyze_compliance_burden(chunks, logs),
                 self._analyze_legal_precedents(chunks, logs)
             ]
-            
-            results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
+
+            # Execute section calls sequentially to avoid Gemini burst-rate 429s.
+            results = []
+            for task in analysis_tasks:
+                try:
+                    results.append(await task)
+                except Exception as exc:
+                    results.append(exc)
             logs.append("✓ Aggregating and synthesizing results...")
             
             # Step 5: Parallel analysis for deep sections
             timeline_task = self._analyze_timeline(chunks, metadata, logs)
             comparative_task = self._analyze_comparatives(chunks, metadata, logs)
-            
-            deep_results = await asyncio.gather(timeline_task, comparative_task, return_exceptions=True)
+
+            # Keep these sequential too for the same quota reason.
+            deep_results = []
+            for task in (timeline_task, comparative_task):
+                try:
+                    deep_results.append(await task)
+                except Exception as exc:
+                    deep_results.append(exc)
             
             # Step 6: Synthesize final results
             final_analysis = self._synthesize_results(metadata, results, deep_results, logs)
             logs.append("✓ Final synthesis complete!")
 
             final_analysis["analysis_provider"] = self.provider
-            final_analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else self.model
+            final_analysis["analysis_model"] = self.gemini_model if self.provider == "gemini" else "none"
             
             return final_analysis, logs
             
@@ -104,6 +173,114 @@ class GrokBillAnalyzer:
             logger.error(f"Bill analysis provider error: {str(e)}")
             logs.append(f"✗ Provider error: {str(e)}")
             return await self._mock_analysis(text, logs)
+
+    async def _analyze_unified(self, chunks: list[str], metadata: dict, logs: list[str]) -> dict:
+        """Run a single comprehensive analysis call to reduce rate-limit risk."""
+
+        joined_chunks = "\n---\n".join(chunks[:min(3, len(chunks))])
+        prompt = f"""Analyze this bill and return a complete structured assessment.
+
+Bill title hint: {metadata.get('bill_title', 'Unknown')}
+Country hint: {metadata.get('country', 'Unknown')}
+
+Bill content excerpt:
+{joined_chunks[:12000]}
+
+Return ONLY valid JSON with these keys:
+{{
+    "bill_summary": "string",
+    "pros": ["string", ...],
+    "cons": ["string", ...],
+    "national_impact": {{
+        "gdp_impact": float,
+        "employment_impact": float,
+        "inflation_impact": float,
+        "sector_effects": [{{"sector": "string", "impact": float}}]
+    }},
+    "global_impact": {{
+        "trade_relations": ["string", ...],
+        "geopolitical_influence": float,
+        "affected_regions": ["string", ...]
+    }},
+    "risk_assessment": {{
+        "risk_level": "LOW|MEDIUM|HIGH",
+        "probability": float,
+        "mitigation_strategies": ["string", ...]
+    }},
+    "stakeholder_analysis": [{{"stakeholder": "string", "sentiment": "POSITIVE|NEGATIVE|NEUTRAL|MIXED", "influence": float}}],
+    "implementation_timeline": [{{"phase": "string", "duration": "string", "milestones": ["string", ...]}}],
+    "comparative_analysis": [{{"country": "string", "similar_bill": "string", "outcome": "string"}}],
+    "esg_impact": {{
+        "esg_score": float,
+        "environmental": "string",
+        "social": "string",
+        "governance": "string",
+        "sustainability_metrics": ["string", ...]
+    }},
+    "compliance_burden": {{
+        "complexity_score": float,
+        "estimated_cost_level": "LOW|MEDIUM|HIGH",
+        "burdensome_provisions": ["string", ...],
+        "required_resources": ["string", ...]
+    }},
+    "legal_precedents": {{
+        "precedents": [{{"act_name": "string", "outcome": "string", "relevance": "string"}}],
+        "legal_challenges_risk": "string"
+    }}
+}}"""
+
+        try:
+            response = await self._call_llm_api(prompt)
+            data = self._extract_json(response)
+            summary = str(data.get("bill_summary") or "").strip()
+            if not summary:
+                return {}
+            if not isinstance(data.get("pros"), list):
+                data["pros"] = []
+            if not isinstance(data.get("cons"), list):
+                data["cons"] = []
+            logs.append("✓ Unified Gemini response parsed")
+            return data
+        except Exception as e:
+            logs.append(f"⚠ Unified analysis fallback used: {str(e)}")
+            return {}
+
+    def _merge_unified_analysis(self, metadata: dict, unified: dict) -> dict:
+        """Normalize unified response to frontend-compatible schema."""
+
+        analysis = {
+            "bill_title": metadata.get("bill_title", "Bill Analysis"),
+            "country": metadata.get("country", "Unknown"),
+            "bill_summary": unified.get("bill_summary", ""),
+            "pros": unified.get("pros", []) if isinstance(unified.get("pros"), list) else [],
+            "cons": unified.get("cons", []) if isinstance(unified.get("cons"), list) else [],
+            "national_impact": unified.get("national_impact", {}) if isinstance(unified.get("national_impact"), dict) else {},
+            "global_impact": unified.get("global_impact", {}) if isinstance(unified.get("global_impact"), dict) else {},
+            "risk_assessment": unified.get("risk_assessment", {}) if isinstance(unified.get("risk_assessment"), dict) else {},
+            "stakeholder_analysis": unified.get("stakeholder_analysis", []) if isinstance(unified.get("stakeholder_analysis"), list) else [],
+            "implementation_timeline": unified.get("implementation_timeline", []) if isinstance(unified.get("implementation_timeline"), list) else [],
+            "comparative_analysis": unified.get("comparative_analysis", []) if isinstance(unified.get("comparative_analysis"), list) else [],
+            "india_impact": {},
+            "recommendations": [],
+            "policy_brief": {},
+            "esg_impact": unified.get("esg_impact", {}) if isinstance(unified.get("esg_impact"), dict) else {},
+            "compliance_burden": unified.get("compliance_burden", {}) if isinstance(unified.get("compliance_burden"), dict) else {},
+            "legal_precedents": unified.get("legal_precedents", {}) if isinstance(unified.get("legal_precedents"), dict) else {},
+        }
+
+        if not analysis["implementation_timeline"]:
+            analysis["implementation_timeline"] = self._generate_timeline()
+        if not analysis["comparative_analysis"]:
+            analysis["comparative_analysis"] = self._generate_comparatives()
+
+        india_impact = self._build_india_impact(analysis)
+        recommendations = self._build_recommendations(analysis, india_impact)
+        policy_brief = self._build_policy_brief(analysis, india_impact, recommendations)
+
+        analysis["india_impact"] = india_impact
+        analysis["recommendations"] = recommendations
+        analysis["policy_brief"] = policy_brief
+        return analysis
     
     async def _extract_metadata(self, text: str, logs: list) -> dict:
         """Extract bill title, country, and basic metadata"""
@@ -155,6 +332,7 @@ Return ONLY valid JSON:
             return self._extract_json(response)
         except Exception as e:
             logger.warning(f"Summary analysis failed: {str(e)}")
+            logs.append(f"⚠ Summary section fallback used: {str(e)}")
             return {"bill_summary": "Bill analysis in progress"}
     
     async def _analyze_pros_cons(self, chunks: list, logs: list) -> dict:
@@ -181,6 +359,7 @@ Return ONLY valid JSON:
             return self._extract_json(response)
         except Exception as e:
             logger.warning(f"Pros/cons analysis failed: {str(e)}")
+            logs.append(f"⚠ Pros/cons section fallback used: {str(e)}")
             return {"pros": [], "cons": []}
     
     async def _analyze_economic_impact(self, chunks: list, logs: list) -> dict:
@@ -210,6 +389,7 @@ Return ONLY valid JSON:
             return {"national_impact": data}
         except Exception as e:
             logger.warning(f"Economic impact analysis failed: {str(e)}")
+            logs.append(f"⚠ Economic impact section fallback used: {str(e)}")
             return {"national_impact": {}}
     
     async def _analyze_risk_assessment(self, chunks: list, logs: list) -> dict:
@@ -235,6 +415,7 @@ Return ONLY valid JSON:
             return {"risk_assessment": data}
         except Exception as e:
             logger.warning(f"Risk assessment failed: {str(e)}")
+            logs.append(f"⚠ Risk assessment section fallback used: {str(e)}")
             return {"risk_assessment": {}}
     
     async def _analyze_global_impact(self, chunks: list, logs: list) -> dict:
@@ -260,6 +441,7 @@ Return ONLY valid JSON:
             return {"global_impact": data}
         except Exception as e:
             logger.warning(f"Global impact analysis failed: {str(e)}")
+            logs.append(f"⚠ Global impact section fallback used: {str(e)}")
             return {"global_impact": {}}
     
     async def _analyze_stakeholders(self, chunks: list, logs: list) -> dict:
@@ -286,6 +468,7 @@ Return ONLY valid JSON:
             return {"stakeholder_analysis": data.get("stakeholders", [])}
         except Exception as e:
             logger.warning(f"Stakeholder analysis failed: {str(e)}")
+            logs.append(f"⚠ Stakeholder section fallback used: {str(e)}")
             return {"stakeholder_analysis": []}
     
     async def _analyze_timeline(self, chunks: list, metadata: dict, logs: list) -> list:
@@ -307,6 +490,7 @@ Return ONLY valid JSON:
             return data.get("timeline", [])
         except Exception as e:
             logger.warning(f"Timeline analysis failed: {str(e)}")
+            logs.append(f"⚠ Timeline section fallback used: {str(e)}")
             return self._generate_timeline()
 
     async def _analyze_comparatives(self, chunks: list, metadata: dict, logs: list) -> list:
@@ -328,6 +512,7 @@ Return ONLY valid JSON:
             return data.get("comparatively", [])
         except Exception as e:
             logger.warning(f"Comparative analysis failed: {str(e)}")
+            logs.append(f"⚠ Comparative section fallback used: {str(e)}")
             return self._generate_comparatives()
 
     async def _analyze_esg_impact(self, chunks: list, logs: list) -> dict:
@@ -349,7 +534,9 @@ Return ONLY valid JSON:
         try:
             response = await self._call_llm_api(prompt)
             return {"esg_impact": self._extract_json(response)}
-        except: return {"esg_impact": {}}
+        except Exception as e:
+            logs.append(f"⚠ ESG section fallback used: {str(e)}")
+            return {"esg_impact": {}}
 
     async def _analyze_compliance_burden(self, chunks: list, logs: list) -> dict:
         """Analyze compliance burden and implementation costs"""
@@ -369,7 +556,9 @@ Return ONLY valid JSON:
         try:
             response = await self._call_llm_api(prompt)
             return {"compliance_burden": self._extract_json(response)}
-        except: return {"compliance_burden": {}}
+        except Exception as e:
+            logs.append(f"⚠ Compliance section fallback used: {str(e)}")
+            return {"compliance_burden": {}}
 
     async def _analyze_legal_precedents(self, chunks: list, logs: list) -> dict:
         """Search for similar legal precedents or similar acts"""
@@ -390,13 +579,13 @@ Return ONLY valid JSON:
         try:
             response = await self._call_llm_api(prompt)
             return {"legal_precedents": self._extract_json(response)}
-        except: return {"legal_precedents": []}
+        except Exception as e:
+            logs.append(f"⚠ Legal precedents fallback used: {str(e)}")
+            return {"legal_precedents": []}
 
     async def _call_llm_api(self, prompt: str) -> str:
-        """Call configured LLM provider (Gemini preferred, Grok fallback)."""
-        if self.provider == "gemini":
-            return await self._call_gemini_api(prompt)
-        return await self._call_grok_api(prompt)
+        """Call configured LLM provider."""
+        return await self._call_gemini_api(prompt)
 
     async def _call_grok_api(self, prompt: str) -> str:
         """Call Grok API with retry logic"""
@@ -447,7 +636,7 @@ Return ONLY valid JSON:
     async def _call_gemini_api(self, prompt: str) -> str:
         """Call Gemini API with retry logic."""
 
-        payload = {
+        payload_with_json_mime = {
             "contents": [
                 {
                     "parts": [
@@ -464,32 +653,57 @@ Return ONLY valid JSON:
             }
         }
 
+        payload_without_mime = {
+            "contents": payload_with_json_mime["contents"],
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
+            }
+        }
+
         url = f"{self.gemini_api_base_url}/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
 
         for attempt in range(self.max_retries):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
-                    response.raise_for_status()
-                    result = response.json()
+                    for payload in (payload_with_json_mime, payload_without_mime):
+                        response = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+                        if response.status_code >= 400:
+                            # Some preview models reject responseMimeType=json; retry same attempt without it.
+                            if payload is payload_with_json_mime:
+                                continue
+                            response.raise_for_status()
 
-                    candidates = result.get("candidates", [])
-                    if not candidates:
-                        raise Exception("Gemini response has no candidates")
+                        result = response.json()
+                        candidates = result.get("candidates", [])
+                        if not candidates:
+                            continue
 
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if not parts:
-                        raise Exception("Gemini response has no content parts")
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if not parts:
+                            continue
 
-                    text = "".join(part.get("text", "") for part in parts)
-                    if not text:
-                        raise Exception("Gemini response text is empty")
+                        text = "".join(part.get("text", "") for part in parts)
+                        if text and text.strip():
+                            return text
 
-                    return text
+                    raise Exception("Gemini response has no usable candidate text")
 
             except httpx.TimeoutException:
                 if attempt < self.max_retries - 1:
                     logger.warning(f"Gemini API timeout, retrying... (attempt {attempt + 1})")
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise
+            except httpx.HTTPStatusError as e:
+                if e.response is not None and e.response.status_code == 429 and attempt < self.max_retries - 1:
+                    retry_after = e.response.headers.get("Retry-After")
+                    wait_seconds = float(retry_after) if retry_after and retry_after.isdigit() else 6.0 * (attempt + 1)
+                    logger.warning(f"Gemini API rate-limited (429), waiting {wait_seconds:.1f}s before retry")
+                    await asyncio.sleep(wait_seconds)
+                    continue
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Gemini API HTTP error: {str(e)}, retrying...")
                     await asyncio.sleep(2 ** attempt)
                 else:
                     raise
@@ -501,6 +715,326 @@ Return ONLY valid JSON:
                     raise
 
         raise Exception("Max retries exceeded")
+
+    async def _upload_pdf_to_gemini(self, pdf_bytes: bytes, filename: str) -> tuple[str, str]:
+        """Upload PDF bytes to Gemini File API and return (file_name, file_uri)."""
+
+        host = self.gemini_api_base_url.rstrip("/")
+        if host.endswith("/v1beta"):
+            host = host[:-7]
+        elif host.endswith("/v1"):
+            host = host[:-3]
+
+        upload_url = f"{host}/upload/v1beta/files?key={self.gemini_api_key}"
+        headers = {
+            "X-Goog-Upload-Protocol": "multipart",
+            "X-Goog-Upload-Command": "start, upload, finalize",
+            "X-Goog-Upload-Header-Content-Type": "application/pdf",
+            "X-Goog-Upload-Header-Content-Length": str(len(pdf_bytes)),
+        }
+
+        files = {
+            "metadata": (None, json.dumps({"file": {"displayName": filename}}), "application/json"),
+            "file": (filename, pdf_bytes, "application/pdf"),
+        }
+
+        async with httpx.AsyncClient(timeout=max(120.0, float(self.timeout))) as client:
+            response = await client.post(upload_url, headers=headers, files=files)
+            response.raise_for_status()
+            payload = response.json()
+
+        file_data = payload.get("file") or {}
+        file_name = file_data.get("name")
+        file_uri = file_data.get("uri")
+        if not file_name or not file_uri:
+            raise ValueError("File upload succeeded but response did not contain file name/uri")
+        return file_name, file_uri
+
+    async def _delete_uploaded_file(self, file_name: str) -> None:
+        """Best-effort cleanup for uploaded Gemini files."""
+
+        try:
+            delete_url = f"{self.gemini_api_base_url.rstrip('/')}/{file_name}?key={self.gemini_api_key}"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                await client.delete(delete_url)
+        except Exception:
+            logger.debug("Gemini file cleanup skipped", exc_info=True)
+
+    async def _call_gemini_comprehensive(self, file_uri: str) -> dict[str, Any]:
+        """Single-pass comprehensive analysis using Gemini response schema."""
+
+        response_schema: dict[str, Any] = {
+            "type": "OBJECT",
+            "properties": {
+                "bill_title": {"type": "STRING"},
+                "country": {"type": "STRING"},
+                "bill_summary": {"type": "STRING"},
+                "pros": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "cons": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "national_impact": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "gdp_impact": {"type": "NUMBER"},
+                        "employment_impact": {"type": "NUMBER"},
+                        "inflation_impact": {"type": "NUMBER"},
+                        "sector_effects": {
+                            "type": "ARRAY",
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "sector": {"type": "STRING"},
+                                    "impact": {"type": "NUMBER"},
+                                },
+                            },
+                        },
+                    },
+                },
+                "global_impact": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "trade_relations": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "geopolitical_influence": {"type": "NUMBER"},
+                        "affected_regions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                },
+                "risk_assessment": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "risk_level": {"type": "STRING", "enum": ["LOW", "MEDIUM", "HIGH"]},
+                        "probability": {"type": "NUMBER"},
+                        "mitigation_strategies": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                },
+                "stakeholder_analysis": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "stakeholder": {"type": "STRING"},
+                            "sentiment": {"type": "STRING", "enum": ["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED"]},
+                            "influence": {"type": "NUMBER"},
+                        },
+                    },
+                },
+                "implementation_timeline": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "phase": {"type": "STRING"},
+                            "duration": {"type": "STRING"},
+                            "milestones": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        },
+                    },
+                },
+                "comparative_analysis": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "country": {"type": "STRING"},
+                            "similar_bill": {"type": "STRING"},
+                            "outcome": {"type": "STRING"},
+                        },
+                    },
+                },
+                "india_impact": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "regional_signal_strength": {"type": "NUMBER"},
+                        "inflation_pressure": {"type": "NUMBER"},
+                        "readiness_score": {"type": "NUMBER"},
+                        "opportunity_index": {"type": "NUMBER"},
+                    },
+                },
+                "recommendations": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "title": {"type": "STRING"},
+                            "detail": {"type": "STRING"},
+                            "confidence": {"type": "NUMBER"},
+                            "priority": {"type": "STRING", "enum": ["low", "medium", "high"]},
+                        },
+                    },
+                },
+                "esg_impact": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "esg_score": {"type": "NUMBER"},
+                        "environmental": {"type": "STRING"},
+                        "social": {"type": "STRING"},
+                        "governance": {"type": "STRING"},
+                        "sustainability_metrics": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                },
+                "compliance_burden": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "complexity_score": {"type": "NUMBER"},
+                        "estimated_cost_level": {"type": "STRING", "enum": ["LOW", "MEDIUM", "HIGH"]},
+                        "burdensome_provisions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "required_resources": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                },
+                "legal_precedents": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "precedents": {
+                            "type": "ARRAY",
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "act_name": {"type": "STRING"},
+                                    "outcome": {"type": "STRING"},
+                                    "relevance": {"type": "STRING"},
+                                },
+                            },
+                        },
+                        "legal_challenges_risk": {"type": "STRING"},
+                    },
+                },
+            },
+            "required": [
+                "bill_title",
+                "country",
+                "bill_summary",
+                "pros",
+                "cons",
+                "national_impact",
+                "global_impact",
+                "risk_assessment",
+                "stakeholder_analysis",
+                "implementation_timeline",
+                "comparative_analysis",
+                "india_impact",
+                "recommendations",
+            ],
+        }
+
+        payload_base = {
+            "systemInstruction": {
+                "parts": [
+                    {
+                        "text": (
+                            "You are an expert legislative analyst. Read the entire attached PDF and produce a rigorous,"
+                            " evidence-driven assessment. Do not use placeholders. Return strict JSON only."
+                        )
+                    }
+                ]
+            },
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "fileData": {
+                                "mimeType": "application/pdf",
+                                "fileUri": file_uri,
+                            }
+                        },
+                        {
+                            "text": "Analyze this legislative document holistically and provide the complete structured response."
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": min(0.2, float(self.temperature)),
+                "maxOutputTokens": min(3072, int(self.max_tokens)),
+                "responseMimeType": "application/json",
+                "responseSchema": response_schema,
+            },
+        }
+
+        candidate_models = [self.gemini_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        seen_models: set[str] = set()
+
+        last_error: Optional[Exception] = None
+
+        for model_name in candidate_models:
+            if not model_name or model_name in seen_models:
+                continue
+            seen_models.add(model_name)
+            url = f"{self.gemini_api_base_url.rstrip('/')}/models/{model_name}:generateContent?key={self.gemini_api_key}"
+
+            for attempt in range(self.max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=max(180.0, float(self.timeout))) as client:
+                        response = await client.post(url, json=payload_base, headers={"Content-Type": "application/json"})
+                        response.raise_for_status()
+                        result = response.json()
+                        text = "".join(
+                            part.get("text", "")
+                            for part in ((result.get("candidates", [{}])[0].get("content", {}) or {}).get("parts", []))
+                        )
+                        data = self._extract_json(text)
+                        if not data:
+                            raise ValueError("Gemini structured response was empty")
+                        return data
+                except httpx.HTTPStatusError as e:
+                    last_error = e
+                    if e.response is not None and e.response.status_code == 429 and attempt < self.max_retries - 1:
+                        retry_after = e.response.headers.get("Retry-After")
+                        wait_seconds = float(retry_after) if retry_after and retry_after.isdigit() else 10.0 * (attempt + 1)
+                        logger.warning(f"Gemini model {model_name} rate-limited (429), waiting {wait_seconds:.1f}s")
+                        await asyncio.sleep(wait_seconds)
+                        continue
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    break
+
+            logger.warning(f"Gemini comprehensive analysis failed for model {model_name}; trying next model")
+
+        raise Exception(f"Gemini comprehensive call exceeded retry budget across models: {last_error}")
+
+    def _normalize_holistic_analysis(self, data: dict[str, Any], filename: str) -> dict[str, Any]:
+        """Normalize holistic response into the expected frontend schema."""
+
+        analysis: dict[str, Any] = {
+            "bill_title": data.get("bill_title") or filename or "Bill Analysis",
+            "country": data.get("country") or "Unknown",
+            "bill_summary": data.get("bill_summary") or "",
+            "pros": data.get("pros") if isinstance(data.get("pros"), list) else [],
+            "cons": data.get("cons") if isinstance(data.get("cons"), list) else [],
+            "national_impact": data.get("national_impact") if isinstance(data.get("national_impact"), dict) else {},
+            "global_impact": data.get("global_impact") if isinstance(data.get("global_impact"), dict) else {},
+            "risk_assessment": data.get("risk_assessment") if isinstance(data.get("risk_assessment"), dict) else {},
+            "stakeholder_analysis": data.get("stakeholder_analysis") if isinstance(data.get("stakeholder_analysis"), list) else [],
+            "implementation_timeline": data.get("implementation_timeline") if isinstance(data.get("implementation_timeline"), list) else [],
+            "comparative_analysis": data.get("comparative_analysis") if isinstance(data.get("comparative_analysis"), list) else [],
+            "india_impact": data.get("india_impact") if isinstance(data.get("india_impact"), dict) else {},
+            "recommendations": data.get("recommendations") if isinstance(data.get("recommendations"), list) else [],
+            "policy_brief": data.get("policy_brief") if isinstance(data.get("policy_brief"), dict) else {},
+            "esg_impact": data.get("esg_impact") if isinstance(data.get("esg_impact"), dict) else {},
+            "compliance_burden": data.get("compliance_burden") if isinstance(data.get("compliance_burden"), dict) else {},
+            "legal_precedents": data.get("legal_precedents") if isinstance(data.get("legal_precedents"), dict) else {},
+        }
+
+        if not analysis["implementation_timeline"]:
+            analysis["implementation_timeline"] = self._generate_timeline()
+        if not analysis["comparative_analysis"]:
+            analysis["comparative_analysis"] = self._generate_comparatives()
+
+        if not analysis["india_impact"]:
+            analysis["india_impact"] = self._build_india_impact(analysis)
+        if not analysis["recommendations"]:
+            analysis["recommendations"] = self._build_recommendations(analysis, analysis["india_impact"])
+        if not analysis["policy_brief"]:
+            analysis["policy_brief"] = self._build_policy_brief(
+                analysis,
+                analysis["india_impact"],
+                analysis["recommendations"],
+            )
+
+        return analysis
     
     def _create_smart_chunks(self, text: str) -> list[str]:
         """
@@ -554,20 +1088,40 @@ Return ONLY valid JSON:
     
     def _extract_json(self, response: str) -> dict:
         """Extract JSON from response"""
-        
-        # Try to find JSON in response
-        start_idx = response.find("{")
-        end_idx = response.rfind("}") + 1
-        
-        if start_idx >= 0 and end_idx > start_idx:
-            json_str = response[start_idx:end_idx]
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                logger.warning("JSON parsing failed, returning empty dict")
-                return {}
-        
-        return {}
+
+        if not response:
+            return {}
+
+        candidate = response.strip()
+
+        # Remove markdown code fences if the model wrapped JSON in ```json ... ```.
+        candidate = re.sub(r"^```(?:json)?\s*", "", candidate, flags=re.IGNORECASE)
+        candidate = re.sub(r"\s*```$", "", candidate)
+
+        # Try direct parse first.
+        try:
+            parsed = json.loads(candidate)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            pass
+
+        # Fallback: find largest JSON object region.
+        start_idx = candidate.find("{")
+        end_idx = candidate.rfind("}") + 1
+        if start_idx < 0 or end_idx <= start_idx:
+            return {}
+
+        json_str = candidate[start_idx:end_idx]
+
+        # Repair a common model issue: trailing commas before ] or }.
+        json_str = re.sub(r",\s*([}\]])", r"\1", json_str)
+
+        try:
+            parsed = json.loads(json_str)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            logger.warning("JSON parsing failed after repair, returning empty dict")
+            return {}
     
     def _synthesize_results(self, metadata: dict, results: list, deep_results: list, logs: list) -> dict:
         """Combine all analysis results into final output"""
@@ -781,7 +1335,7 @@ Return ONLY valid JSON:
         analysis = {
             "bill_title": "Legislative Analysis",
             "country": "Unknown",
-            "bill_summary": f"This document contains approximately {word_count} words. Full AI-powered analysis requires GEMINI_API_KEY or GROK_API_KEY configuration.",
+            "bill_summary": f"This document contains approximately {word_count} words. Full AI-powered analysis requires GEMINI_API_KEY configuration.",
             "analysis_provider": "mock",
             "analysis_model": "none",
             "pros": ["Comprehensive coverage", "Detailed provisions"],

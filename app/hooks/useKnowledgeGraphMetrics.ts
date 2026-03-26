@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/app/lib/api';
+import { canonicalizeEntityLabel } from '@/app/lib/entity-canonical';
 
 type NodeType = {
   type: string;
@@ -79,6 +80,33 @@ type KnowledgeGraphMetrics = {
   centrality: CentralityStats;
 };
 
+function dedupeRelationships(items: Relationship[]) {
+  const merged = new Map<string, Relationship>();
+  for (const item of items) {
+    const source = canonicalizeEntityLabel(item.source);
+    const target = canonicalizeEntityLabel(item.target);
+    const relation = item.relation;
+    const key = `${source}|${target}|${relation}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.strength = Math.max(existing.strength, item.strength);
+      existing.url = existing.url || item.url;
+      continue;
+    }
+    merged.set(key, { ...item, source, target });
+  }
+  return Array.from(merged.values());
+}
+
+function normalizePaths(items: Path[]) {
+  return items.map((item) => ({
+    ...item,
+    chain: item.chain.map((node) => canonicalizeEntityLabel(node)),
+  }));
+}
+
+type DataSourceState = 'live' | 'sample';
+
 type HookOptions = {
   source?: string;
   target?: string;
@@ -100,18 +128,18 @@ const SAMPLE_NODE_TYPES: NodeType[] = [
 ];
 
 const SAMPLE_RELATIONSHIPS: Relationship[] = [
-  { source: 'Russia', target: 'EU', relation: 'SANCTIONS', strength: 0.92, date: '2026-03-15', impact: 'high' },
-  { source: 'China', target: 'USA', relation: 'TRADE_PARTNER', strength: 0.85, date: '2026-03-14' },
-  { source: 'India', target: 'Russia', relation: 'DEFENSE_AGREEMENT', strength: 0.78, date: '2026-03-12' },
-  { source: 'NATO', target: 'Ukraine', relation: 'MILITARY_SUPPORT', strength: 0.88, date: '2026-03-10', impact: 'critical' },
-  { source: 'OPEC', target: 'Global Markets', relation: 'PRICE_INFLUENCE', strength: 0.81, date: '2026-03-08' },
-  { source: 'EU', target: 'China', relation: 'DIPLOMATIC_TENSION', strength: 0.67, date: '2026-03-05' },
+  { source: 'Russia', target: 'EU', relation: 'SANCTIONS', strength: 92, date: '2026-03-15', impact: 'high' },
+  { source: 'China', target: 'USA', relation: 'TRADE_PARTNER', strength: 85, date: '2026-03-14' },
+  { source: 'India', target: 'Russia', relation: 'DEFENSE_AGREEMENT', strength: 78, date: '2026-03-12' },
+  { source: 'NATO', target: 'Ukraine', relation: 'MILITARY_SUPPORT', strength: 88, date: '2026-03-10', impact: 'critical' },
+  { source: 'OPEC', target: 'Global Markets', relation: 'PRICE_INFLUENCE', strength: 81, date: '2026-03-08' },
+  { source: 'EU', target: 'China', relation: 'DIPLOMATIC_TENSION', strength: 67, date: '2026-03-05' },
 ];
 
 const SAMPLE_PATHS: Path[] = [
-  { chain: ['Russia', 'SANCTIONS', 'EU', 'TRADE_PARTNER', 'China'], strength: 0.74, hops: 2 },
-  { chain: ['Russia', 'DEFENSE_AGREEMENT', 'India', 'TRADE_PARTNER', 'EU'], strength: 0.68, hops: 2 },
-  { chain: ['Russia', 'ENERGY_SUPPLIER', 'Europe', 'NATO_MEMBER', 'EU'], strength: 0.71, hops: 2 },
+  { chain: ['Russia', 'India', 'EU'], strength: 74, hops: 2 },
+  { chain: ['Russia', 'China', 'EU'], strength: 68, hops: 2 },
+  { chain: ['Russia', 'Global Markets', 'EU'], strength: 71, hops: 2 },
 ];
 
 const SAMPLE_SHACL_SUMMARY: ShaclSummary = {
@@ -168,9 +196,10 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dataSource, setDataSource] = useState<DataSourceState>('sample');
 
-  const source = options.source ?? 'Russia';
-  const target = options.target ?? 'EU';
+  const source = canonicalizeEntityLabel(options.source ?? 'Russia');
+  const target = canonicalizeEntityLabel(options.target ?? 'EU');
   const searchQuery = options.searchQuery?.trim() ?? '';
   const relationshipLimit = options.relationshipLimit ?? 60;
   const minStrength = options.minStrength ?? 0;
@@ -181,6 +210,7 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
     let active = true;
 
     async function load() {
+      if (active) setLoading(true);
       try {
         const path = `/api/knowledge-graph/paths/${encodeURIComponent(source)}/${encodeURIComponent(target)}?depth=${depth}&max_paths=${maxPaths}`;
         const relQuery = searchQuery ? `&query=${encodeURIComponent(searchQuery)}` : '';
@@ -198,17 +228,23 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
         if (!active) return;
         setData({
           nodeTypes: nodesRes.node_types,
-          relationships: relationshipsRes.relationships,
-          paths: pathRes.paths,
+          relationships: dedupeRelationships(relationshipsRes.relationships),
+          paths: normalizePaths(pathRes.paths),
           shaclSummary: shaclRes.summary,
           shaclShapes: shaclRes.shapes,
-          conflict: conflictRes,
-          centrality: centralityRes,
+          conflict: {
+            ...conflictRes,
+            hotspots: conflictRes.hotspots.map((item) => ({ ...item, entity: canonicalizeEntityLabel(item.entity) })),
+          },
+          centrality: {
+            ...centralityRes,
+            top_central_nodes: centralityRes.top_central_nodes.map((item) => ({ ...item, entity: canonicalizeEntityLabel(item.entity) })),
+          },
         });
+        setDataSource('live');
         setError(null);
       } catch (err) {
         if (!active) return;
-        // Use sample data as fallback
         setData({
           nodeTypes: SAMPLE_NODE_TYPES,
           relationships: SAMPLE_RELATIONSHIPS,
@@ -218,7 +254,8 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
           conflict: SAMPLE_CONFLICT,
           centrality: SAMPLE_CENTRALITY,
         });
-        setError(err instanceof Error ? err.message : 'Failed to load knowledge graph metrics - using sample data');
+        setDataSource('sample');
+        setError(err instanceof Error ? err.message : 'Failed to load knowledge graph metrics');
       } finally {
         if (active) setLoading(false);
       }
@@ -234,6 +271,8 @@ export function useKnowledgeGraphMetrics(options: HookOptions = {}) {
     data,
     loading,
     error,
+    dataSource,
+    isFallback: dataSource === 'sample',
     reload: () => setRefreshKey((prev) => prev + 1),
   };
 }

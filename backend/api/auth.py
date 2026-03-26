@@ -16,6 +16,7 @@ from services.auth import (
 from schemas.auth import UserCredentials, UserRegistration, Token, TokenResponse, UserResponse
 from services.rbac import UserRole, ClearanceLevel, RBACContext
 from utils.response import build_success, build_error
+from utils.audit import record_audit_log
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -28,16 +29,15 @@ async def _record_login_audit(
     ip_address: Optional[str],
     reason: str,
 ) -> None:
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            action="LOGIN",
-            resource="auth/session",
-            classification="UNCLASS",
-            status=status_value,
-            ip_address=ip_address,
-            details={"reason": reason},
-        )
+    await record_audit_log(
+        db,
+        user_id=user_id,
+        action="LOGIN",
+        resource="auth/session",
+        classification="UNCLASS",
+        status=status_value,
+        ip_address=ip_address,
+        details={"reason": reason},
     )
 
 
@@ -318,16 +318,15 @@ async def logout(
             return build_error("AUTH_FAILED", "Invalid or expired token")
 
         ip_address = request.client.host if request.client else None
-        db.add(
-            AuditLog(
-                user_id=token_data.username,
-                action="LOGOUT",
-                resource="auth/session",
-                classification="UNCLASS",
-                status="ALLOW",
-                ip_address=ip_address,
-                details={"reason": "user_logout"},
-            )
+        await record_audit_log(
+            db,
+            user_id=token_data.username,
+            action="LOGOUT",
+            resource="auth/session",
+            classification="UNCLASS",
+            status="ALLOW",
+            ip_address=ip_address,
+            details={"reason": "user_logout"},
         )
         await db.commit()
 

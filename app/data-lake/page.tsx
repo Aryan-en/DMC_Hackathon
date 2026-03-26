@@ -136,7 +136,7 @@ export default function DataLakePage() {
               </table>
             </div>
             {!loading && data.datasets.length === 0 && (
-              <p className="text-xs mt-3" style={{ color: '#64748b' }}>No datasets available.</p>
+              <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>No datasets available.</p>
             )}
           </div>
         )}
@@ -178,10 +178,10 @@ export default function DataLakePage() {
             <h3 className="font-semibold text-sm mb-4" style={{ color: 'var(--text-primary)' }}>Data Lineage Tracking</h3>
             <div className="space-y-3">
               {data.lineage.map((l) => (
-                <div key={l.dataset} className="p-3 rounded-lg bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                <div key={l.dataset} className="p-3 rounded-lg border" style={{ background: 'var(--metric-1)', borderColor: 'var(--border-subtle)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>{l.dataset}</span>
-                    <span className="px-2 py-1 text-[10px] rounded font-bold uppercase" style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-lavender)' }}>{l.stages} stages</span>
+                    <span className="px-2 py-1 text-[10px] rounded font-bold uppercase" style={{ background: 'var(--metric-1-border)', color: 'var(--accent-lavender)' }}>{l.stages} stages</span>
                   </div>
                   <div className="text-[10px] font-mono flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
                     <span>{l.source}</span>
@@ -199,28 +199,28 @@ export default function DataLakePage() {
           <div className="glass-card rounded-xl p-5">
             <h3 className="font-semibold text-sm mb-4" style={{ color: 'var(--text-primary)' }}>Query Cost Monitoring</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(var(--accent-gold), 0.1)', border: '1px solid var(--border-color)' }}>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--metric-3)', border: '1px solid var(--border-color)' }}>
                 <div className="text-xs" style={{ color: 'var(--accent-gold)', marginBottom: '0.5rem' }}>Total Cost (24h)</div>
                 <div className="text-2xl font-bold" style={{ color: 'var(--accent-gold)' }}>{data.costs.total_cost_units.toFixed(2)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--accent-gold)' }}>Cost units</div>
               </div>
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(var(--accent-steel), 0.1)', border: '1px solid var(--border-color)' }}>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--metric-1)', border: '1px solid var(--border-color)' }}>
                 <div className="text-xs" style={{ color: 'var(--accent-steel)', marginBottom: '0.5rem' }}>Avg Cost / Query</div>
                 <div className="text-2xl font-bold" style={{ color: 'var(--accent-steel)' }}>{data.costs.average_cost_per_query.toFixed(2)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--accent-steel)' }}>Units per query</div>
               </div>
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(var(--accent-emerald), 0.1)', border: '1px solid var(--border-color)' }}>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--metric-2)', border: '1px solid var(--border-color)' }}>
                 <div className="text-xs" style={{ color: 'var(--accent-emerald)', marginBottom: '0.5rem' }}>Rows Scanned</div>
                 <div className="text-2xl font-bold" style={{ color: 'var(--accent-emerald)' }}>{compact(data.costs.total_rows_scanned)}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--accent-emerald)' }}>Total across period</div>
               </div>
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(var(--accent-lavender), 0.1)', border: '1px solid var(--border-color)' }}>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--metric-1)', border: '1px solid var(--border-color)' }}>
                 <div className="text-xs" style={{ color: 'var(--accent-lavender)', marginBottom: '0.5rem' }}>Queries Tracked</div>
                 <div className="text-2xl font-bold" style={{ color: 'var(--accent-lavender)' }}>{data.costs.queries_tracked}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--accent-lavender)' }}>Monitored queries</div>
               </div>
             </div>
-            <div className="p-3 rounded-lg bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+            <div className="p-3 rounded-lg border" style={{ background: 'var(--metric-1)', borderColor: 'var(--border-subtle)' }}>
               <div className="text-xs font-mono space-y-1" style={{ color: 'var(--text-secondary)' }}>
                 <div><span style={{ color: 'var(--text-muted)' }}>Period:</span> {data.costs.period_days} day(s)</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Max Rows Scanned:</span> {compact(data.costs.max_rows_scanned)}</div>
@@ -235,7 +235,7 @@ export default function DataLakePage() {
             <h3 className="font-semibold text-sm mb-4" style={{ color: 'var(--text-primary)' }}>Materialized Views</h3>
             <div className="space-y-3">
               {data.materialized_views.map((view) => (
-                <div key={view.name} className="p-4 rounded-lg bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                <div key={view.name} className="p-4 rounded-lg border" style={{ background: 'var(--metric-1)', borderColor: 'var(--border-subtle)' }}>
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <div style={{ color: 'var(--accent-gold)', fontWeight: 'bold', marginBottom: '0.25rem' }}>{view.name}</div>

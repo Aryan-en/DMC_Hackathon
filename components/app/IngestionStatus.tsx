@@ -12,6 +12,9 @@ type Ingestor = {
   lastRun?: string;
 };
 
+const FULL_INGESTION_POLL_ATTEMPTS = 600;
+const FULL_INGESTION_POLL_INTERVAL_MS = 2000;
+
 export default function IngestionStatus() {
   const [ingestors, setIngestors] = useState<Ingestor[]>([]);
   const [triggering, setTriggering] = useState(false);
@@ -38,12 +41,35 @@ export default function IngestionStatus() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/tasks/ingestion/trigger-all`, { method: 'POST' });
       const data = await res.json();
-      
-      // Also trigger metrics simulation for immediate UI feedback
-      await fetch(`${API_BASE_URL}/api/tasks/simulate-metrics`, { method: 'POST' });
 
       if (data?.data?.task_id) {
-        setLastTask({ id: data.data.task_id, status: 'QUEUED' });
+        const taskId = data.data.task_id as string;
+        setLastTask({ id: taskId, status: 'QUEUED' });
+
+        // Wait for completion so visible metrics are refreshed with ingested data.
+        for (let i = 0; i < FULL_INGESTION_POLL_ATTEMPTS; i += 1) {
+          const statusRes = await fetch(`${API_BASE_URL}/api/tasks/status/${taskId}`, { cache: 'no-store' });
+          const statusData = await statusRes.json();
+          const status = String(statusData?.data?.status || '').toUpperCase();
+          setLastTask({ id: taskId, status: status || 'PENDING' });
+
+          if (status === 'SUCCESS') {
+            localStorage.removeItem('ontora_strategic_metrics');
+            localStorage.removeItem('ontora_intelligence_metrics');
+            localStorage.removeItem('ontora_intelligence_alerts');
+            window.location.reload();
+            return;
+          }
+
+          if (status === 'FAILURE' || status === 'REVOKED') {
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, FULL_INGESTION_POLL_INTERVAL_MS));
+        }
+
+        setLastTask({ id: taskId, status: 'RUNNING' });
+        alert(`Full ingestion is still running in background. Task ID: ${taskId}.`);
       }
     } catch (e) {
       console.error('Trigger failed', e);
@@ -74,26 +100,25 @@ export default function IngestionStatus() {
   }, [lastTask]);
 
   return (
-    <div className="glass-card rounded-xl p-5 h-full flex flex-col">
+    <div className="tactical-card rounded-xl p-5 h-full flex flex-col">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Ingestion Pipeline</h3>
-          <p style={{ color: '#94a3b8', fontSize: '0.65rem' }}>Automated task orchestration for global data discovery</p>
+          <h3 className="text-[10px] uppercase tracking-[0.2em] font-black opacity-70" style={{ color: 'var(--text-primary)' }}>Ingestion Pipeline // Task Orchestrator</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.65rem' }}>Automated global data discovery & fusion</p>
         </div>
         <button
           onClick={handleTriggerAll}
           disabled={triggering || (lastTask?.status !== 'SUCCESS' && lastTask?.status !== 'FAILURE' && lastTask !== null)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-black text-[10px] uppercase tracking-wider"
           style={{
-            background: 'rgba(200,168,74,0.15)',
-            border: '1px solid rgba(200,168,74,0.25)',
-            color: '#c8a84a',
-            fontSize: '0.62rem',
-            fontWeight: 700,
-            cursor: triggering ? 'not-allowed' : 'pointer'
+            background: 'var(--metric-accent-gradient)',
+            border: '1px solid var(--metric-accent)',
+            color: 'var(--background)',
+            cursor: triggering ? 'not-allowed' : 'pointer',
+            opacity: triggering ? 0.5 : 1
           }}
         >
-          {triggering ? <Loader2 size={12} className="animate-spin" /> : <Play size={10} fill="#c8a84a" />}
+          {triggering ? <Loader2 size={12} className="animate-spin" /> : <Play size={10} fill="currentColor" />}
           FORCE RE-SYNC
         </button>
       </div>
@@ -102,21 +127,20 @@ export default function IngestionStatus() {
         {ingestors.map((ing) => (
           <div 
             key={ing.id} 
-            className="flex items-center justify-between p-2.5 rounded-lg"
-            style={{ background: 'rgba(10, 21, 37, 0.4)', border: '1px solid rgba(200,168,74,0.05)' }}
+            className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
           >
             <div className="flex items-center gap-3">
-              <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">
-                {ing.id === 'mea' ? <Globe size={13} className="text-[#00d4ff]" /> : ing.id === 'worldbank' ? <Database size={13} className="text-[#3eb87a]" /> : <Network size={13} className="text-[#8b5cf6]" />}
+              <div className="p-1.5 rounded bg-white/[0.05]">
+                {ing.id === 'mea' ? <Globe size={13} style={{ color: 'var(--metric-2-text)' }} /> : ing.id === 'worldbank' ? <Database size={13} style={{ color: 'var(--accent-emerald)' }} /> : <Network size={13} style={{ color: 'var(--accent-lavender)' }} />}
               </div>
               <div>
-                <div style={{ color: '#cbd5e1', fontSize: '0.72rem', fontWeight: 600 }}>{ing.name}</div>
-                <div style={{ color: '#4a6070', fontSize: '0.6rem' }}>{ing.type} • Active</div>
+                <div className="font-bold" style={{ color: 'var(--text-primary)', fontSize: '0.75rem' }}>{ing.name}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.6rem', opacity: 0.6 }}>{ing.type} • Active</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 size={12} className="text-[#3eb87a]" />
-              <div className="text-[0.58rem] font-mono text-[#3eb87a] tracking-tight">STABLE</div>
+              <CheckCircle2 size={12} style={{ color: 'var(--accent-emerald)' }} />
+              <div className="text-[11px] font-black tracking-tighter" style={{ color: 'var(--accent-emerald)' }}>STABLE</div>
             </div>
           </div>
         ))}
@@ -146,14 +170,14 @@ export default function IngestionStatus() {
         )}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+      <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <RotateCcw size={10} className="text-[#4a6070]" />
-          <span style={{ color: '#4a6070', fontSize: '0.6rem' }}>Next scheduled sync: approx 15m</span>
+          <RotateCcw size={10} style={{ color: 'var(--text-secondary)' }} />
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem', opacity: 0.7 }}>Next sync: +15m</span>
         </div>
         <div 
-          className="text-[0.6rem] font-bold px-2 py-0.5 rounded"
-          style={{ background: 'rgba(62,184,122,0.1)', color: '#3eb87a', border: '1px solid rgba(62,184,122,0.2)' }}
+          className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter"
+          style={{ background: 'var(--accent-emerald-gradient)', color: 'var(--background)', border: '1px solid var(--accent-emerald)' }}
         >
           ORD. OPERATIONAL
         </div>

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.postgres import get_db_session
 from db.schemas import Country, CountryRelation, EconomicIndicator, Entity, SystemMetric
 from utils.response import build_error, build_success
-from utils.cache import cached_endpoint
+from utils.cache import cached_endpoint, CACHE_HITS, CACHE_MISSES
 
 router = APIRouter()
 
@@ -299,3 +299,16 @@ async def get_kg_nodes(db: AsyncSession = Depends(get_db_session)):
         {"label": "Nations Monitored", "value": str(int(nations)), "icon": "Globe", "color": "#c8a84a"},
     ]
     return build_success({"nodes": nodes}, meta={"update_frequency": "hourly"})
+
+
+@router.get("/cache-stats")
+async def get_cache_stats():
+    """Expose simple in-memory/Redis cache statistics."""
+    total = CACHE_HITS + CACHE_MISSES
+    hit_rate = (CACHE_HITS / total * 100) if total > 0 else 0
+    return build_success({
+        "hits": CACHE_HITS,
+        "misses": CACHE_MISSES,
+        "hit_rate_pct": round(hit_rate, 2),
+        "total_requests": total
+    })

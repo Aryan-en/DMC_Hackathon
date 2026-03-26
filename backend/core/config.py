@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     # Gemini API for Bill Analysis (Preferred provider)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_API_BASE_URL: str = os.getenv("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     
     # Data Sources
     MEA_BASE_URL: str = "https://www.mea.gov.in"

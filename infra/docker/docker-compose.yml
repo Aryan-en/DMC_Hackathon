@@ -150,6 +150,7 @@ services:
       NEO4J_PASSWORD: "neo4j_password"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
+      PYTHONPATH: "."
       KAFKA_BROKERS: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
     ports:
       - "8000:8000"
@@ -189,6 +190,7 @@ services:
       NEO4J_PASSWORD: "neo4j_password"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
+      PYTHONPATH: "."
       KAFKA_BROKERS: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
     depends_on:
       postgres:
@@ -215,6 +217,7 @@ services:
       LOG_LEVEL: "INFO"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
+      PYTHONPATH: "."
     depends_on:
       redis:
         condition: service_healthy

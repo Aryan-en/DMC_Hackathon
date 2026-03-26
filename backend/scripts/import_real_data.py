@@ -137,8 +137,8 @@ async def import_to_db(df):
                 })
                 count += 1
                 
-                # If we have enough for this run, stop (or continue for 15k nodes)
-                if len(entities_to_create) >= 16000:
+                # If we have enough for this run, stop (or continue for 31k nodes)
+                if len(entities_to_create) >= 31000:
                     break
         
         logger.info(f"Staged {len(entities_to_create)} entities and {len(relationships_to_create)} relationships")
@@ -202,8 +202,8 @@ async def main():
                 total_e += e_count
                 total_r += r_count
                 logger.info(f"Cumulative nodes: {total_e}, edges: {total_r}")
-                if total_e >= 15000:
-                    logger.info("Reached 15k target nodes!")
+                if total_e >= 31000:
+                    logger.info("Reached 31k target nodes!")
                     break
         
         print(f"Finished. Total unique nodes approximately imported: {total_e}")

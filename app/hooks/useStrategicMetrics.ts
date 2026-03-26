@@ -20,14 +20,14 @@ type StrategicMetrics = {
 
 // Fallback sample data
 const SAMPLE_REGIONS: RegionRisk[] = [
-  { name: 'Eastern Europe', risk: 87, color: '#ef4444' },
-  { name: 'East Asia', risk: 72, color: '#f97316' },
-  { name: 'Middle East', risk: 68, color: '#f97316' },
-  { name: 'South Asia', risk: 55, color: '#eab308' },
-  { name: 'Sub-Saharan Africa', risk: 62, color: '#f97316' },
-  { name: 'Latin America', risk: 38, color: '#22c55e' },
-  { name: 'North America', risk: 24, color: '#22c55e' },
-  { name: 'Western Europe', risk: 28, color: '#22c55e' },
+  { name: 'Eastern Europe', risk: 87, color: 'var(--accent-crimson)' },
+  { name: 'East Asia', risk: 72, color: 'var(--accent-amber)' },
+  { name: 'Middle East', risk: 68, color: 'var(--accent-amber)' },
+  { name: 'South Asia', risk: 55, color: 'var(--accent-gold)' },
+  { name: 'Sub-Saharan Africa', risk: 62, color: 'var(--accent-amber)' },
+  { name: 'Latin America', risk: 38, color: 'var(--accent-emerald)' },
+  { name: 'North America', risk: 24, color: 'var(--accent-emerald)' },
+  { name: 'Western Europe', risk: 28, color: 'var(--accent-emerald)' },
 ];
 
 const SAMPLE_GLOBAL_ENTITIES = {
@@ -43,12 +43,12 @@ const SAMPLE_PREDICTION_ACCURACY = { accuracy: 0.84 };
 
 const SAMPLE_INFRA_HEALTH = {
   components: [
-    { label: 'PostgreSQL', value: 98, color: '#22c55e' },
-    { label: 'Neo4j', value: 95, color: '#22c55e' },
-    { label: 'Kafka', value: 87, color: '#3b82f6' },
-    { label: 'Redis', value: 99, color: '#22c55e' },
-    { label: 'Ollama ML', value: 82, color: '#eab308' },
-    { label: 'API Gateway', value: 96, color: '#22c55e' },
+    { label: 'PostgreSQL', value: 98, color: 'var(--accent-emerald)' },
+    { label: 'Neo4j', value: 95, color: 'var(--accent-emerald)' },
+    { label: 'Kafka', value: 87, color: 'var(--accent-steel)' },
+    { label: 'Redis', value: 99, color: 'var(--accent-emerald)' },
+    { label: 'Ollama ML', value: 82, color: 'var(--accent-gold)' },
+    { label: 'API Gateway', value: 96, color: 'var(--accent-emerald)' },
   ],
 };
 
@@ -71,12 +71,8 @@ const CACHE_TTL = 30000;
 
 export function useStrategicMetrics() {
   const [data, setData] = useState<StrategicMetrics>(() => {
-    if (_cachedData) return _cachedData;
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ontora_strategic_metrics');
-      if (saved) return JSON.parse(saved);
-    }
-    return INITIAL_DATA;
+    // Keep server and first client render deterministic to avoid hydration mismatch.
+    return _cachedData || INITIAL_DATA;
   });
   const [loading, setLoading] = useState(!_cachedData && (!data || data.regions.length === 0));
   const [error, setError] = useState<string | null>(null);
@@ -198,6 +194,21 @@ export function useStrategicMetrics() {
   }
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && !_cachedData) {
+      const saved = localStorage.getItem('ontora_strategic_metrics');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as StrategicMetrics;
+          _cachedData = parsed;
+          _lastFetch = Date.now();
+          setData(parsed);
+          setLoading(false);
+        } catch {
+          // Ignore invalid cache payloads.
+        }
+      }
+    }
+
     load();
   }, []);
 

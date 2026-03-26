@@ -1,10 +1,12 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
+import StatCard from '@/components/StatCard';
 import MultiLayerGeoHeatmap from '@/components/app/MultiLayerGeoHeatmap';
+import { getSafeExternalUrl } from '@/app/lib/source-links';
 import { 
   Upload, AlertCircle, TrendingUp, TrendingDown, Sparkles, Gauge, 
-  ShieldCheck, Flag, Lightbulb, Target, BookOpen, Scale, Leaf, History, FileText
+  ShieldCheck, Flag, Lightbulb, Target, BookOpen, Scale, Leaf, History, FileText, Link2, Download, Trash2
 } from 'lucide-react';
 import OntoraLogo from '@/components/OntoraLogo';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
@@ -16,6 +18,10 @@ interface BillAnalysis {
   bill_title: string;
   country: string;
   bill_summary: string;
+  pages?: number;
+  words?: number;
+  processing_seconds?: number;
+  source_url?: string | null;
   pros: string[];
   cons: string[];
   national_impact: {
@@ -97,6 +103,8 @@ interface AnalysisHistory {
   pages: number;
   provider: string;
   model: string;
+  source_url?: string | null;
+  download_url?: string;
 }
 
 interface AnalyzerStatus {
@@ -104,11 +112,105 @@ interface AnalyzerStatus {
   provider: string;
   model: string;
   gemini_enabled: boolean;
-  grok_enabled: boolean;
+}
+
+interface AnalysisJobPayload {
+  job_id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  logs: string[];
+  error?: string | null;
+  pages?: number | null;
+  elapsed_seconds: number;
+  result?: BillAnalysis | null;
+}
+
+const ACTIVE_JOB_STORAGE_KEY = 'ontora.billAnalysis.activeJobId';
+
+function formatAnalysisError(raw: string | null | undefined): string {
+  const message = (raw || '').trim();
+  const lowered = message.toLowerCase();
+
+  if (
+    lowered.includes('rate limit') ||
+    lowered.includes('too many requests') ||
+    lowered.includes('429') ||
+    lowered.includes('quota')
+  ) {
+    return 'Gemini API quota/rate limit reached. Please retry in a few minutes or switch to a higher-quota API key/model.';
+  }
+
+  return message || 'Analysis failed';
+}
+
+const DEFAULT_ANALYSIS: BillAnalysis = {
+  bill_title: 'Untitled Bill',
+  country: 'Unknown',
+  bill_summary: 'No summary available.',
+  pros: [],
+  cons: [],
+  national_impact: {
+    gdp_impact: 0,
+    employment_impact: 0,
+    inflation_impact: 0,
+    sector_effects: [],
+  },
+  global_impact: {
+    trade_relations: [],
+    geopolitical_influence: 0,
+    affected_regions: [],
+  },
+  risk_assessment: {
+    risk_level: 'MEDIUM',
+    probability: 0,
+    mitigation_strategies: [],
+  },
+  implementation_timeline: [],
+  stakeholder_analysis: [],
+  comparative_analysis: [],
+};
+
+function normalizeAnalysis(raw: Partial<BillAnalysis> | null | undefined): BillAnalysis {
+  const candidate = raw || {};
+
+  return {
+    ...DEFAULT_ANALYSIS,
+    ...candidate,
+    pros: Array.isArray(candidate.pros) ? candidate.pros : [],
+    cons: Array.isArray(candidate.cons) ? candidate.cons : [],
+    implementation_timeline: Array.isArray(candidate.implementation_timeline) ? candidate.implementation_timeline : [],
+    stakeholder_analysis: Array.isArray(candidate.stakeholder_analysis) ? candidate.stakeholder_analysis : [],
+    comparative_analysis: Array.isArray(candidate.comparative_analysis) ? candidate.comparative_analysis : [],
+    recommendations: Array.isArray(candidate.recommendations) ? candidate.recommendations : [],
+    national_impact: {
+      gdp_impact: candidate.national_impact?.gdp_impact ?? 0,
+      employment_impact: candidate.national_impact?.employment_impact ?? 0,
+      inflation_impact: candidate.national_impact?.inflation_impact ?? 0,
+      sector_effects: Array.isArray(candidate.national_impact?.sector_effects) ? candidate.national_impact.sector_effects : [],
+    },
+    global_impact: {
+      trade_relations: Array.isArray(candidate.global_impact?.trade_relations) ? candidate.global_impact.trade_relations : [],
+      geopolitical_influence: candidate.global_impact?.geopolitical_influence ?? 0,
+      affected_regions: Array.isArray(candidate.global_impact?.affected_regions) ? candidate.global_impact.affected_regions : [],
+    },
+    risk_assessment: {
+      risk_level: candidate.risk_assessment?.risk_level || 'MEDIUM',
+      probability: candidate.risk_assessment?.probability ?? 0,
+      mitigation_strategies: Array.isArray(candidate.risk_assessment?.mitigation_strategies) ? candidate.risk_assessment.mitigation_strategies : [],
+    },
+    compliance_burden: candidate.compliance_burden
+      ? {
+          ...candidate.compliance_burden,
+          required_resources: Array.isArray(candidate.compliance_burden.required_resources) ? candidate.compliance_burden.required_resources : [],
+          burdensome_provisions: Array.isArray(candidate.compliance_burden.burdensome_provisions) ? candidate.compliance_burden.burdensome_provisions : [],
+        }
+      : undefined,
+  };
 }
 
 export default function BillAnalysisPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [pdfUrl, setPdfUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<BillAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +222,8 @@ export default function BillAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<AnalysisHistory[]>([]);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const { data: geospatialData, loading: heatmapLoading, error: heatmapError } = useGeospatialMetrics();
   
   const fetchHistory = async () => {
@@ -136,6 +240,16 @@ export default function BillAnalysisPage() {
 
   useEffect(() => {
     fetchHistory();
+  }, []);
+
+  useEffect(() => {
+    const persistedJobId = window.localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+    if (persistedJobId) {
+      setCurrentJobId(persistedJobId);
+      setLoading(true);
+      setError(null);
+      setLogs((prev) => (prev.length > 0 ? prev : ['Resumed active analysis job from server.']));
+    }
   }, []);
 
   // Auto-scroll logs to bottom when they update
@@ -163,11 +277,89 @@ export default function BillAnalysisPage() {
     loadStatus();
   }, []);
 
+  useEffect(() => {
+    if (!currentJobId) {
+      return;
+    }
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/bill-analysis/jobs/${currentJobId}`, { cache: 'no-store' });
+        const payload = await resp.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (payload.status !== 'success' || !payload.data) {
+          throw new Error(payload?.error?.message || 'Failed to fetch analysis job status');
+        }
+
+        const data = payload.data as AnalysisJobPayload;
+        setLoading(data.status === 'queued' || data.status === 'processing');
+        setProgress(Math.max(0, Math.min(100, data.progress || 0)));
+        setElapsedSeconds(data.elapsed_seconds || 0);
+        if (Array.isArray(data.logs)) {
+          setLogs(data.logs);
+        }
+
+        if (data.status === 'completed' && data.result) {
+          const result = normalizeAnalysis(data.result as BillAnalysis);
+          setAnalysis(result);
+          setAnalysisProvider((result.provider || result.analysis_provider || analyzerStatus?.provider || 'N/A').toUpperCase());
+          setAnalysisModel(result.analysis_model || analyzerStatus?.model || 'N/A');
+          setCurrentJobId(null);
+          window.localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+          fetchHistory();
+        } else if (data.status === 'failed') {
+          const friendly = formatAnalysisError(data.error || 'Analysis failed in background job');
+          setError(friendly);
+          setLogs((prev) => [...prev, `✗ ${friendly}`]);
+          setCurrentJobId(null);
+          window.localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Polling failed';
+          const lowered = message.toLowerCase();
+          const staleJob = lowered.includes('job not found') || lowered.includes('expired');
+
+          if (staleJob) {
+            setCurrentJobId(null);
+            window.localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+            setLogs((prev) => [
+              ...prev,
+              '~ Previous analysis session was not found on server. Start a new analysis to continue.',
+            ]);
+            fetchHistory();
+            setError(null);
+          } else {
+            const friendly = formatAnalysisError(message);
+            setError(friendly);
+            setLogs((prev) => [...prev, `✗ ${friendly}`]);
+          }
+          setLoading(false);
+        }
+      }
+    };
+
+    poll();
+    const intervalId = window.setInterval(poll, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [currentJobId, analyzerStatus]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.type === 'application/pdf') {
         setFile(selectedFile);
+        setPdfUrl('');
         setError(null);
       } else {
         setError('Please upload a PDF file');
@@ -176,53 +368,43 @@ export default function BillAnalysisPage() {
   };
 
   const handleAnalyze = async () => {
-    if (!file) return;
+    const normalizedUrl = pdfUrl.trim();
+    if (!file && !normalizedUrl) return;
     
     setLoading(true);
     setError(null);
-    setProgress(0);
-    setLogs([]);
+    setProgress(5);
+    setElapsedSeconds(0);
+    setLogs(['~ Initializing analysis pipeline...']);
 
     const formData = new FormData();
-    formData.append('file', file);
+    if (file) {
+      formData.append('file', file);
+    } else {
+      formData.append('url', normalizedUrl);
+    }
 
     try {
-      const result = await fetch(`${API_BASE_URL}/api/bill-analysis/analyze`, {
+      const result = await fetch(`${API_BASE_URL}/api/bill-analysis/analyze/start`, {
         method: 'POST',
         body: formData,
       });
-
-      if (!result.ok) {
-        const errorData = await result.json();
-        throw new Error(errorData.error?.message || 'Analysis failed');
-      }
       
       const response = await result.json();
-      
-      // Update progress and logs if available
-      if (response.progress !== undefined) {
-        setProgress(response.progress);
+
+      if (!result.ok || response.status !== 'success' || !response.data?.job_id) {
+        throw new Error(response?.error?.message || 'Failed to start analysis');
       }
-      if (response.logs && Array.isArray(response.logs)) {
-        setLogs(response.logs);
-      }
-      
-      if (response.data) {
-        const data = response.data as BillAnalysis;
-        setAnalysis(data);
-        setAnalysisProvider((data.provider || data.analysis_provider || analyzerStatus?.provider || 'N/A').toUpperCase());
-        setAnalysisModel(data.analysis_model || analyzerStatus?.model || 'N/A');
-        setProgress(100);
-        setLogs(prev => [...prev, '✓ Analysis completed successfully']);
-        fetchHistory(); // Refresh history
-      } else {
-        throw new Error('Invalid response format');
-      }
+
+      const jobId = String(response.data.job_id);
+      setCurrentJobId(jobId);
+      window.localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, jobId);
+      setLogs((prev) => [...prev, `Analysis job started (${jobId.slice(0, 8)}...)`]);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Analysis failed';
+      const raw = err instanceof Error ? err.message : 'Analysis failed';
+      const errorMsg = formatAnalysisError(raw);
       setError(errorMsg);
       setLogs(prev => [...prev, `✗ Error: ${errorMsg}`]);
-    } finally {
       setLoading(false);
     }
   };
@@ -239,7 +421,7 @@ export default function BillAnalysisPage() {
         const resp = await fetch(`${API_BASE_URL}/api/bill-analysis/history/${item.id}`);
         const payload = await resp.json();
         if (payload.data) {
-          setAnalysis(payload.data.analysis_data);
+          setAnalysis(normalizeAnalysis(payload.data.analysis_data));
           setAnalysisProvider(payload.data.provider?.toUpperCase() || 'N/A');
           setAnalysisModel(payload.data.model_used || 'N/A');
           setLogs(['✓ Historical analysis restored from archive']);
@@ -255,11 +437,37 @@ export default function BillAnalysisPage() {
     loadDetail();
   };
 
+  const handleDeleteHistory = async (item: AnalysisHistory) => {
+    const confirmed = window.confirm(`Delete archived analysis "${item.bill_title}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/bill-analysis/history/${item.id}`, {
+        method: 'DELETE',
+      });
+      const payload = await resp.json();
+      if (!resp.ok || payload.status !== 'success') {
+        throw new Error(payload?.error?.message || 'Failed to delete analysis');
+      }
+
+      if (analysis && (analysis as any).analysis_id === item.id) {
+        setAnalysis(null);
+      }
+      setHistory((prev) => prev.filter((entry) => entry.id !== item.id));
+      setLogs((prev) => [...prev, `✓ Deleted archived analysis ${item.id.slice(0, 8)}...`]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Delete failed';
+      setError(message);
+    }
+  };
+
   const handleExportPolicyBrief = () => {
     window.print();
   };
 
-  const sectorChartData = analysis?.national_impact.sector_effects || [];
+  const sectorChartData = analysis?.national_impact?.sector_effects || [];
   
   const impactRadarData = [
     { subject: 'GDP Impact', value: Math.abs((analysis?.national_impact.gdp_impact || 0) * 10), fullMark: 100 },
@@ -275,12 +483,13 @@ export default function BillAnalysisPage() {
   }));
 
   const prosConsData = [
-    { name: 'Pros', value: analysis?.pros.length || 0, color: '#10b981' },
-    { name: 'Cons', value: analysis?.cons.length || 0, color: '#ef4444' },
+    { name: 'Pros', value: analysis?.pros?.length || 0, color: '#10b981' },
+    { name: 'Cons', value: analysis?.cons?.length || 0, color: '#ef4444' },
   ];
 
-  const providerTone = analysisProvider === 'GEMINI' ? '#10b981' : analysisProvider === 'GROK' ? '#00d4ff' : '#f59e0b';
+  const providerTone = analysisProvider === 'GEMINI' ? '#10b981' : '#f59e0b';
   const providerBadgeText = analysisProvider === 'N/A' ? 'PROVIDER CHECKING' : `${analysisProvider} ACTIVE`;
+  const safeAnalysisSourceUrl = getSafeExternalUrl(analysis?.source_url);
 
   const riskColor = analysis?.risk_assessment.risk_level === 'HIGH' ? '#ef4444' : 
                     analysis?.risk_assessment.risk_level === 'MEDIUM' ? '#f59e0b' : '#10b981';
@@ -300,45 +509,106 @@ export default function BillAnalysisPage() {
     return '#10b981';
   };
 
+  const stageLabel = logs.length > 0 ? logs[logs.length - 1] : 'Waiting for backend stage update';
+
   return (
     <div className="flex flex-col min-h-screen grid-bg">
       <TopBar title="Bill Amendment Analysis" subtitle="AI-Powered Legislative Impact Assessment & Risk Evaluation" />
       
-      <main className="flex-1 px-6 py-6 space-y-6">
-        <div className="flex justify-end">
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style={{
-              background: `${providerTone}1A`,
-              border: `1px solid ${providerTone}66`,
-              boxShadow: `0 0 14px ${providerTone}33`,
-            }}
-          >
-            <Sparkles size={12} style={{ color: providerTone }} />
-            <span style={{ color: providerTone, fontSize: '0.72rem', letterSpacing: '0.08em', fontWeight: 700 }}>
-              {providerBadgeText}
-            </span>
+      <main className="flex-1 px-4 py-4 md:px-6 md:py-5 space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StatCard
+            label="Risk Probability"
+            value={analysis ? `${Math.round((analysis.risk_assessment.probability || 0) * 100)}%` : '--'}
+            subValue={analysis?.risk_assessment?.risk_level || 'Awaiting analysis'}
+            icon={Gauge}
+            bgColor="var(--theme-stat-bg)"
+            textColor="var(--theme-stat-text)"
+          />
+          <StatCard
+            label="Advantages Found"
+            value={analysis?.pros?.length?.toString() || '0'}
+            subValue="Positive legislative effects"
+            icon={TrendingUp}
+            bgColor="#a7f3d0"
+            textColor="#064e3b"
+          />
+          <StatCard
+            label="Disadvantages Found"
+            value={analysis?.cons?.length?.toString() || '0'}
+            subValue="Risk or burden markers"
+            icon={TrendingDown}
+            bgColor="#fecaca"
+            textColor="#991b1b"
+          />
+          <StatCard
+            label="Sectors Assessed"
+            value={analysis?.national_impact?.sector_effects?.length?.toString() || '0'}
+            subValue="Economic coverage map"
+            icon={ShieldCheck}
+            bgColor="#fef08a"
+            textColor="#854d0e"
+          />
+          <StatCard
+            label="Readiness Score"
+            value={analysis ? `${readinessScore}` : '--'}
+            subValue={analysis ? 'India preparedness signal' : 'Available after analysis'}
+            icon={Target}
+            bgColor="#99f6e4"
+            textColor="#0f766e"
+          />
+        </div>
+
+        <div className="glass-card rounded-2xl px-5 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-gold/10 border border-gold/20">
+                <OntoraLogo size={28} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={13} className="text-gold" />
+                  <span className="text-secondary text-[10px] font-black uppercase tracking-widest">Legislative Analysis</span>
+                </div>
+                <h2 className="text-primary text-xl font-black tracking-tight leading-none mb-1">Bill Analysis Engine</h2>
+                <p className="text-secondary text-xs font-medium">Structured review of legislative documents.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'var(--accent-gold-dim)', border: '1px solid var(--accent-gold-border)' }}>
+                <Sparkles size={12} style={{ color: 'var(--accent-gold)' }} />
+                <span style={{ color: 'var(--accent-gold)', fontSize: '0.72rem', letterSpacing: '0.08em', fontWeight: 700 }}>{providerBadgeText}</span>
+              </div>
+              <div className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest" style={{ background: 'color-mix(in srgb, var(--accent-steel) 8%, var(--card-bg))', border: '1px solid color-mix(in srgb, var(--accent-steel) 18%, var(--border-color))', color: 'var(--text-secondary)' }}>
+                {analysisModel}
+              </div>
+              {analyzerStatus && (
+                <div className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest" style={{ background: 'color-mix(in srgb, var(--accent-emerald) 10%, var(--card-bg))', border: '1px solid color-mix(in srgb, var(--accent-emerald) 22%, var(--border-color))', color: analyzerStatus.gemini_enabled ? 'var(--accent-emerald)' : 'var(--accent-crimson)' }}>
+                  Gemini {analyzerStatus.gemini_enabled ? 'Enabled' : 'Missing'}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="glass-card rounded-xl p-6">
+        <div className="hidden glass-card rounded-2xl p-5">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-center gap-5">
-              <div className="p-3 rounded-2xl bg-gold/10 border border-gold/20 glow-gold">
+              <div className="p-3 rounded-2xl bg-gold/10 border border-gold/20">
                 <OntoraLogo size={32} />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Sparkles size={14} className="text-gold animate-pulse" />
+                  <Sparkles size={14} className="text-gold" />
                   <span className="text-secondary text-[10px] font-black uppercase tracking-widest">
-                    Legislative Intelligence Cluster
+                    Legislative Analysis
                   </span>
                 </div>
                 <h2 className="text-primary text-xl font-black tracking-tight leading-none mb-1">
-                  Bill Analysis Engine <span className="text-gold/50 text-sm font-normal">v2.4 — DEEP LOGIC ENABLED</span>
+                  Bill Analysis Engine
                 </h2>
                 <p className="text-secondary text-xs font-medium">
-                  Autonomous synthesis of multi-section legislative documents.
+                  Structured review of legislative documents.
                 </p>
               </div>
             </div>
@@ -355,8 +625,6 @@ export default function BillAnalysisPage() {
                   <div style={{ color: '#6c8298', fontSize: '0.68rem' }}>API Keys</div>
                   <div style={{ color: '#cbd5e1', fontSize: '0.78rem' }}>
                     Gemini: <strong style={{ color: analyzerStatus.gemini_enabled ? '#10b981' : '#ef4444' }}>{analyzerStatus.gemini_enabled ? 'Enabled' : 'Missing'}</strong>
-                    {' · '}
-                    Grok: <strong style={{ color: analyzerStatus.grok_enabled ? '#10b981' : '#f59e0b' }}>{analyzerStatus.grok_enabled ? 'Enabled' : 'Fallback Off'}</strong>
                   </div>
                 </div>
               )}
@@ -370,29 +638,43 @@ export default function BillAnalysisPage() {
             </div>
             <div className="rounded-lg p-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)' }}>
               <div className="flex items-center gap-2 mb-1"><TrendingUp size={13} style={{ color: '#10b981' }} /><span style={{ color: '#7f9bb7', fontSize: '0.72rem' }}>Advantages Found</span></div>
-              <div style={{ color: '#10b981', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.pros.length ?? 0}</div>
+              <div style={{ color: '#10b981', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.pros?.length ?? 0}</div>
             </div>
             <div className="rounded-lg p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)' }}>
               <div className="flex items-center gap-2 mb-1"><TrendingDown size={13} style={{ color: '#ef4444' }} /><span style={{ color: '#7f9bb7', fontSize: '0.72rem' }}>Disadvantages Found</span></div>
-              <div style={{ color: '#ef4444', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.cons.length ?? 0}</div>
+              <div style={{ color: '#ef4444', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.cons?.length ?? 0}</div>
             </div>
             <div className="rounded-lg p-3" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.18)' }}>
               <div className="flex items-center gap-2 mb-1"><ShieldCheck size={13} style={{ color: '#8b5cf6' }} /><span style={{ color: '#7f9bb7', fontSize: '0.72rem' }}>Sectors Assessed</span></div>
-              <div style={{ color: '#8b5cf6', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.national_impact.sector_effects.length ?? 0}</div>
+              <div style={{ color: '#8b5cf6', fontSize: '1.05rem', fontWeight: 700 }}>{analysis?.national_impact?.sector_effects?.length ?? 0}</div>
             </div>
           </div>
         </div>
 
         {/* Upload Section */}
-        <div className="glass-card rounded-xl p-6">
-          <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Upload Bill Document</h3>
+        <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-5 items-stretch">
+        <div className="glass-card rounded-2xl p-5 h-full">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Upload Bill Document or Paste PDF URL</h3>
+            {safeAnalysisSourceUrl && (
+              <a
+                href={safeAnalysisSourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase"
+                style={{ background: 'color-mix(in srgb, var(--accent-gold) 10%, var(--card-bg))', border: '1px solid color-mix(in srgb, var(--accent-gold) 24%, var(--border-color))', color: 'var(--accent-gold)' }}
+              >
+                <Link2 size={10} /> Source
+              </a>
+            )}
+          </div>
           
           <div
             className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all hover:border-opacity-80"
-            style={{ borderColor: 'rgba(0,212,255,0.3)' }}
+            style={{ borderColor: 'color-mix(in srgb, var(--accent-steel) 28%, var(--border-color))', background: 'color-mix(in srgb, var(--accent-steel) 6%, var(--card-bg))' }}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload size={32} style={{ color: '#00d4ff', margin: '0 auto mb-3' }} />
+            <Upload size={32} style={{ color: 'var(--accent-steel)', margin: '0 auto mb-3' }} />
             <input
               ref={fileInputRef}
               type="file"
@@ -400,69 +682,162 @@ export default function BillAnalysisPage() {
               onChange={handleFileSelect}
               className="hidden"
             />
-            <p style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>
+            <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
               {file ? file.name : 'Click or drag PDF to upload'}
             </p>
-            <p style={{ color: '#4a6070', fontSize: '0.8rem', marginTop: '8px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '8px' }}>
               PDF documents accepted
             </p>
           </div>
 
+          <div className="mt-4">
+            <label className="block mb-2" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+              Or analyze a remote PDF URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://example.gov/policies/bill.pdf"
+              value={pdfUrl}
+              onChange={(e) => {
+                setPdfUrl(e.target.value);
+                if (e.target.value.trim()) {
+                  setFile(null);
+                }
+              }}
+              className="w-full rounded-lg px-3 py-2"
+              style={{
+                background: 'color-mix(in srgb, var(--accent-steel) 8%, var(--card-bg))',
+                border: '1px solid color-mix(in srgb, var(--accent-steel) 20%, var(--border-color))',
+                color: 'var(--text-primary)',
+                fontSize: '0.86rem',
+              }}
+            />
+          </div>
+
           <button
             onClick={handleAnalyze}
-            disabled={!file || loading}
+            disabled={(!file && !pdfUrl.trim()) || loading}
             className="mt-4 px-6 py-2 rounded-lg font-medium text-sm transition-all"
             style={{
-              background: file && !loading ? 'rgba(0,212,255,0.2)' : 'rgba(0,212,255,0.08)',
-              color: file && !loading ? '#00d4ff' : '#4a6070',
-              border: `1px solid rgba(0,212,255,${file && !loading ? '0.3' : '0.1'})`,
-              cursor: file && !loading ? 'pointer' : 'not-allowed',
+              background: (file || pdfUrl.trim()) && !loading ? 'var(--accent-gold)' : 'color-mix(in srgb, var(--accent-gold) 16%, var(--card-bg))',
+              color: (file || pdfUrl.trim()) && !loading ? '#ffffff' : 'var(--text-secondary)',
+              border: `1px solid ${(file || pdfUrl.trim()) && !loading ? 'var(--accent-gold)' : 'var(--border-color)'}`,
+              cursor: (file || pdfUrl.trim()) && !loading ? 'pointer' : 'not-allowed',
             }}
           >
-            {loading ? 'Analyzing...' : 'Analyze Bill'}
+            {loading ? 'Analyzing...' : file ? 'Analyze Uploaded PDF' : 'Analyze URL PDF'}
           </button>
 
           {error && (
-            <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '0.8rem' }}>
+            <div className="mt-4 p-3 rounded-lg" style={{ background: 'color-mix(in srgb, var(--accent-crimson) 10%, var(--card-bg))', color: 'var(--accent-crimson)', fontSize: '0.8rem', border: '1px solid color-mix(in srgb, var(--accent-crimson) 22%, var(--border-color))' }}>
               {error}
             </div>
           )}
+        </div>
+        <div className="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
+          <div className="p-5 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <History className="text-gold" size={18} />
+              <h3 className="text-primary font-black text-xs uppercase tracking-widest">Strategic Analysis Archive</h3>
+            </div>
+            <span className="text-secondary text-[10px] font-bold uppercase tracking-widest">Total Audited: {history.length}</span>
+          </div>
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="text-[9px] font-bold uppercase tracking-[0.2em] bg-black/20 sticky top-0">
+                <tr>
+                  <th className="px-4 py-4 text-secondary">Run</th>
+                  <th className="px-4 py-4 text-secondary">Document</th>
+                  <th className="px-4 py-4 text-secondary text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {history.map((entry) => (
+                  <tr key={entry.id} onClick={() => handleLoadHistory(entry)} className="group hover:bg-gold/5 transition-colors cursor-pointer">
+                    <td className="px-4 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-primary text-[10px] font-mono font-bold tracking-tighter">{entry.id.substring(0, 8)}...</span>
+                        <span className="text-secondary text-[9px] mt-1">{new Date(entry.analyzed_at).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <FileText size={12} className="text-gold/60" />
+                          <span className="text-primary text-[11px] font-bold tracking-tight line-clamp-1">{entry.bill_title}</span>
+                        </div>
+                        <span className="text-secondary text-[10px] font-black uppercase">{entry.country}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {getSafeExternalUrl(entry.source_url) && (
+                          <a href={getSafeExternalUrl(entry.source_url) || undefined} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                            <Link2 size={10} /> Source
+                          </a>
+                        )}
+                        <a href={`${API_BASE_URL}/api/bill-analysis/download/${entry.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase" style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', color: '#67e8f9' }}>
+                          <Download size={10} /> PDF
+                        </a>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteHistory(entry); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}>
+                          <Trash2 size={10} /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {history.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-12 text-center text-secondary text-xs italic">No historical intelligence records found in archive.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
         </div>
 
         {/* Progress & Logs Section */}
         {loading && (
           <div className="glass-card rounded-xl p-6">
-            <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Analysis Progress</h3>
+            <h3 className="text-[10px] uppercase tracking-[0.2em] font-black mb-4 opacity-70" style={{ color: 'var(--text-primary)' }}>Analysis Progress</h3>
             
             {/* Progress Bar */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
-                <span style={{ color: '#8ab4d9', fontSize: '0.85rem' }}>Progress</span>
-                <span style={{ color: '#00d4ff', fontSize: '0.85rem', fontWeight: 'bold' }}>{progress}%</span>
+                <span style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 'bold' }}>Progress</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontFamily: 'monospace' }}>{currentJobId ? `ID: ${currentJobId.slice(0, 8)}...` : 'ID: PENDING'}</span>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>Elapsed: <span className="font-bold" style={{ color: 'var(--accent-amber)' }}>{elapsedSeconds}s</span></span>
+                <span className="uppercase font-black text-[9px]" style={{ color: 'var(--accent-emerald)' }}>Live Engine Active</span>
               </div>
               <div
-                className="w-full h-2 rounded-full overflow-hidden"
-                style={{ background: 'rgba(0,212,255,0.1)' }}
+                className="w-full h-1.5 rounded-full overflow-hidden"
+                style={{ background: 'var(--nested-surface)' }}
               >
                 <div
-                  className="h-full transition-all duration-300"
+                  className="h-full transition-all duration-500"
                   style={{
-                    width: `${progress}%`,
-                    background: 'linear-gradient(90deg, #00d4ff, #67e8f9)',
+                    width: '100%',
+                    background: 'var(--metric-accent-gradient)',
+                    boxShadow: '0 0 10px var(--accent-gold)'
                   }}
                 />
               </div>
+              <div className="mt-2 font-bold uppercase text-[9px] tracking-widest" style={{ color: 'var(--text-dim)' }}>{stageLabel}</div>
             </div>
 
             {/* Logs */}
             <div>
-              <h4 style={{ color: '#8ab4d9', fontSize: '0.85rem', marginBottom: '8px', fontWeight: 'bold' }}>Activity Log</h4>
+              <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: 'black', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Activity Log</h4>
               <div
-                className="rounded-lg p-4 font-mono text-xs overflow-y-auto max-h-64"
+                className="rounded-lg p-5 font-mono text-xs overflow-y-auto max-h-64 border"
                 style={{
-                  background: 'rgba(0,0,0,0.3)',
-                  color: '#10b981',
-                  border: '1px solid rgba(16,185,129,0.2)',
+                  background: 'var(--nested-surface)',
+                  color: 'var(--text-primary)',
+                  borderColor: 'var(--border-color)',
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
                 }}
               >
                 {logs.length === 0 ? (
@@ -499,6 +874,24 @@ export default function BillAnalysisPage() {
               <p style={{ color: '#4a6070', fontSize: '0.8rem' }}>
                 <strong style={{ color: '#00d4ff' }}>Country:</strong> {analysis.country}
               </p>
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="px-2.5 py-1.5 rounded-md" style={{ background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.25)' }}>
+                  <div style={{ color: '#7f9bb7', fontSize: '0.64rem' }}>Pages</div>
+                  <div style={{ color: '#7dd3fc', fontSize: '0.8rem', fontWeight: 700 }}>{analysis.pages ?? '--'}</div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-md" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                  <div style={{ color: '#7f9bb7', fontSize: '0.64rem' }}>Word Count</div>
+                  <div style={{ color: '#34d399', fontSize: '0.8rem', fontWeight: 700 }}>{analysis.words ? analysis.words.toLocaleString() : '--'}</div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-md" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                  <div style={{ color: '#7f9bb7', fontSize: '0.64rem' }}>Processing Time</div>
+                  <div style={{ color: '#fbbf24', fontSize: '0.8rem', fontWeight: 700 }}>{analysis.processing_seconds ? `${analysis.processing_seconds}s` : '--'}</div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-md" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                  <div style={{ color: '#7f9bb7', fontSize: '0.64rem' }}>Source</div>
+                  <div style={{ color: '#c4b5fd', fontSize: '0.8rem', fontWeight: 700 }}>{analysis.source_url ? 'URL PDF' : 'Uploaded PDF'}</div>
+                </div>
+              </div>
               <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)' }}>
                 <span style={{ color: '#7f9bb7', fontSize: '0.72rem' }}>Analyzed By:</span>
                 <strong style={{ color: '#00d4ff', fontSize: '0.75rem' }}>{analysisProvider}</strong>
@@ -722,7 +1115,7 @@ export default function BillAnalysisPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-secondary text-xs uppercase font-bold">Sustainability Score</span>
-                      <span className="text-emerald-400 font-extrabold text-lg">{Math.round(analysis.esg_impact.esg_score)}/100</span>
+                      <span className="text-emerald-400 font-extrabold text-lg">{Math.round(Number(analysis.esg_impact.esg_score || 0))}/100</span>
                     </div>
                     <div className="space-y-2">
                       <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
@@ -1018,6 +1411,7 @@ export default function BillAnalysisPage() {
         )}
 
         {/* Analysis Archive */}
+        {false && (
         <div className="glass-card rounded-2xl overflow-hidden mt-8">
           <div className="p-5 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1061,9 +1455,35 @@ export default function BillAnalysisPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Flag size={10} className="text-secondary" />
-                        <span className="text-secondary text-[10px] font-black uppercase">{entry.country}</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Flag size={10} className="text-secondary" />
+                          <span className="text-secondary text-[10px] font-black uppercase">{entry.country}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {getSafeExternalUrl(entry.source_url) && (
+                            <a
+                              href={getSafeExternalUrl(entry.source_url) || undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase"
+                              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}
+                            >
+                              <Link2 size={10} /> Source URL
+                            </a>
+                          )}
+                          <a
+                            href={`${API_BASE_URL}/api/bill-analysis/download/${entry.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase"
+                            style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', color: '#67e8f9' }}
+                          >
+                            <Download size={10} /> Open PDF
+                          </a>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -1074,7 +1494,19 @@ export default function BillAnalysisPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-mono text-secondary text-[10px]">
-                      {entry.pages} PAGES
+                      <div className="flex items-center justify-end gap-2">
+                        <span>{entry.pages} PAGES</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteHistory(entry);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase"
+                          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}
+                        >
+                          <Trash2 size={10} /> Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1089,6 +1521,7 @@ export default function BillAnalysisPage() {
             </table>
           </div>
         </div>
+        )}
       </main>
     </div>
   );

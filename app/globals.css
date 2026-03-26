@@ -1,48 +1,91 @@
 @import "tailwindcss";
 
 :root {
-  /* Light mode - ULTRA high contrast tactical palette */
-  --background: #fffcf5;
-  /* Creamy gold tint */
-  --foreground: #000000;
-  --sidebar-bg: #fdf8e1;
-  /* Saturated goldish light */
-  --card-bg: #fffbf0;
-  /* Creamy gold tint instead of white */
-  --border-color: rgba(178, 144, 79, 0.12);
-  --border-subtle: rgba(0, 0, 0, 0.08);
+  /* Light mode - Situational Gold On White (Tactical High Contrast) */
+  --background: #fdfaf0;
+  /* Light Champagne Cream */
+  --sidebar-bg: #f2eecb;
+  /* Rich Tactical Sand Gold (Deeply Goldy) */
+  --card-bg: #ffffff;
+  --border-color: rgba(194, 154, 91, 0.4);
+  /* Stronger gold tactical border */
+  /* Stronger indicator visibility */
+  --border-subtle: rgba(0, 0, 0, 0.15);
 
   /* Table Specifics */
-  --table-header-bg: #000000;
-  /* Absolute black header */
+  --table-header-bg: #0f172a;
+  /* Solid Navy */
   --table-header-text: #ffffff;
-  --table-row-border: rgba(0, 0, 0, 0.04);
-  --table-row-hover: rgba(178, 144, 79, 0.05);
+  --table-row-border: rgba(0, 0, 0, 0.1);
+  --table-row-hover: rgba(194, 154, 91, 0.08);
 
-  /* Accents - Light Palette (Saturated) */
-  --accent-gold: #b2904f;
+  /* Accents - Light Palette (Gold/Neutral) */
+  --accent-gold: #c29a5b;
   --accent-gold-light: #d6b985;
-  --accent-gold-dim: rgba(178, 144, 79, 0.12);
-  --accent-steel: #000000;
-  --accent-emerald: #15803d;
-  --accent-amber: #b45309;
-  --accent-crimson: #991b1b;
-  --accent-lavender: #6b21a8;
+  --accent-gold-dim: rgba(194, 154, 91, 0.1);
+  --accent-steel: #0f172a;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-crimson: #dc2626;
+  --accent-lavender: #7c3aed;
 
-  /* Text hierarchy - FORCED BLACK */
-  --text-primary: #000000;
-  --text-secondary: #000000;
-  --text-muted: #1a1a1a;
-  --text-dim: #222222;
+  /* Dynamic Metric Palette - Light (Gold) */
+  --metric-1: rgba(194, 154, 91, 0.1);
+  --metric-1-text: #926d39;
+  --metric-1-border: rgba(194, 154, 91, 0.35);
+
+  --metric-2: rgba(194, 154, 91, 0.15);
+  --metric-2-text: #c29a5b;
+  --metric-2-border: rgba(194, 154, 91, 0.45);
+
+  --metric-3: rgba(194, 154, 91, 0.2);
+  --metric-3-text: #8d6b38;
+  --metric-3-border: rgba(194, 154, 91, 0.55);
+
+  --metric-accent: var(--accent-gold);
+  --metric-accent-gradient: linear-gradient(135deg, #c29a5b, #d6b985);
+  --accent-emerald-gradient: linear-gradient(135deg, #059669, #10b981);
+
+  /* Text hierarchy - MAXIMUM READABILITY */
+  --text-primary: #0f172a;
+  --text-secondary: #0f172a;
+  /* Pure Navy */
+  --text-muted: #334155;
+  /* Deeper */
+  --text-dim: #475569;
+  /* Deeper */
+
+  /* Surface Extensions */
+  --tactical-shadow: 2px 2px 0px rgba(0, 0, 0, 0.12);
+  --nested-surface: rgba(194, 154, 91, 0.08);
+  --nested-surface-hover: rgba(194, 154, 91, 0.15);
+
+  /* Vibrant Palette - Universal High-Performance Tokens */
+  --vibrant-gold: #eab308;
+  --vibrant-gold-text: #854d0e;
+  --vibrant-purple: #9333ea;
+  --vibrant-purple-text: #581c87;
+  --vibrant-cyan: #06b6d4;
+
+  --tactical-gradient-gold: linear-gradient(135deg, #d6b985 0%, #c29a5b 100%);
+  --tactical-gradient-purple: linear-gradient(135deg, #8a78c8 0%, #7c3aed 100%);
+
+  /* Theme-specific Stat Card BGs (Gold in Light, Purple in Dark) */
+  --theme-stat-bg: #fef08a;
+  --theme-stat-text: #854d0e;
 }
 
 .dark {
   /* Core palette — deep navy with gold accents */
-  --background: #060c1d;
-  --foreground: #c4cdd8;
-  --sidebar-bg: #040914;
-  --card-bg: #0b1224;
-  --border-color: rgba(214, 185, 133, 0.14);
+  --background: #030712;
+  /* Deepest Navy Obsidian */
+  --foreground: #f8fafc;
+  --sidebar-bg: #000000;
+  /* Absolute Black Sidebar */
+  --card-bg: #1c263a;
+  /* Clearly lighter navy for distinct cards */
+  --border-color: rgba(194, 154, 91, 0.38);
+  /* Distinct Gold borders */
   --border-subtle: rgba(255, 255, 255, 0.05);
 
   /* Table Specifics - Dark */
@@ -61,11 +104,46 @@
   --accent-crimson: #b84a4a;
   --accent-lavender: #8a78c8;
 
-  /* Text hierarchy */
-  --text-primary: #dce4ee;
-  --text-secondary: #7a8fa8;
-  --text-muted: #3a4e62;
-  --text-dim: #1e2e3e;
+  /* Dynamic Metric Palette - Dark (Purple) */
+  --metric-1: rgba(124, 58, 237, 0.12);
+  /* Brighter Purple */
+  --metric-1-text: #a78bfa;
+  --metric-1-border: rgba(124, 58, 237, 0.3);
+
+  --metric-2: rgba(124, 58, 237, 0.18);
+  /* Brighter Purple */
+  --metric-2-text: #8b5cf6;
+  --metric-2-border: rgba(124, 58, 237, 0.4);
+
+  --metric-3: rgba(124, 58, 237, 0.25);
+  /* Brighter Purple */
+  --metric-3-text: #7c3aed;
+  --metric-3-border: rgba(124, 58, 237, 0.5);
+  --metric-accent: var(--accent-lavender);
+  --metric-accent-gradient: linear-gradient(135deg, var(--accent-lavender), #a78bfa);
+  --accent-emerald-gradient: linear-gradient(135deg, #059669, #34d399);
+
+  /* Text hierarchy - REFINED FOR DARK MODE CONTRAST */
+  --text-primary: #f8fafc;
+  /* Brighter white for primary */
+  --text-secondary: #cbd5e1;
+  /* Clearer light gray/blue */
+  --text-muted: #94a3b8;
+  /* Visible slate */
+  --text-dim: #64748b;
+
+  --nested-surface: rgba(138, 120, 200, 0.12);
+  --nested-surface-hover: rgba(138, 120, 200, 0.22);
+  --theme-stat-bg: #1e1b4b;
+  --theme-stat-text: #ddd6fe;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -112,11 +190,6 @@ button {
 ::-webkit-scrollbar-thumb {
   background: rgba(214, 185, 133, 0.24);
   border-radius: 2px;
-}
-
-/* ── Glow effects ─────────────────────────────────── */
-.glow-gold {
-  box-shadow: 0 4px 24px rgba(214, 185, 133, 0.14), 0 1px 4px rgba(214, 185, 133, 0.08);
 }
 
 /* ── Status badges ────────────────────────────────── */
@@ -238,25 +311,33 @@ button {
   }
 }
 
-/* ── Glass card overrides for high contrast ─────── */
-.glass-card {
+.glass-card,
+.tactical-card {
   background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 12px rgba(178, 144, 79, 0.15);
-  transition: all 0.2s ease;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.05);
+  /* Sharp Flat Shadow */
+  transition: all 0.2s ease-out;
+  backdrop-filter: none !important;
 }
 
-.glass-card:hover {
-  border-color: var(--accent-gold);
-  box-shadow: 0 8px 32px rgba(178, 144, 79, 0.2);
+.glass-card:hover,
+.tactical-card:hover {
+  background: color-mix(in srgb, var(--card-bg), var(--border-color) 40%);
+  transform: translateY(-1px);
 }
 
-.dark .glass-card {
-  background: linear-gradient(135deg, rgba(11, 18, 36, 0.98) 0%, rgba(9, 15, 30, 1) 100%);
-  border: 1px solid rgba(214, 185, 133, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+/* Hover transforms handled above */
+
+.dark .glass-card,
+.dark .tactical-card {
+  background: var(--card-bg);
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none !important;
 }
 
-.dark .glass-card:hover {
-  border-color: rgba(214, 185, 133, 0.4);
+.dark .glass-card:hover,
+.dark .tactical-card:hover {
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.4);
 }

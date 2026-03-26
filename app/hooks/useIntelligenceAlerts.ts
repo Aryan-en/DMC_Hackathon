@@ -20,12 +20,8 @@ const ALERTS_CACHE_TTL = 30000;
 
 export function useIntelligenceAlerts(pollingInterval = 30000) {
   const [alerts, setAlerts] = useState<IntelAlert[]>(() => {
-    if (_cachedAlerts.length > 0) return _cachedAlerts;
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ontora_intelligence_alerts');
-      if (saved) return JSON.parse(saved);
-    }
-    return [];
+    // Keep first render deterministic across SSR/client to avoid hydration mismatches.
+    return _cachedAlerts;
   });
   const [loading, setLoading] = useState(_cachedAlerts.length === 0 && alerts.length === 0);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +62,21 @@ export function useIntelligenceAlerts(pollingInterval = 30000) {
   }, [loading]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && _cachedAlerts.length === 0) {
+      const saved = localStorage.getItem('ontora_intelligence_alerts');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as IntelAlert[];
+          _cachedAlerts = parsed;
+          _lastAlertFetch = Date.now();
+          setAlerts(parsed);
+          setLoading(false);
+        } catch {
+          // Ignore malformed cached payloads.
+        }
+      }
+    }
+
     fetchAlerts();
     const interval = setInterval(fetchAlerts, pollingInterval);
     return () => clearInterval(interval);

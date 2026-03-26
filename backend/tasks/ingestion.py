@@ -12,55 +12,324 @@ logger = logging.getLogger(__name__)
 import random
 import math
 import time
+import re
 from uuid import uuid4
-from datetime import datetime, timedelta
-from sqlalchemy import select, func, delete
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import select, func
 from db.postgres import AsyncSessionLocal
-from db.schemas import SystemMetric
+from db.schemas import Country, CountryRelation, Document, EconomicIndicator, Entity, Relationship, SystemMetric
+from services.entity_extractor import EntityExtractionService
+from utils.entity_resolution import canonicalize_entity_name, normalize_country_name
 
 logger = logging.getLogger(__name__)
 
+
+def _derive_country_code(name: str) -> str:
+    letters = re.sub(r"[^A-Za-z]", "", normalize_country_name(name).upper())
+    if len(letters) >= 3:
+        return letters[:3]
+    return (letters + "XXX")[:3]
+
+
+def _normalize_entity_name(name: str) -> str:
+    return canonicalize_entity_name(name)
+
+
+async def _get_or_create_country(session, iso_code: str, name: str) -> Country:
+    iso = (iso_code or "XXX").strip().upper()[:3]
+    display_name = normalize_country_name((name or iso).strip() or iso)
+
+    existing = (
+        await session.execute(select(Country).where(Country.iso_code == iso))
+    ).scalar_one_or_none()
+    if existing:
+        if display_name and (not existing.name or len(existing.name) <= 3):
+            existing.name = display_name
+        return existing
+
+    by_name = (
+        await session.execute(select(Country).where(func.lower(Country.name) == display_name.lower()))
+    ).scalar_one_or_none()
+    if by_name:
+        return by_name
+
+    candidate = iso
+    suffix = 1
+    while True:
+        occupied = (
+            await session.execute(select(Country.id).where(Country.iso_code == candidate))
+        ).scalar_one_or_none()
+        if not occupied:
+            break
+        candidate = f"{iso[:2]}{suffix % 10}"
+        suffix += 1
+
+    country = Country(iso_code=candidate, name=display_name)
+    session.add(country)
+    await session.flush()
+    return country
+
+
+async def _upsert_extracted_entity(session, cache: dict[str, Entity], payload: dict) -> Entity | None:
+    name = _normalize_entity_name(str(payload.get("name") or ""))
+    entity_type = str(payload.get("entity_type") or "CONCEPT").upper()[:50]
+    if not name:
+        return None
+
+    key = f"{entity_type}:{name.lower()}"
+    if key in cache:
+        entity = cache[key]
+        entity.mention_count = int(entity.mention_count or 0) + int(payload.get("mention_count") or 1)
+        return entity
+
+    entity = (
+        await session.execute(
+            select(Entity).where(
+                func.lower(Entity.name) == name.lower(),
+                Entity.entity_type == entity_type,
+            )
+        )
+    ).scalar_one_or_none()
+
+    mention_inc = int(payload.get("mention_count") or 1)
+    confidence = float(payload.get("confidence_score") or 0.6)
+
+    if entity:
+        entity.mention_count = int(entity.mention_count or 0) + max(1, mention_inc)
+        entity.confidence_score = max(float(entity.confidence_score or 0.0), confidence)
+        entity.updated_at = datetime.utcnow()
+    else:
+        entity = Entity(
+            id=uuid4(),
+            entity_type=entity_type,
+            name=name,
+            confidence_score=confidence,
+            mention_count=max(1, mention_inc),
+            properties={"link_key": payload.get("link_key")},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(entity)
+        await session.flush()
+
+    cache[key] = entity
+    return entity
+
+
+async def _process_document_for_ontology(
+    session,
+    entity_service: EntityExtractionService,
+    entity_cache: dict[str, Entity],
+    entity_seen: set[str],
+    doc: Document,
+    stats: dict,
+) -> None:
+    content = str(doc.content or doc.title or "").strip()
+    if not content:
+        doc.processed = True
+        return
+
+    extracted = entity_service.extract(content)
+    link_to_entity: dict[str, Entity] = {}
+
+    for ent in extracted[:20]:
+        upserted = await _upsert_extracted_entity(session, entity_cache, ent)
+        if not upserted:
+            continue
+        link_key = str(ent.get("link_key") or "")
+        if link_key:
+            link_to_entity[link_key] = upserted
+        dedupe_key = f"{upserted.entity_type}:{upserted.name.lower()}"
+        if dedupe_key not in entity_seen:
+            entity_seen.add(dedupe_key)
+            stats["entities_upserted"] += 1
+
+    triplets = entity_service.extract_triplets(content)
+    for trip in triplets[:20]:
+        subj_payload = {
+            "name": trip.get("subject"),
+            "entity_type": "CONCEPT",
+            "confidence_score": trip.get("confidence") or 0.6,
+            "mention_count": 1,
+            "link_key": trip.get("subject_link"),
+        }
+        obj_payload = {
+            "name": trip.get("object"),
+            "entity_type": "CONCEPT",
+            "confidence_score": trip.get("confidence") or 0.6,
+            "mention_count": 1,
+            "link_key": trip.get("object_link"),
+        }
+
+        subject = link_to_entity.get(str(trip.get("subject_link") or "")) or await _upsert_extracted_entity(
+            session, entity_cache, subj_payload
+        )
+        obj = link_to_entity.get(str(trip.get("object_link") or "")) or await _upsert_extracted_entity(
+            session, entity_cache, obj_payload
+        )
+        if not subject or not obj or subject.id == obj.id:
+            continue
+
+        rel = Relationship(
+            id=uuid4(),
+            subject_entity_id=subject.id,
+            predicate=str(trip.get("predicate") or "RELATED_TO")[:100],
+            object_entity_id=obj.id,
+            confidence_score=float(trip.get("confidence") or 0.6),
+            source_document_id=doc.id,
+            url=doc.url,
+            created_at=datetime.utcnow(),
+        )
+        session.add(rel)
+        stats["relationships_persisted"] += 1
+
+    doc.processed = True
+
+
+async def _run_full_ingestion_async() -> dict:
+    mea_results = await run_mea_scraper()
+    wb_results = await run_worldbank_fetcher()
+    gdelt_results = await run_gdelt_fetcher()
+
+    stats = {
+        "mea_count": len(mea_results),
+        "wb_count": len(wb_results),
+        "gdelt_count": len(gdelt_results),
+        "documents_persisted": 0,
+        "documents_ontology_processed": 0,
+        "countries_updated": 0,
+        "indicators_persisted": 0,
+        "relations_persisted": 0,
+        "entities_upserted": 0,
+        "relationships_persisted": 0,
+    }
+
+    entity_service = EntityExtractionService()
+
+    async with AsyncSessionLocal() as session:
+        country_seen: set[str] = set()
+        entity_seen: set[str] = set()
+        entity_cache: dict[str, Entity] = {}
+
+        # 1) Persist news documents and derive entities/relationships used by app dashboards.
+        for art in gdelt_results:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            metadata = art.get("metadata") or {}
+            metadata["ingested_at"] = now.isoformat()
+
+            content = str(art.get("content") or art.get("title") or "").strip()
+            new_doc = Document(
+                id=uuid4(),
+                title=art.get("title"),
+                source=art.get("source", "NEWS"),
+                url=art.get("url"),
+                content=content,
+                doc_metadata=metadata,
+                published_date=now,
+                created_at=now,
+                processed=True,
+            )
+            session.add(new_doc)
+            await session.flush()
+            stats["documents_persisted"] += 1
+
+            await _process_document_for_ontology(
+                session=session,
+                entity_service=entity_service,
+                entity_cache=entity_cache,
+                entity_seen=entity_seen,
+                doc=new_doc,
+                stats=stats,
+            )
+            stats["documents_ontology_processed"] += 1
+
+        # 1b) Backfill ontology extraction for older unprocessed documents already in DB.
+        pending_docs = (
+            await session.execute(
+                select(Document)
+                .where(Document.processed.is_(False))
+                .order_by(Document.created_at.desc())
+                .limit(300)
+            )
+        ).scalars().all()
+
+        for pending_doc in pending_docs:
+            await _process_document_for_ontology(
+                session=session,
+                entity_service=entity_service,
+                entity_cache=entity_cache,
+                entity_seen=entity_seen,
+                doc=pending_doc,
+                stats=stats,
+            )
+            stats["documents_ontology_processed"] += 1
+
+        # 2) Persist World Bank indicators (supports economic charts and ingestion counters).
+        for item in wb_results:
+            iso_code = str(item.get("country_code") or "IND").upper()[:3]
+            country = await _get_or_create_country(session, iso_code, iso_code)
+            country_seen.add(country.iso_code)
+
+            indicator = EconomicIndicator(
+                id=uuid4(),
+                country_id=country.id,
+                indicator_code=str(item.get("indicator_code") or "UNKNOWN")[:50],
+                indicator_name=str(item.get("indicator_name") or "Unknown Indicator")[:255],
+                value=float(item.get("value") or 0.0),
+                year=int(item.get("year") or datetime.utcnow().year),
+                unit=str(item.get("unit") or "unknown")[:50],
+                created_at=datetime.utcnow(),
+            )
+            session.add(indicator)
+            stats["indicators_persisted"] += 1
+
+        # 3) Persist MEA bilateral relations when available.
+        if mea_results:
+            india = await _get_or_create_country(session, "IND", "India")
+            country_seen.add(india.iso_code)
+
+            for rel in mea_results:
+                country_name = normalize_country_name(str(rel.get("country") or rel.get("country_name") or "").strip())
+                if not country_name:
+                    continue
+                target = await _get_or_create_country(session, _derive_country_code(country_name), country_name)
+                country_seen.add(target.iso_code)
+
+                relation = CountryRelation(
+                    id=uuid4(),
+                    country_a_id=india.id,
+                    country_b_id=target.id,
+                    relation_type=str(rel.get("relation_type") or "bilateral")[:50],
+                    status=str(rel.get("status") or "stable")[:50],
+                    trade_volume=float(rel.get("trade_volume") or 0.0) if rel.get("trade_volume") is not None else None,
+                    sentiment=str(rel.get("sentiment") or "neutral")[:50],
+                    confidence_score=float(rel.get("confidence_score") or 0.75),
+                    agreements=rel.get("agreements") or [],
+                    key_issues=rel.get("key_issues") or [],
+                    last_updated=datetime.utcnow(),
+                    source="MEA",
+                )
+                session.add(relation)
+                stats["relations_persisted"] += 1
+
+        stats["countries_updated"] = len(country_seen)
+        await session.commit()
+
+    # 4) Refresh operational metrics after ingestion to keep dashboard cards moving.
+    try:
+        generate_simulated_metrics.delay()
+    except Exception:
+        logger.warning("Unable to enqueue simulated metrics refresh after full ingestion.")
+
+    stats["status"] = "success"
+    return stats
+
 @celery_app.task(name="tasks.ingestion.run_full_ingestion")
 def run_full_ingestion():
-    """Run all scrapers and persist REAL data from GDELT/MEA to DB."""
+    """Run all ingestion sources and persist data required across all dashboards."""
     logger.info("Starting scheduled full ingestion...")
-    from db.schemas import Document
-    
-    loop = asyncio.get_event_loop()
     try:
-        mea_results = loop.run_until_complete(run_mea_scraper())
-        wb_results = loop.run_until_complete(run_worldbank_fetcher())
-        gdelt_results = loop.run_until_complete(run_gdelt_fetcher())
-        
-        async def _persist():
-            async with AsyncSessionLocal() as session:
-                # Persist GDELT Real-time news
-                for art in gdelt_results:
-                    # check if exists
-                    exists = (await session.execute(select(Document).where(Document.url == art["url"]))).scalar_one_or_none()
-                    if not exists:
-                        new_doc = Document(
-                            id=str(uuid4()),
-                            title=art["title"],
-                            source=art["source"],
-                            url=art["url"],
-                            content=art["content"],
-                            doc_metadata=art["metadata"],
-                            published_date=datetime.utcnow(),
-                            created_at=datetime.utcnow(),
-                            processed=True
-                        )
-                        session.add(new_doc)
-                await session.commit()
-        
-        loop.run_until_complete(_persist())
-        
-        return {
-            "mea_count": len(mea_results),
-            "wb_count": len(wb_results),
-            "gdelt_count": len(gdelt_results),
-            "status": "success"
-        }
+        return asyncio.run(_run_full_ingestion_async())
     except Exception as e:
         logger.error(f"Ingestion task failed: {str(e)}")
         return {"status": "error", "message": str(e)}
