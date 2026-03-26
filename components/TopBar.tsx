@@ -1,8 +1,9 @@
 'use client';
 
-import { Search, User } from 'lucide-react';
+import { Search, User, Sun, Moon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/app/lib/api';
+import { useTheme } from '@/app/context/ThemeContext';
 
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [time, setTime] = useState<string | null>(null);
@@ -10,6 +11,7 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
   const [activeUser, setActiveUser] = useState('Operator');
   const [loggedIn, setLoggedIn] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const update = () => {
@@ -79,10 +81,10 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
     <header
       className="h-16 flex items-center justify-between px-6 sticky top-0 z-30"
       style={{
-        background: 'rgba(3, 8, 16, 0.97)',
-        borderBottom: '1px solid rgba(200,168,74,0.1)',
+        background: 'var(--topbar-bg)',
+        borderBottom: '1px solid var(--topbar-border)',
         backdropFilter: 'blur(20px)',
-        boxShadow: '0 1px 0 rgba(200,168,74,0.05)',
+        boxShadow: '0 1px 0 color-mix(in srgb, var(--accent-gold) 8%, transparent)',
       }}
     >
       {/* Left: breadcrumb */}
@@ -91,12 +93,12 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
           className="flex items-center gap-2 mb-0.5"
           style={{ fontSize: '0.7rem' }}
         >
-          <span style={{ color: '#3a4e62', letterSpacing: '0.08em' }}>Ontora</span>
-          <span style={{ color: 'rgba(200,168,74,0.25)', fontSize: '0.6rem' }}>›</span>
-          <span style={{ color: '#8a9aaa', letterSpacing: '0.04em' }}>{title}</span>
+          <span style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>Ontora</span>
+          <span style={{ color: 'color-mix(in srgb, var(--accent-gold) 28%, transparent)', fontSize: '0.6rem' }}>›</span>
+          <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>{title}</span>
         </div>
         {subtitle && (
-          <div style={{ color: '#2a3d52', fontSize: '0.6rem', maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.6rem', maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {subtitle}
           </div>
         )}
@@ -106,26 +108,26 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
       <div
         className="flex items-center gap-2.5 px-4 py-2 rounded-xl"
         style={{
-          background: 'rgba(10, 21, 37, 0.8)',
-          border: '1px solid rgba(200,168,74,0.1)',
+          background: 'var(--input-bg)',
+          border: '1px solid var(--input-border)',
           width: '340px',
           transition: 'border-color 0.2s',
         }}
         onFocus={() => {}}
       >
-        <Search size={12} style={{ color: '#3a4e62' }} />
+        <Search size={12} style={{ color: 'var(--text-muted)' }} />
         <input
           type="text"
           placeholder="Search entities, events, intelligence..."
           className="flex-1 bg-transparent outline-none"
-          style={{ color: '#7a8fa8', fontSize: '0.75rem', letterSpacing: '0.01em' }}
+          style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.01em' }}
         />
         <kbd
           className="px-1.5 py-0.5 rounded"
           style={{
-            background: 'rgba(200,168,74,0.06)',
-            border: '1px solid rgba(200,168,74,0.14)',
-            color: '#4a6070',
+            background: 'color-mix(in srgb, var(--accent-gold) 9%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--accent-gold) 18%, transparent)',
+            color: 'var(--text-muted)',
             fontSize: '0.58rem',
             fontFamily: 'var(--font-geist-mono)',
             letterSpacing: '0.05em',
@@ -137,6 +139,27 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
 
       {/* Right: status + clock */}
       <div className="flex items-center gap-5">
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+          style={{
+            border: '1px solid var(--input-border)',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--hover-bg)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? (
+            <Moon size={14} style={{ color: 'var(--accent-gold)' }} />
+          ) : (
+            <Sun size={14} style={{ color: 'var(--accent-gold)' }} />
+          )}
+        </button>
+
+        {/* Thin divider */}
+        <div className="w-px h-6" style={{ background: 'var(--divider-color)' }} />
+
         {/* Live indicator */}
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full live-indicator" style={{ background: '#3eb87a' }} />
@@ -149,23 +172,23 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         </div>
 
         {/* Thin divider */}
-        <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
+        <div className="w-px h-6" style={{ background: 'var(--divider-color)' }} />
 
         {/* Clock */}
         {time && date && (
           <div className="text-right">
             <div
               className="font-mono font-bold"
-              style={{ color: '#c8a84a', fontSize: '0.82rem', letterSpacing: '0.08em' }}
+              style={{ color: 'var(--accent-gold)', fontSize: '0.82rem', letterSpacing: '0.08em' }}
             >
               {time}
             </div>
-            <div style={{ color: '#2a3d52', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.6rem', letterSpacing: '0.05em' }}>{date}</div>
           </div>
         )}
 
         {/* Thin divider */}
-        <div className="w-px h-6" style={{ background: 'rgba(200,168,74,0.08)' }} />
+        <div className="w-px h-6" style={{ background: 'var(--divider-color)' }} />
 
         {/* User */}
         <button
@@ -173,26 +196,26 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
             window.location.href = 'http://localhost:3002';
           }}
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
-          style={{ border: '1px solid rgba(200,168,74,0.1)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,168,74,0.04)')}
+          style={{ border: '1px solid var(--input-border)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--hover-bg)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <div
             className="w-6 h-6 rounded-lg flex items-center justify-center"
             style={{
-              background: 'linear-gradient(135deg, rgba(200,168,74,0.2) 0%, rgba(200,168,74,0.08) 100%)',
-              border: '1px solid rgba(200,168,74,0.2)',
+              background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-gold) 20%, transparent) 0%, color-mix(in srgb, var(--accent-gold) 8%, transparent) 100%)',
+              border: '1px solid color-mix(in srgb, var(--accent-gold) 20%, transparent)',
             }}
           >
-            <User size={11} style={{ color: '#c8a84a' }} />
+            <User size={11} style={{ color: 'var(--accent-gold)' }} />
           </div>
           <div>
             <div
-              style={{ color: '#8a9aaa', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.04em' }}
+              style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.04em' }}
             >
               {activeUser}
             </div>
-            <div style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.08em' }}>{loggedIn ? 'Authenticated' : 'Sign in'}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.08em' }}>{loggedIn ? 'Authenticated' : 'Sign in'}</div>
           </div>
         </button>
 

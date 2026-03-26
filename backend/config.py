@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     KAFKA_BROKERS: str = os.getenv("KAFKA_BROKERS", "localhost:9092")
     KAFKA_BROKERS_LIST: Optional[List[str]] = None
     ACTIVE_ENV_FILE: str = "none"
+
+    # Dev-only metric simulators
+    # Used to drive real-time dashboard charts (e.g., CPU utilization on /predictions)
+    ENABLE_SERVING_METRICS_SIM: bool = os.getenv("ENABLE_SERVING_METRICS_SIM", "true").lower() == "true"
     
     # ML Models
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")

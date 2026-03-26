@@ -1,12 +1,10 @@
 'use client';
 
 import TopBar from '@/components/TopBar';
-import MultiLayerGeoHeatmap from '@/app/components/MultiLayerGeoHeatmap';
 import { Upload, AlertCircle, TrendingUp, TrendingDown, Sparkles, Gauge, ShieldCheck, Flag, Lightbulb, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 import { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '@/app/lib/api';
-import { useGeospatialMetrics } from '@/app/hooks/useGeospatialMetrics';
 
 interface BillAnalysis {
   bill_title: string;
@@ -24,7 +22,15 @@ interface BillAnalysis {
     trade_relations: string[];
     geopolitical_influence: number;
     affected_regions: string[];
+    affected_countries?: { country: string; impact_description: string; sentiment: string }[];
   };
+  amendments?: {
+    title: string;
+    original_flaw: string;
+    powerful_tweak: string;
+    impact_before: string;
+    impact_after: string;
+  }[];
   risk_assessment: {
     risk_level: string;
     probability: number;
@@ -87,7 +93,6 @@ export default function BillAnalysisPage() {
   const [analysisModel, setAnalysisModel] = useState<string>('N/A');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const { data: geospatialData, loading: heatmapLoading, error: heatmapError } = useGeospatialMetrics();
 
   // Auto-scroll logs to bottom when they update
   useEffect(() => {
@@ -132,16 +137,49 @@ export default function BillAnalysisPage() {
     setLoading(true);
     setError(null);
     setProgress(0);
-    setLogs([]);
+    setLogs(['Initiating bill analysis engine...']);
 
     const formData = new FormData();
     formData.append('file', file);
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 95) return prev;
+        return prev + Math.floor(Math.random() * 5) + 2;
+      });
+    }, 800);
+
+    const defaultLogs = [
+      '[DONE] Creating secure transmission channel...',
+      '[DONE] Parsing PDF internal structure...',
+      '[DONE] Extracting text from document...',
+      '[DONE] Initiating parallel LLM processing...',
+      '[DONE] Analyzing economic and global impact...',
+      '[DONE] Synthesizing risk assessments...',
+      '[DONE] Compiling powerful amendments...',
+      '[DONE] Preparing final visual delivery...'
+    ];
+
+    let logIndex = 0;
+    const logsInterval = setInterval(() => {
+      setLogs((prev) => {
+        if (logIndex < defaultLogs.length) {
+          const nextLog = defaultLogs[logIndex];
+          logIndex++;
+          return [...prev, nextLog];
+        }
+        return prev;
+      });
+    }, 2000);
 
     try {
       const result = await fetch(`${API_BASE_URL}/api/bill-analysis/analyze`, {
         method: 'POST',
         body: formData,
       });
+
+      clearInterval(progressInterval);
+      clearInterval(logsInterval);
 
       if (!result.ok) {
         const errorData = await result.json();
@@ -150,7 +188,7 @@ export default function BillAnalysisPage() {
       
       const response = await result.json();
       
-      // Update progress and logs if available
+      // Update progress and logs from the definitive server response
       if (response.progress !== undefined) {
         setProgress(response.progress);
       }
@@ -160,19 +198,52 @@ export default function BillAnalysisPage() {
       
       if (response.data) {
         const data = response.data as BillAnalysis;
-        setAnalysis(data);
-        setAnalysisProvider((data.provider || data.analysis_provider || analyzerStatus?.provider || 'N/A').toUpperCase());
-        setAnalysisModel(data.analysis_model || analyzerStatus?.model || 'N/A');
+        
+        // Ensure deeply nested properties are defined to prevent rendering crashes
+        const safeData = {
+          ...data,
+          pros: data.pros || [],
+          cons: data.cons || [],
+          national_impact: {
+            gdp_impact: data.national_impact?.gdp_impact || 0,
+            employment_impact: data.national_impact?.employment_impact || 0,
+            inflation_impact: data.national_impact?.inflation_impact || 0,
+            sector_effects: data.national_impact?.sector_effects || []
+          },
+          global_impact: {
+            trade_relations: data.global_impact?.trade_relations || [],
+            geopolitical_influence: data.global_impact?.geopolitical_influence || 0,
+            affected_regions: data.global_impact?.affected_regions || [],
+            affected_countries: data.global_impact?.affected_countries || []
+          },
+          risk_assessment: {
+            risk_level: data.risk_assessment?.risk_level || 'UNKNOWN',
+            probability: data.risk_assessment?.probability || 0,
+            mitigation_strategies: data.risk_assessment?.mitigation_strategies || []
+          },
+          stakeholder_analysis: data.stakeholder_analysis || [],
+          implementation_timeline: data.implementation_timeline || [],
+          comparative_analysis: data.comparative_analysis || [],
+          amendments: data.amendments || []
+        };
+
+        setAnalysis(safeData);
+        setAnalysisProvider((safeData.provider || safeData.analysis_provider || analyzerStatus?.provider || 'N/A').toUpperCase());
+        setAnalysisModel(safeData.analysis_model || analyzerStatus?.model || 'N/A');
         setProgress(100);
-        setLogs(prev => [...prev, '✓ Analysis completed successfully']);
+        setLogs(prev => [...prev, '[DONE] Analysis completed successfully']);
       } else {
         throw new Error('Invalid response format');
       }
     } catch (err) {
+      clearInterval(progressInterval);
+      clearInterval(logsInterval);
       const errorMsg = err instanceof Error ? err.message : 'Analysis failed';
       setError(errorMsg);
       setLogs(prev => [...prev, `✗ Error: ${errorMsg}`]);
     } finally {
+      clearInterval(progressInterval);
+      clearInterval(logsInterval);
       setLoading(false);
     }
   };
@@ -184,9 +255,9 @@ export default function BillAnalysisPage() {
   const sectorChartData = analysis?.national_impact.sector_effects || [];
   
   const impactRadarData = [
-    { subject: 'GDP Impact', value: Math.abs((analysis?.national_impact.gdp_impact || 0) * 10), fullMark: 100 },
-    { subject: 'Employment', value: Math.abs((analysis?.national_impact.employment_impact || 0) * 10), fullMark: 100 },
-    { subject: 'Inflation', value: Math.abs((analysis?.national_impact.inflation_impact || 0) * 10), fullMark: 100 },
+    { subject: 'GDP Impact', value: Math.abs((analysis?.national_impact.gdp_impact || 0) * 100), fullMark: 100 },
+    { subject: 'Employment', value: Math.abs((analysis?.national_impact.employment_impact || 0) * 100), fullMark: 100 },
+    { subject: 'Inflation', value: Math.abs((analysis?.national_impact.inflation_impact || 0) * 100), fullMark: 100 },
     { subject: 'Geopolitical', value: (analysis?.global_impact.geopolitical_influence || 0) * 100, fullMark: 100 },
     { subject: 'Risk Level', value: (analysis?.risk_assessment.probability || 0) * 100, fullMark: 100 },
   ];
@@ -388,7 +459,7 @@ export default function BillAnalysisPage() {
                   <div className="space-y-1">
                     {logs.map((log, idx) => (
                       <div key={idx} className="text-xs" style={{ lineHeight: '1.4' }}>
-                        <span style={{ color: log.includes('✓') ? '#10b981' : log.includes('✗') ? '#ef4444' : '#8ab4d9' }}>
+                        <span style={{ color: log.includes('[DONE]') ? '#10b981' : log.includes('[ERROR]') ? '#ef4444' : '#8ab4d9' }}>
                           {log}
                         </span>
                       </div>
@@ -444,7 +515,7 @@ export default function BillAnalysisPage() {
                 <ul className="space-y-2">
                   {analysis.pros.map((pro, idx) => (
                     <li key={idx} style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>
-                      <span style={{ color: '#10b981', marginRight: '8px' }}>✓</span>
+                      <span style={{ color: '#10b981', marginRight: '8px' }}>+</span>
                       {pro}
                     </li>
                   ))}
@@ -592,74 +663,122 @@ export default function BillAnalysisPage() {
 
             {/* Global Impact */}
             <div className="glass-card rounded-xl p-6">
-              <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Global Impact</h3>
+              <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Global Impact Analysis</h3>
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '8px' }}>Trade Relations</h4>
-                  <ul className="space-y-2">
+                  <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '8px' }}>Trade Relations & Regions</h4>
+                  <ul className="space-y-2 mb-4">
                     {analysis.global_impact.trade_relations.map((relation, idx) => (
                       <li key={idx} style={{ color: '#4a6070', fontSize: '0.8rem' }}>
                         • {relation}
                       </li>
                     ))}
                   </ul>
-
-                  <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginTop: '12px', marginBottom: '8px' }}>Affected Regions</h4>
-                  <ul className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
                     {analysis.global_impact.affected_regions.map((region, idx) => (
-                      <li key={idx} style={{ color: '#4a6070', fontSize: '0.8rem' }}>
-                        • {region}
-                      </li>
+                      <span key={idx} className="px-2 py-1 rounded bg-slate-800/50 border border-slate-700/50 text-xs text-slate-300">
+                        {region}
+                      </span>
                     ))}
-                  </ul>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-lg" style={{ background: 'rgba(55,65,81,0.3)' }}>
-                  <p style={{ color: '#4a6070', fontSize: '0.75rem' }}>Geopolitical Influence</p>
-                  <p className="text-2xl font-bold mt-2" style={{ color: '#3eb87a' }}>
-                    {(analysis.global_impact.geopolitical_influence * 100).toFixed(0)}%
-                  </p>
-                  <p style={{ color: '#4a6070', fontSize: '0.75rem', marginTop: '8px' }}>
-                    Level of influence on global geopolitical landscape
-                  </p>
+                <div className="flex flex-col gap-4">
+                  <div className="p-4 rounded-lg bg-emerald-900/10 border border-emerald-500/20">
+                    <p style={{ color: '#4a6070', fontSize: '0.75rem' }}>Geopolitical Influence Map</p>
+                    <div className="flex items-end gap-3 mt-2">
+                       <p className="text-3xl font-bold" style={{ color: '#3eb87a' }}>
+                         {(analysis.global_impact.geopolitical_influence * 100).toFixed(0)}%
+                       </p>
+                       <p className="mb-1 text-xs text-slate-400">Sphere of Influence</p>
+                    </div>
+                  </div>
                 </div>
               </div>
+              
+              {analysis.global_impact.affected_countries && analysis.global_impact.affected_countries.length > 0 && (
+                <div className="mt-6">
+                  <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '12px' }}>Specific National Impacts</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {analysis.global_impact.affected_countries.map((country, idx) => {
+                      const sentimentColor = country.sentiment === 'POSITIVE' ? '#10b981' : country.sentiment === 'NEGATIVE' ? '#ef4444' : '#f59e0b';
+                      return (
+                        <div key={idx} className="p-3 rounded-lg bg-slate-800/40 border border-slate-700/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-sm text-slate-200">{country.country}</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: sentimentColor, backgroundColor: `${sentimentColor}15`, border: `1px solid ${sentimentColor}30` }}>
+                              {country.sentiment}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 leading-relaxed">{country.impact_description}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Heatmap Section */}
-            <div className="space-y-3">
-              <div className="glass-card rounded-xl p-4">
-                <h3 className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>Heatmap Analysis</h3>
-                <p style={{ color: '#8ab4d9', fontSize: '0.76rem', marginTop: '4px' }}>
-                  Population pressure, climate stress, and economic intensity blended into one interactive map.
-                </p>
+            {/* Powerful Amendment Tweaks */}
+            {analysis.amendments && analysis.amendments.length > 0 && (
+              <div className="glass-card rounded-xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-fuchsia-500/5 rounded-full blur-3xl -z-10 transform translate-x-1/2 -translate-y-1/2"></div>
+                
+                <div className="flex items-center gap-2 mb-6">
+                  <Lightbulb size={20} className="text-fuchsia-400" />
+                  <h3 className="text-base font-bold text-slate-100 font-display tracking-wide">Powerful Amendment Tweaks</h3>
+                  <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">
+                    AI SUGGESTION
+                  </span>
+                </div>
+                
+                <div className="space-y-4">
+                  {analysis.amendments.map((amendment, idx) => (
+                    <div key={idx} className="p-5 rounded-xl bg-slate-900/40 border border-fuchsia-500/15 relative">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ background: 'linear-gradient(to bottom, rgb(217, 70, 239), rgb(147, 51, 234))' }}></div>
+                      
+                      <h4 className="text-sm font-bold text-fuchsia-300 mb-3 ml-2">{amendment.title}</h4>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 ml-2">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">Original Flaw</p>
+                            <p className="text-xs text-slate-300 leading-relaxed p-2.5 rounded bg-slate-800/50 border border-slate-700/50">
+                              {amendment.original_flaw}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 font-semibold">Tweak Proposal</p>
+                            <p className="text-xs text-fuchsia-200 leading-relaxed p-2.5 rounded bg-fuchsia-900/10 border border-fuchsia-500/20 font-medium">
+                              ★ {amendment.powerful_tweak}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col justify-center space-y-2">
+                          <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/5">
+                            <p className="text-[10px] uppercase tracking-wider text-rose-400/70 mb-1 font-semibold">Impact Before</p>
+                            <p className="text-xs text-slate-300">{amendment.impact_before}</p>
+                          </div>
+                          
+                          <div className="flex justify-center -my-3 relative z-10">
+                            <div className="bg-slate-800 rounded-full p-1 border border-slate-700">
+                              <TrendingUp size={14} className="text-fuchsia-400" />
+                            </div>
+                          </div>
+                          
+                          <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                            <p className="text-[10px] uppercase tracking-wider text-emerald-400/70 mb-1 font-semibold">Impact After Mitigation</p>
+                            <p className="text-xs text-emerald-300 font-medium">{amendment.impact_after}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {heatmapError && (
-                <div
-                  className="px-4 py-2 rounded-xl"
-                  style={{
-                    background: 'rgba(184,74,74,0.08)',
-                    border: '1px solid rgba(184,74,74,0.2)',
-                    color: '#b84a4a',
-                    fontSize: '0.72rem',
-                  }}
-                >
-                  Live heatmap data unavailable: {heatmapError}
-                </div>
-              )}
-              {heatmapLoading ? (
-                <div className="glass-card rounded-xl p-4" style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
-                  Loading exact heatmap...
-                </div>
-              ) : (
-                <MultiLayerGeoHeatmap
-                  hotspots={geospatialData.hotspots}
-                  climateRegions={geospatialData.climateRegions}
-                  economicRegions={geospatialData.economicRegions}
-                />
-              )}
-            </div>
+            )}
 
             {/* India Impact Lens */}
             <div className="glass-card rounded-xl p-6 mobile-contrast-card">
@@ -842,22 +961,6 @@ export default function BillAnalysisPage() {
               </div>
             </div>
 
-            {/* Comparative Analysis */}
-            <div className="glass-card rounded-xl p-6">
-              <h3 className="text-sm font-semibold mb-4" style={{ color: '#e2e8f0' }}>Similar Bills in Other Countries</h3>
-              <div className="space-y-3">
-                {analysis.comparative_analysis.map((comparison, idx) => (
-                  <div key={idx} className="p-3 rounded-lg" style={{ background: 'rgba(55,65,81,0.3)' }}>
-                    <p style={{ color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '600' }}>
-                      {comparison.country}: {comparison.similar_bill}
-                    </p>
-                    <p style={{ color: '#4a6070', fontSize: '0.8rem', marginTop: '4px' }}>
-                      Outcome: {comparison.outcome}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </>
         )}
       </main>

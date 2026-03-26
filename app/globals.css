@@ -1,6 +1,8 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
-:root {
+:root,
+html.dark {
   /* Core palette — deep navy with cyan accents */
   --background: #030810;
   --foreground: #c4cdd8;
@@ -24,6 +26,53 @@
   --text-secondary: #7a8fa8;
   --text-muted: #3a4e62;
   --text-dim: #1e2e3e;
+
+  --topbar-bg: rgba(3, 8, 16, 0.97);
+  --topbar-border: rgba(200, 168, 74, 0.1);
+  --sidebar-gradient: linear-gradient(180deg, #080c14 0%, #0a111b 68%, #111a27 100%);
+  --sidebar-border: rgba(201, 168, 106, 0.16);
+  --sidebar-shadow: 4px 0 32px rgba(0, 0, 0, 0.5);
+  --divider-color: rgba(200, 168, 74, 0.08);
+  --input-bg: rgba(10, 21, 37, 0.8);
+  --input-border: rgba(200, 168, 74, 0.1);
+  --hover-bg: rgba(200, 168, 74, 0.04);
+  --scrollbar-thumb: rgba(0, 212, 255, 0.24);
+  --scrollbar-thumb-hover: rgba(0, 212, 255, 0.42);
+}
+
+html.light {
+  --background: #f4f7fb;
+  --foreground: #1f2937;
+  --sidebar-bg: #eef2f8;
+  --card-bg: #ffffff;
+  --border-color: rgba(8, 145, 178, 0.2);
+  --border-subtle: rgba(17, 24, 39, 0.08);
+
+  --accent-gold: #0891b2;
+  --accent-gold-light: #06b6d4;
+  --accent-gold-dim: rgba(8, 145, 178, 0.15);
+  --accent-steel: #2563eb;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-crimson: #dc2626;
+  --accent-lavender: #7c3aed;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --text-dim: #9ca3af;
+
+  --topbar-bg: rgba(255, 255, 255, 0.96);
+  --topbar-border: rgba(8, 145, 178, 0.16);
+  --sidebar-gradient: linear-gradient(180deg, #f8fbff 0%, #eef4fb 68%, #e7eef8 100%);
+  --sidebar-border: rgba(8, 145, 178, 0.18);
+  --sidebar-shadow: 2px 0 20px rgba(15, 23, 42, 0.08);
+  --divider-color: rgba(8, 145, 178, 0.14);
+  --input-bg: rgba(226, 232, 240, 0.75);
+  --input-border: rgba(8, 145, 178, 0.18);
+  --hover-bg: rgba(8, 145, 178, 0.08);
+  --scrollbar-thumb: rgba(8, 145, 178, 0.35);
+  --scrollbar-thumb-hover: rgba(8, 145, 178, 0.5);
 }
 
 @theme inline {
@@ -39,6 +88,7 @@ body {
   font-family: var(--font-geist-sans), 'Segoe UI', Arial, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 * {
@@ -54,11 +104,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 212, 255, 0.24);
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 212, 255, 0.42);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── Glow effects ─────────────────────────────────── */
@@ -115,26 +165,26 @@ body {
 /* ── Background ───────────────────────────────────── */
 .grid-bg {
   background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 255, 0.05) 0%, transparent 60%),
-    linear-gradient(rgba(0, 212, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.018) 1px, transparent 1px);
+    radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--accent-gold) 10%, transparent) 0%, transparent 60%),
+    linear-gradient(color-mix(in srgb, var(--accent-gold) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-gold) 4%, transparent) 1px, transparent 1px);
   background-size: 100% 100%, 60px 60px, 60px 60px;
 }
 
 /* ── Glass card — premium dark surface ────────────── */
 .glass-card {
-  background: linear-gradient(135deg, rgba(10, 21, 37, 0.95) 0%, rgba(8, 16, 30, 0.98) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--card-bg) 95%, transparent) 0%, color-mix(in srgb, var(--card-bg) 98%, transparent) 100%);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 212, 255, 0.12);
+  border: 1px solid var(--border-color);
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
-              0 8px 32px rgba(0, 0, 0, 0.4),
-              0 1px 2px rgba(0, 0, 0, 0.3);
+              0 8px 32px rgba(0, 0, 0, 0.18),
+              0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 /* ── Accent divider line ─────────────────────────── */
 .gold-line {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.45), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-gold) 45%, transparent), transparent);
 }
 
 /* ── Sidebar nav link ─────────────────────────────── */
@@ -197,24 +247,24 @@ body {
   border-collapse: collapse;
 }
 .data-table th {
-  background: rgba(6, 13, 26, 0.8);
+  background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
   color: var(--text-muted);
   font-size: 0.68rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 600;
   padding: 0.7rem 1rem;
-  border-bottom: 1px solid rgba(0, 212, 255, 0.12);
+  border-bottom: 1px solid var(--border-color);
 }
 .data-table td {
   padding: 0.7rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 0.82rem;
   color: var(--text-secondary);
   transition: background 0.15s;
 }
 .data-table tr:hover td {
-  background: rgba(0, 212, 255, 0.04);
+  background: color-mix(in srgb, var(--accent-gold) 8%, transparent);
 }
 .data-table tr:last-child td {
   border-bottom: none;

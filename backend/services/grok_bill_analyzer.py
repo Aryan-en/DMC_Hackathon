@@ -76,7 +76,8 @@ class GrokBillAnalyzer:
                 self._analyze_economic_impact(chunks, logs),
                 self._analyze_risk_assessment(chunks, logs),
                 self._analyze_global_impact(chunks, logs),
-                self._analyze_stakeholders(chunks, logs)
+                self._analyze_stakeholders(chunks, logs),
+                self._analyze_amendments(chunks, logs)
             ]
             
             results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
@@ -234,7 +235,7 @@ Return ONLY valid JSON:
         analysis_chunks = chunks[::max(1, len(chunks)//3)]
         chunk_text = "\n---\n".join(analysis_chunks)
         
-        prompt = f"""Analyze the global and geopolitical impact of this legislation:
+        prompt = f"""Analyze the global and geopolitical impact of this legislation, specifying details for affected countries:
 
 {chunk_text[:6000]}
 
@@ -242,7 +243,10 @@ Return ONLY valid JSON:
 {{
     "trade_relations": ["string", ...],
     "geopolitical_influence": float between 0 and 1,
-    "affected_regions": ["string", ...]
+    "affected_regions": ["string", ...],
+    "affected_countries": [
+        {{"country": "string", "impact_description": "string", "sentiment": "POSITIVE|NEGATIVE|NEUTRAL"}}
+    ]
 }}"""
         
         try:
@@ -252,6 +256,38 @@ Return ONLY valid JSON:
         except Exception as e:
             logger.warning(f"Global impact analysis failed: {str(e)}")
             return {"global_impact": {}}
+    
+    async def _analyze_amendments(self, chunks: list, logs: list) -> dict:
+        """Provide powerful tweaks and impact analysis"""
+        
+        # We sample towards the end of the text for proposed implementation / effects
+        analysis_chunks = chunks[len(chunks)//2:]
+        chunk_text = "\n---\n".join(analysis_chunks)
+        
+        prompt = f"""Suggest how this decision or legislation can be tweaked to be much more powerful. Provide specific amendment tweaks with their impact analysis before and after the tweak.
+        
+{chunk_text[:6000]}
+
+Return ONLY valid JSON:
+{{
+    "amendments": [
+        {{
+            "title": "string (Short actionable title)",
+            "original_flaw": "string (What the current draft lacks or risks)",
+            "powerful_tweak": "string (How to tweak it for maximum impact)",
+            "impact_before": "string (Current projected impact)",
+            "impact_after": "string (Impact after applying the tweak)"
+        }}
+    ]
+}}"""
+        
+        try:
+            response = await self._call_llm_api(prompt)
+            data = self._extract_json(response)
+            return {"amendments": data.get("amendments", [])}
+        except Exception as e:
+            logger.warning(f"Amendments analysis failed: {str(e)}")
+            return {"amendments": []}
     
     async def _analyze_stakeholders(self, chunks: list, logs: list) -> dict:
         """Identify and analyze stakeholders"""
@@ -471,6 +507,7 @@ Return ONLY valid JSON:
             "stakeholder_analysis": [],
             "implementation_timeline": self._generate_timeline(),
             "comparative_analysis": self._generate_comparatives(),
+            "amendments": [],
             "india_impact": {},
             "recommendations": [],
             "policy_brief": {}
@@ -481,6 +518,9 @@ Return ONLY valid JSON:
                 continue
             if isinstance(result, dict):
                 analysis.update(result)
+
+        if not analysis.get("pros") and not analysis.get("national_impact"):
+            raise Exception("LLM LLM analysis failed silently returning empty data. Falling back to mock generator.")
 
         india_impact = self._build_india_impact(analysis)
         recommendations = self._build_recommendations(analysis, india_impact)
@@ -644,38 +684,90 @@ Return ONLY valid JSON:
         ]
     
     async def _mock_analysis(self, text: str, logs: list) -> tuple[dict, list]:
-        """Fallback mock analysis when API is unavailable"""
+        """Fallback mock analysis when API is unavailable, with basic personalization derived from bill context."""
         
-        logs.append("✓ Using fallback analysis mode")
+        logs.append("✓ Using fallback analysis mode with context personalization")
         word_count = len(text.split())
         
+        text_lower = text.lower()
+        
+        # Keyword based customization
+        if "privacy" in text_lower or "data" in text_lower:
+            bill_title_mock = "Digital Privacy Protection Act Analysis"
+            pros_mock = ["Enhances consumer data sovereignty", "Imposes strong localized constraints for MNCs", "Standardizes digital auditing frameworks"]
+            cons_mock = ["Massive compliance cost for local tech companies", "Risks friction with international data-sharing treaties"]
+            amendments_title = "Introduce Cryptographic Data Providence Ledgers"
+        elif "climate" in text_lower or "energy" in text_lower or "carbon" in text_lower:
+            bill_title_mock = "Climate Action Initiative Analysis"
+            pros_mock = ["Aggressive carbon reduction roadmap", "Tax incentives for domestic renewable production", "Creates green employment transition mechanisms"]
+            cons_mock = ["Potential short-term spike in industrial energy costs", "Displaces legacy fossil-fuel dependent workforces"]
+            amendments_title = "Accelerate Phase-out Exemption Clauses"
+        elif "trade" in text_lower or "export" in text_lower or "customs" in text_lower:
+            bill_title_mock = "Trade Facilitation Act Analysis"
+            pros_mock = ["Streamlines cross-border customs execution", "Reduces red tape by digitizing single-window clearances", "Boosts SME export viability financially"]
+            cons_mock = ["Weaker safeguards against smuggled sub-standard goods", "Relies heavily on international port cooperation"]
+            amendments_title = "Digitize Tariff Reconciliation via Blockchain"
+        else:
+            bill_title_mock = "General Legislative Baseline Assessment"
+            pros_mock = ["Comprehensive policy coverage", "Detailed enforcement provisions", "Strong administrative oversight mechanisms"]
+            cons_mock = ["General implementation complexity", "High compliance and rollout costs for underlying SMEs"]
+            amendments_title = "Enhance Tracking and Accountability Visibility"
+        
         analysis = {
-            "bill_title": "Legislative Analysis",
-            "country": "Unknown",
-            "bill_summary": f"This document contains approximately {word_count} words. Full AI-powered analysis requires GEMINI_API_KEY or GROK_API_KEY configuration.",
+            "bill_title": bill_title_mock,
+            "country": "Simulated Jurisdiction",
+            "bill_summary": f"This document contains approximately {word_count} words. Full generative AI analysis requires an active GEMINI API configuration. Returning contextual mock extrapolation.",
             "analysis_provider": "mock",
-            "analysis_model": "none",
-            "pros": ["Comprehensive coverage", "Detailed provisions"],
-            "cons": ["Implementation complexity"],
+            "analysis_model": "rule-based-engine",
+            "pros": pros_mock,
+            "cons": cons_mock,
             "national_impact": {
                 "gdp_impact": 0.5,
                 "employment_impact": 0.2,
                 "inflation_impact": 0.1,
-                "sector_effects": []
+                "sector_effects": [
+                    {"sector": "Technology & Innovation", "impact": 0.8},
+                    {"sector": "Finance & Economics", "impact": -0.3},
+                    {"sector": "Domestic Labor", "impact": 0.5},
+                    {"sector": "International Trade", "impact": -0.1}
+                ]
             },
             "global_impact": {
-                "geopolitical_influence": 0.3,
-                "trade_relations": [],
-                "affected_regions": []
+                "geopolitical_influence": 0.7,
+                "trade_relations": ["US", "EU", "ASEAN"],
+                "affected_regions": ["North America", "Europe", "Asia"],
+                "affected_countries": [
+                    {"country": "United States", "impact_description": "Changes in local policies may shift ongoing trade dynamics.", "sentiment": "NEGATIVE"},
+                    {"country": "Germany", "impact_description": "Aligns generally with European standards on these metrics.", "sentiment": "POSITIVE"},
+                    {"country": "Japan", "impact_description": "Logistics and global supply chains remain mostly neutral.", "sentiment": "NEUTRAL"}
+                ]
             },
             "risk_assessment": {
                 "risk_level": "MEDIUM",
-                "probability": 0.5,
-                "mitigation_strategies": []
+                "probability": 0.65,
+                "mitigation_strategies": [
+                    "Phased implementation timeline over 24 months",
+                    "Targeted tax subsidies for highly impacted sectors",
+                    "Establishment of a dedicated compliance task force"
+                ]
             },
-            "stakeholder_analysis": [],
+            "stakeholder_analysis": [
+                 {"stakeholder": "Major Corporations", "influence": 0.9, "position": "OPPOSED"},
+                 {"stakeholder": "Civic Rights Entities", "influence": 0.6, "position": "SUPPORTIVE"},
+                 {"stakeholder": "SMEs", "influence": 0.4, "position": "OPPOSED"},
+                 {"stakeholder": "Government Regulators", "influence": 0.8, "position": "SUPPORTIVE"}
+            ],
             "implementation_timeline": self._generate_timeline(),
-            "comparative_analysis": self._generate_comparatives()
+            "comparative_analysis": self._generate_comparatives(),
+            "amendments": [
+                {
+                    "title": amendments_title,
+                    "original_flaw": "The current draft lacks robust enforcement for its primary directives.",
+                    "powerful_tweak": "Mandate digitized tracking frameworks covering all implementation outcomes.",
+                    "impact_before": "Moderate compliance, high risk of execution failure.",
+                    "impact_after": "Near-zero deviation resulting in robust, trackable national compliance."
+                }
+            ]
         }
 
         india_impact = self._build_india_impact(analysis)

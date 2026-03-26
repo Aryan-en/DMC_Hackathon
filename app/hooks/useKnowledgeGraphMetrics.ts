@@ -97,18 +97,18 @@ const SAMPLE_NODE_TYPES: NodeType[] = [
 ];
 
 const SAMPLE_RELATIONSHIPS: Relationship[] = [
-  { source: 'Russia', target: 'EU', relation: 'SANCTIONS', strength: 0.92, date: '2026-03-15', impact: 'high' },
-  { source: 'China', target: 'USA', relation: 'TRADE_PARTNER', strength: 0.85, date: '2026-03-14' },
-  { source: 'India', target: 'Russia', relation: 'DEFENSE_AGREEMENT', strength: 0.78, date: '2026-03-12' },
-  { source: 'NATO', target: 'Ukraine', relation: 'MILITARY_SUPPORT', strength: 0.88, date: '2026-03-10', impact: 'critical' },
-  { source: 'OPEC', target: 'Global Markets', relation: 'PRICE_INFLUENCE', strength: 0.81, date: '2026-03-08' },
-  { source: 'EU', target: 'China', relation: 'DIPLOMATIC_TENSION', strength: 0.67, date: '2026-03-05' },
+  { source: 'Russia', target: 'EU', relation: 'SANCTIONS', strength: 92, date: '2026-03-15', impact: 'high' },
+  { source: 'China', target: 'USA', relation: 'TRADE_PARTNER', strength: 85, date: '2026-03-14' },
+  { source: 'India', target: 'Russia', relation: 'DEFENSE_AGREEMENT', strength: 78, date: '2026-03-12' },
+  { source: 'NATO', target: 'Ukraine', relation: 'MILITARY_SUPPORT', strength: 88, date: '2026-03-10', impact: 'critical' },
+  { source: 'OPEC', target: 'Global Markets', relation: 'PRICE_INFLUENCE', strength: 81, date: '2026-03-08' },
+  { source: 'EU', target: 'China', relation: 'DIPLOMATIC_TENSION', strength: 67, date: '2026-03-05' },
 ];
 
 const SAMPLE_PATHS: Path[] = [
-  { chain: ['Russia', 'SANCTIONS', 'EU', 'TRADE_PARTNER', 'China'], strength: 0.74, hops: 2 },
-  { chain: ['Russia', 'DEFENSE_AGREEMENT', 'India', 'TRADE_PARTNER', 'EU'], strength: 0.68, hops: 2 },
-  { chain: ['Russia', 'ENERGY_SUPPLIER', 'Europe', 'NATO_MEMBER', 'EU'], strength: 0.71, hops: 2 },
+  { chain: ['Russia', 'SANCTIONS', 'EU', 'TRADE_PARTNER', 'China'], strength: 74, hops: 2 },
+  { chain: ['Russia', 'DEFENSE_AGREEMENT', 'India', 'TRADE_PARTNER', 'EU'], strength: 68, hops: 2 },
+  { chain: ['Russia', 'ENERGY_SUPPLIER', 'Europe', 'NATO_MEMBER', 'EU'], strength: 71, hops: 2 },
 ];
 
 const SAMPLE_SHACL_SUMMARY: ShaclSummary = {

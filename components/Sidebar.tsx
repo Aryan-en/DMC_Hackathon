@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Globe, LayoutDashboard, Share2, Map, Brain,
-  Database, Shield, Layers, Activity, Zap, FileText, Settings
+  Database, Shield, Activity, Zap, FileText, Settings, Layers
 } from 'lucide-react';
 
 const navItems = [
@@ -13,7 +13,7 @@ const navItems = [
   { href: '/bill-analysis', label: 'Bill Amendment', icon: FileText, group: 'COMMAND' },
   { href: '/knowledge-graph', label: 'Knowledge Graph', icon: Share2, group: 'ANALYSIS' },
   { href: '/geospatial', label: 'Geospatial Intel', icon: Map, group: 'ANALYSIS' },
-  { href: '/heatmap', label: 'Heatmap', icon: Layers, group: 'ANALYSIS' },
+  { href: '/heatmap', label: 'Multi-Layer Heatmap', icon: Layers, group: 'ANALYSIS' },
   { href: '/predictions', label: 'Predictions Engine', icon: Zap, group: 'ANALYSIS' },
   { href: '/data-streams', label: 'Data Streams', icon: Activity, group: 'INFRASTRUCTURE' },
   { href: '/data-lake', label: 'Data Lake', icon: Database, group: 'INFRASTRUCTURE' },
@@ -30,25 +30,25 @@ export default function Sidebar() {
     <aside
       className="fixed left-0 top-0 h-screen w-64 flex flex-col z-40"
       style={{
-        background: 'linear-gradient(180deg, #080c14 0%, #0a111b 68%, #111a27 100%)',
-        borderRight: '1px solid rgba(201,168,106,0.16)',
-        boxShadow: '4px 0 32px rgba(0,0,0,0.5)',
+        background: 'var(--sidebar-gradient)',
+        borderRight: '1px solid var(--sidebar-border)',
+        boxShadow: 'var(--sidebar-shadow)',
       }}
     >
       {/* Logo */}
       <div
         className="flex items-center gap-4 px-5 py-5"
-        style={{ borderBottom: '1px solid rgba(201,168,106,0.12)' }}
+        style={{ borderBottom: '1px solid var(--divider-color)' }}
       >
         <div
           className="relative flex items-center justify-center w-10 h-10 rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, rgba(200,168,74,0.18) 0%, rgba(200,168,74,0.06) 100%)',
-            border: '1px solid rgba(201,168,106,0.30)',
-            boxShadow: '0 0 20px rgba(201,168,106,0.12)',
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-gold) 18%, transparent) 0%, color-mix(in srgb, var(--accent-gold) 6%, transparent) 100%)',
+            border: '1px solid color-mix(in srgb, var(--accent-gold) 30%, transparent)',
+            boxShadow: '0 0 20px color-mix(in srgb, var(--accent-gold) 12%, transparent)',
           }}
         >
-          <Globe size={18} style={{ color: '#d6b985' }} />
+          <Globe size={18} style={{ color: 'var(--accent-gold)' }} />
           <span
             className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full live-indicator"
             style={{ background: '#3eb87a' }}
@@ -57,11 +57,11 @@ export default function Sidebar() {
         <div>
           <div
             className="font-bold tracking-widest"
-            style={{ color: '#d6b985', fontSize: '0.75rem', letterSpacing: '0.22em' }}
+            style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', letterSpacing: '0.22em' }}
           >
             ONTORA
           </div>
-          <div style={{ color: '#3a4e62', fontSize: '0.65rem', letterSpacing: '0.04em' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', letterSpacing: '0.04em' }}>
             Global Ontology Engine
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function Sidebar() {
             <div key={group}>
               <div
                 className="px-3 mb-2 font-semibold tracking-widest"
-                style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.18em' }}
+                style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.18em' }}
               >
                 {group}
               </div>
@@ -90,14 +90,14 @@ export default function Sidebar() {
                       className={`sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'active' : ''}`}
                       style={{
                         background: isActive
-                          ? 'linear-gradient(90deg, rgba(201,168,106,0.16) 0%, rgba(201,168,106,0.05) 100%)'
+                          ? 'linear-gradient(90deg, color-mix(in srgb, var(--accent-gold) 16%, transparent) 0%, color-mix(in srgb, var(--accent-gold) 5%, transparent) 100%)'
                           : 'transparent',
-                        color: isActive ? '#ead5a4' : '#6f8096',
+                        color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                       }}
                     >
                       <Icon
                         size={15}
-                        style={{ color: isActive ? '#d6b985' : '#4f6178', flexShrink: 0 }}
+                        style={{ color: isActive ? 'var(--accent-gold)' : 'var(--text-muted)', flexShrink: 0 }}
                       />
                       <span
                         style={{
@@ -112,7 +112,7 @@ export default function Sidebar() {
                       {isActive && (
                         <span
                           className="w-1.5 h-1.5 rounded-full"
-                          style={{ background: '#d6b985', opacity: 0.9 }}
+                          style={{ background: 'var(--accent-gold)', opacity: 0.9 }}
                         />
                       )}
                     </Link>
@@ -127,11 +127,11 @@ export default function Sidebar() {
       {/* System status */}
       <div
         className="px-4 py-4"
-        style={{ borderTop: '1px solid rgba(201,168,106,0.12)' }}
+        style={{ borderTop: '1px solid var(--divider-color)' }}
       >
         <div
           className="mb-3 font-semibold tracking-widest"
-          style={{ color: '#2a3d52', fontSize: '0.58rem', letterSpacing: '0.18em' }}
+          style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.18em' }}
         >
           SYSTEM STATUS
         </div>
@@ -141,7 +141,7 @@ export default function Sidebar() {
           { label: 'Neo4j Cluster', status: 'SYNC', color: '#c9a86a' },
         ].map(s => (
           <div key={s.label} className="flex items-center justify-between py-1.5">
-            <span style={{ color: '#3a4e62', fontSize: '0.68rem' }}>{s.label}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{s.label}</span>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: s.color }} />
               <span
@@ -152,10 +152,10 @@ export default function Sidebar() {
             </div>
           </div>
         ))}
-        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(200,168,74,0.06)' }}>
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--divider-color)' }}>
           <div className="flex items-center justify-between">
-            <Layers size={10} style={{ color: '#2a3d52' }} />
-            <span style={{ color: '#2a3d52', fontSize: '0.6rem', fontFamily: 'var(--font-geist-mono)' }}>v4.2.1 — CLASSIFIED</span>
+            <Activity size={10} style={{ color: 'var(--text-muted)' }} />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem', fontFamily: 'var(--font-geist-mono)' }}>v4.2.1 - CLASSIFIED</span>
           </div>
         </div>
       </div>

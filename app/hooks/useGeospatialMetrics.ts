@@ -454,7 +454,11 @@ const SAMPLE_ECONOMIC_REGIONS: EconomicRegion[] = [
   },
 ];
 
-export function useGeospatialMetrics() {
+type UseGeospatialMetricsOptions = {
+  refreshIntervalMs?: number;
+};
+
+export function useGeospatialMetrics(options: UseGeospatialMetricsOptions = {}) {
   const [data, setData] = useState<GeospatialMetrics>({
     hotspots: SAMPLE_HOTSPOTS,
     climateRegions: SAMPLE_CLIMATE_REGIONS,
@@ -463,6 +467,8 @@ export function useGeospatialMetrics() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshIntervalMs = options.refreshIntervalMs ?? 0;
 
   useEffect(() => {
     let active = true;
@@ -495,8 +501,8 @@ export function useGeospatialMetrics() {
         const climateRegions = dedupeByKey(climateRegionsRaw, (item) => item.region);
         const incidents = dedupeByKey(incidentsRaw, (item) => `${item.name}|${item.date}|${item.lat}|${item.lng}`);
         const economicRegions = dedupeByKey(economicRegionsRaw, (item) => item.name);
-        
-        const isUsingFallback = hotspotsResult.status === 'rejected' || climateResult.status === 'rejected' 
+
+        const isUsingFallback = hotspotsResult.status === 'rejected' || climateResult.status === 'rejected'
           || incidentsResult.status === 'rejected' || economicResult.status === 'rejected';
 
         setData({
@@ -521,10 +527,19 @@ export function useGeospatialMetrics() {
     }
 
     load();
+
+    let interval: number | undefined;
+    if (refreshIntervalMs > 0) {
+      interval = window.setInterval(load, refreshIntervalMs);
+    }
+
     return () => {
       active = false;
+      if (interval) {
+        window.clearInterval(interval);
+      }
     };
-  }, []);
+  }, [refreshIntervalMs]);
 
   return { data, loading, error };
 }

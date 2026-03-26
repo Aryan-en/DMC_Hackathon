@@ -3,8 +3,11 @@ ONTORA Backend - FastAPI Application Entry Point
 Classification: UNCLASSIFIED
 """
 
+import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from time import perf_counter
 
 from fastapi import FastAPI, HTTPException, Request
@@ -77,12 +80,34 @@ async def lifespan(app: FastAPI):
             logger.warning("Ollama not reachable at startup: %s", settings.OLLAMA_HOST)
     except Exception as e:
         logger.error(f"Ollama preflight failed: {e}")
+
+    # In development, ensure we always have time-series data for the
+    # /predictions CPU/serving chart by running a background simulator.
+    # This makes the chart visibly update every ~1s without requiring a
+    # separate script process.
+    serving_metrics_task: asyncio.Task | None = None
+    if settings.ENVIRONMENT == "development" and settings.ENABLE_SERVING_METRICS_SIM:
+        try:
+            repo_root = Path(__file__).resolve().parents[1]
+            if str(repo_root) not in sys.path:
+                sys.path.insert(0, str(repo_root))
+
+            import update_serving_metrics as serving_metrics_sim
+
+            serving_metrics_task = asyncio.create_task(
+                serving_metrics_sim.update_serving_metrics()
+            )
+            logger.info("Started serving metrics simulator (1s cadence)")
+        except Exception as e:
+            logger.warning("Serving metrics simulator failed to start: %s", e)
     
     logger.info("ONTORA Backend ready!")
     yield
     
     logger.info("Shutting down ONTORA Backend...")
     # Cleanup
+    if serving_metrics_task is not None:
+        serving_metrics_task.cancel()
     logger.info("Shutdown complete")
 
 

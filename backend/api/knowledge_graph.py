@@ -508,3 +508,201 @@ async def seed_knowledge_graph_data(db: AsyncSession = Depends(get_db_session)):
         })
     except Exception as exc:
         return build_error("SEED_ERROR", f"Failed to seed knowledge graph: {exc}")
+
+
+@router.get("/node-details")
+async def get_node_details(
+    name: str = Query(..., min_length=1, max_length=500),
+    limit_edges: int = Query(default=200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """GET /api/knowledge-graph/node-details?name=... - Detailed analysis for a single node"""
+    try:
+        name_lower = name.strip().lower()
+        
+        # Find entity by case-insensitive name match
+        entity_stmt = select(Entity).where(
+            func.lower(Entity.name) == name_lower
+        )
+        entity_result = (await db.execute(entity_stmt)).scalars().first()
+        
+        if not entity_result:
+            return build_error("NOT_FOUND", f"Entity '{name}' not found in knowledge graph")
+        
+        entity_id = entity_result.id
+        
+        # Fetch all relationships involving this entity (incoming and outgoing)
+        s = Entity.__table__.alias("s")
+        o = Entity.__table__.alias("o")
+        
+        rel_stmt = (
+            select(
+                s.c.name,
+                o.c.name,
+                Relationship.predicate,
+                Relationship.confidence_score,
+                Relationship.id
+            )
+            .outerjoin(s, Relationship.subject_entity_id == s.c.id)
+            .outerjoin(o, Relationship.object_entity_id == o.c.id)
+            .where(
+                (Relationship.subject_entity_id == entity_id) |
+                (Relationship.object_entity_id == entity_id)
+            )
+            .order_by(Relationship.confidence_score.desc())
+            .limit(limit_edges)
+        )
+        
+        rel_rows = (await db.execute(rel_stmt)).all()
+        
+        # Parse relationships and compute metrics
+        incoming_rels = []
+        outgoing_rels = []
+        incoming_count = 0
+        outgoing_count = 0
+        strengths = []
+        neighbors = defaultdict(float)  # neighbor -> max_strength
+        relation_counts = defaultdict(int)  # predicate -> count
+        
+        for source, target, predicate, confidence, rel_id in rel_rows:
+            if not source or not target:
+                continue
+            
+            strength = int((confidence or 0.75) * 100)
+            strengths.append(strength)
+            
+            if (source or "").lower() == name_lower:
+                # Outgoing relationship
+                outgoing_rels.append({
+                    "source": source,
+                    "target": target,
+                    "relation": predicate,
+                    "strength": strength,
+                })
+                outgoing_count += 1
+                neighbors[target] = max(neighbors.get(target, 0), confidence or 0.75)
+            else:
+                # Incoming relationship
+                incoming_rels.append({
+                    "source": source,
+                    "target": target,
+                    "relation": predicate,
+                    "strength": strength,
+                })
+                incoming_count += 1
+                neighbors[source] = max(neighbors.get(source, 0), confidence or 0.75)
+            
+            relation_counts[predicate] += 1
+        
+        degree = incoming_count + outgoing_count
+        
+        # Compute strength metrics
+        avg_strength = int(sum(strengths) / len(strengths)) if strengths else 0
+        max_strength = max(strengths) if strengths else 0
+        min_strength = min(strengths) if strengths else 0
+        
+        # Get top neighbors by strength
+        top_neighbors = sorted(
+            [{"name": n, "strength": int(s * 100)} for n, s in neighbors.items()],
+            key=lambda x: x["strength"],
+            reverse=True
+        )[:5]
+        
+        # Compute centrality: degree-based within a sample of edges
+        all_edges = await _relationship_rows(db, limit=5000)
+        degree_map = defaultdict(int)
+        all_nodes = set()
+        
+        for s_name, o_name, _, _ in all_edges:
+            if s_name and o_name:
+                all_nodes.add(s_name)
+                all_nodes.add(o_name)
+                degree_map[s_name] += 1
+                degree_map[o_name] += 1
+        
+        node_count = len(all_nodes)
+        node_degree = degree_map.get(entity_result.name, 0)
+        centrality = round((node_degree / max(node_count - 1, 1)), 4) if node_count > 1 else 0.0
+        
+        # Rank this node's centrality
+        central_nodes = sorted(degree_map.items(), key=lambda x: x[1], reverse=True)
+        node_rank = None
+        is_top = False
+        for idx, (n, _) in enumerate(central_nodes[:20], 1):
+            if n.lower() == name_lower:
+                node_rank = idx
+                is_top = True
+                break
+        
+        # Compute conflict/risk signals
+        keywords = {"conflict", "dispute", "sanction", "attack", "military", "crisis", "war", "threat"}
+        risk_edges = []
+        hotspot_hits = 0
+        
+        for source, target, predicate, confidence in all_edges:
+            if not source or not target:
+                continue
+            
+            pred = (predicate or "").lower()
+            conf = float(confidence or 0.0)
+            
+            # Check if this edge involves our entity
+            source_match = source.lower() == name_lower
+            target_match = target.lower() == name_lower
+            
+            if not (source_match or target_match):
+                continue
+            
+            # Compute risk score
+            is_keyword_match = any(k in pred for k in keywords)
+            risk_score = min(100, int((conf * 65) + (25 if is_keyword_match else 0) + 10))
+            
+            if is_keyword_match or risk_score >= 70:
+                risk_edges.append({
+                    "source": source,
+                    "target": target,
+                    "predicate": predicate,
+                    "risk": risk_score,
+                })
+                hotspot_hits += 1
+        
+        risk_edges.sort(key=lambda x: x["risk"], reverse=True)
+        
+        # Build response
+        return build_success({
+            "entity": {
+                "name": entity_result.name,
+                "type": entity_result.entity_type,
+                "description": entity_result.description,
+                "confidence": round(float(entity_result.confidence_score or 0.75), 3),
+                "mention_count": int(entity_result.mention_count or 0),
+                "sentiment": entity_result.sentiment,
+                "created_at": entity_result.created_at.isoformat() if entity_result.created_at else None,
+                "updated_at": entity_result.updated_at.isoformat() if entity_result.updated_at else None,
+            },
+            "metrics": {
+                "degree": degree,
+                "incoming_connections": incoming_count,
+                "outgoing_connections": outgoing_count,
+                "avg_strength": avg_strength,
+                "max_strength": max_strength,
+                "min_strength": min_strength,
+                "centrality": centrality,
+                "node_rank": node_rank,
+                "is_top": is_top,
+                "relation_breakdown": dict(relation_counts),
+                "top_neighbors": top_neighbors,
+            },
+            "relationships": {
+                "incoming": incoming_rels,
+                "outgoing": outgoing_rels,
+                "all": incoming_rels + outgoing_rels,
+            },
+            "risk": {
+                "risk_edge_count": len(risk_edges),
+                "hotspot_hits": hotspot_hits,
+                "risk_edges": risk_edges[:10],  # Top 10 risk edges
+            },
+        })
+    except Exception as exc:
+        return build_error("QUERY_ERROR", f"Failed to fetch node details: {exc}")

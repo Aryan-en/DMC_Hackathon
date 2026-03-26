@@ -260,6 +260,9 @@ export default function KnowledgeGraphPage() {
   const [zoom, setZoom] = useState(1);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number>(-1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [nodeDetails, setNodeDetails] = useState<any>(null);
+  const [nodeDetailsLoading, setNodeDetailsLoading] = useState(false);
+  const [nodeDetailsError, setNodeDetailsError] = useState<string | null>(null);
   const nodeAnalysisRef = useRef<HTMLDivElement>(null);
 
   // Entity category system
@@ -393,6 +396,42 @@ export default function KnowledgeGraphPage() {
     if (selectedNodeId && nodeAnalysisRef.current) {
       nodeAnalysisRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }, [selectedNodeId]);
+
+  // Fetch node details when a node is selected
+  useEffect(() => {
+    if (!selectedNodeId) {
+      setNodeDetails(null);
+      setNodeDetailsError(null);
+      return;
+    }
+
+    const fetchNodeDetails = async () => {
+      setNodeDetailsLoading(true);
+      setNodeDetailsError(null);
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'}/api/knowledge-graph/node-details?name=${encodeURIComponent(selectedNodeId)}`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+          }
+        );
+        const payload = await response.json();
+        if (!response.ok || payload?.status === 'error') {
+          throw new Error(payload?.error?.message || `Failed to fetch node details`);
+        }
+        setNodeDetails(payload.data);
+      } catch (err) {
+        setNodeDetailsError(err instanceof Error ? err.message : 'Failed to load node details');
+        setNodeDetails(null);
+      } finally {
+        setNodeDetailsLoading(false);
+      }
+    };
+
+    fetchNodeDetails();
   }, [selectedNodeId]);
 
   const { data, loading, error, reload } = useKnowledgeGraphMetrics({
@@ -537,7 +576,7 @@ export default function KnowledgeGraphPage() {
             <div className="text-xs space-y-1" style={{ color: '#cbd5e1' }}>
               {source && target && (
                 <div>
-                  <span style={{ color: '#94a3b8' }}>Paths:</span> {source} → {target}
+                  <span style={{ color: '#94a3b8' }}>Paths:</span> {source} -&gt; {target}
                 </div>
               )}
               {queryInput && (
@@ -645,7 +684,9 @@ export default function KnowledgeGraphPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>Node Analysis: {selectedNodeId}</h3>
-                <p className="text-xs mt-1" style={{ color: '#64748b' }}>Detailed node and relationship breakdown</p>
+                <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+                  {nodeDetailsLoading ? 'Loading detailed analysis...' : 'Detailed node and relationship breakdown'}
+                </p>
               </div>
               <button
                 onClick={() => setSelectedNodeId(null)}
@@ -656,123 +697,189 @@ export default function KnowledgeGraphPage() {
               </button>
             </div>
 
+            {nodeDetailsError && (
+              <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(184,74,74,0.1)', border: '1px solid rgba(184,74,74,0.3)', color: '#b84a4a', fontSize: '0.75rem' }}>
+                {nodeDetailsError} — showing computed stats only
+              </div>
+            )}
+
+            {nodeDetailsLoading && (
+              <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff', fontSize: '0.75rem' }}>
+                Fetching enhanced node details...
+              </div>
+            )}
+
             {/* Node Properties */}
             <div className="mb-5 p-4 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(0,212,255,0.2)' }}>
               <h4 className="font-semibold text-xs mb-3" style={{ color: '#00d4ff' }}>Node Properties</h4>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-2xs">
                 <div>
                   <div style={{ color: '#94a3b8' }}>Name</div>
-                  <div className="font-mono" style={{ color: '#e2e8f0' }}>{selectedNodeId}</div>
+                  <div className="font-mono" style={{ color: '#e2e8f0' }}>{nodeDetails?.entity?.name || selectedNodeId}</div>
                 </div>
                 <div>
                   <div style={{ color: '#94a3b8' }}>Type</div>
-                  <div className="font-mono" style={{ color: '#8b5cf6' }}>Entity</div>
-                </div>
-                <div>
-                  <div style={{ color: '#94a3b8' }}>Timestamp</div>
-                  <div className="font-mono" style={{ color: '#00ff88' }}>2026-03-22</div>
-                </div>
-                <div>
-                  <div style={{ color: '#94a3b8' }}>Source</div>
-                  <div className="font-mono" style={{ color: '#f59e0b' }}>Knowledge Graph</div>
+                  <div className="font-mono" style={{ color: '#8b5cf6' }}>{nodeDetails?.entity?.type || 'Entity'}</div>
                 </div>
                 <div>
                   <div style={{ color: '#94a3b8' }}>Confidence</div>
-                  <div className="font-mono" style={{ color: '#06b6d4' }}>95%</div>
+                  <div className="font-mono" style={{ color: '#06b6d4' }}>{nodeDetails?.entity?.confidence ? `${Math.round(nodeDetails.entity.confidence * 100)}%` : '95%'}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#94a3b8' }}>Mentions</div>
+                  <div className="font-mono" style={{ color: '#f59e0b' }}>{nodeDetails?.entity?.mention_count || 1}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#94a3b8' }}>Updated</div>
+                  <div className="font-mono" style={{ color: '#00ff88' }}>
+                    {nodeDetails?.entity?.updated_at ? new Date(nodeDetails.entity.updated_at).toLocaleDateString() : '2026-03-22'}
+                  </div>
                 </div>
               </div>
+              {nodeDetails?.entity?.description && (
+                <div className="mt-3 pt-3 border-t border-rgba(0,212,255,0.2)">
+                  <div style={{ color: '#94a3b8', fontSize: '0.65rem' }}>Description</div>
+                  <div style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>{nodeDetails.entity.description}</div>
+                </div>
+              )}
             </div>
 
             {selectedNodeStats && (
-              <div className="grid grid-cols-3 gap-3 mb-5">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
                 <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Incoming Connections</div>
-                  <div className="text-lg font-bold" style={{ color: '#00d4ff' }}>{selectedNodeStats.incomingConnections}</div>
+                  <div className="text-xs" style={{ color: '#94a3b8' }}>Incoming</div>
+                  <div className="text-lg font-bold" style={{ color: '#00d4ff' }}>{nodeDetails?.metrics?.incoming_connections ?? selectedNodeStats.incomingConnections}</div>
                 </div>
                 <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Outgoing Connections</div>
-                  <div className="text-lg font-bold" style={{ color: '#8b5cf6' }}>{selectedNodeStats.outgoingConnections}</div>
+                  <div className="text-xs" style={{ color: '#94a3b8' }}>Outgoing</div>
+                  <div className="text-lg font-bold" style={{ color: '#8b5cf6' }}>{nodeDetails?.metrics?.outgoing_connections ?? selectedNodeStats.outgoingConnections}</div>
                 </div>
                 <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-                  <div className="text-xs" style={{ color: '#94a3b8' }}>Avg Connection Strength</div>
-                  <div className="text-lg font-bold" style={{ color: '#f59e0b' }}>{selectedNodeStats.avgStrength}%</div>
+                  <div className="text-xs" style={{ color: '#94a3b8' }}>Avg Strength</div>
+                  <div className="text-lg font-bold" style={{ color: '#f59e0b' }}>{nodeDetails?.metrics?.avg_strength ?? selectedNodeStats.avgStrength}%</div>
                 </div>
+                {nodeDetails?.metrics && (
+                  <>
+                    <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(0,255,136,0.3)' }}>
+                      <div className="text-xs" style={{ color: '#94a3b8' }}>Centrality</div>
+                      <div className="text-lg font-bold" style={{ color: '#00ff88' }}>{(nodeDetails.metrics.centrality * 100).toFixed(1)}%</div>
+                      {nodeDetails.metrics.node_rank && (
+                        <div className="text-2xs mt-1" style={{ color: '#64748b' }}>Rank #{nodeDetails.metrics.node_rank}</div>
+                      )}
+                    </div>
+                    <div className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.5)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                      <div className="text-xs" style={{ color: '#94a3b8' }}>Risk Edges</div>
+                      <div className="text-lg font-bold" style={{ color: '#ef4444' }}>{nodeDetails.risk?.risk_edge_count || 0}</div>
+                      {nodeDetails.risk?.hotspot_hits > 0 && (
+                        <div className="text-2xs mt-1" style={{ color: '#f59e0b' }}>Hotspot: {nodeDetails.risk.hotspot_hits}</div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            <h4 className="font-semibold text-xs mb-3" style={{ color: '#c4cdd8' }}>Connected Relationships</h4>
+            {/* Connected Relationships */}
+            <h4 className="font-semibold text-xs mb-3 mt-5" style={{ color: '#c4cdd8' }}>Connected Relationships</h4>
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {selectedNodeRelationships.length > 0 ? (
-                selectedNodeRelationships.map((rel, idx) => {
-                  const relType = relationshipTypes.find(rt => rt.type.toLowerCase() === rel.relation.toLowerCase());
-                  return (
-                    <div key={idx} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.5)' }}>
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="text-xs font-medium" style={{ color: '#e2e8f0' }}>
-                            {rel.source} → {rel.target}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="text-xs font-semibold" style={{ color: relType?.color || '#00d4ff' }}>
-                              {relType?.icon || '🔗'} {rel.relation}
+              {(() => {
+                const rels = nodeDetails?.relationships?.all || selectedNodeRelationships;
+                return rels.length > 0 ? (
+                  rels.map((rel: Relationship, idx: number) => {
+                    const relType = relationshipTypes.find(rt => rt.type.toLowerCase() === (rel.relation || '').toLowerCase());
+                    return (
+                      <div key={idx} className="p-3 rounded-lg" style={{ background: 'rgba(2,8,23,0.6)', border: '1px solid rgba(30,58,95,0.5)' }}>
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="text-xs font-medium" style={{ color: '#e2e8f0' }}>
+                              {rel.source} -&gt; {rel.target}
                             </div>
-                            {relType && (
-                              <div
-                                className="text-2xs px-1.5 py-0.5 rounded-full"
-                                style={{
-                                  background: `${relType.color}20`,
-                                  color: relType.color,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {relType.strength}
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="text-xs font-semibold" style={{ color: relType?.color || '#00d4ff' }}>
+                                {relType?.icon || '[LINK]'} {rel.relation}
                               </div>
-                            )}
+                              {relType && (
+                                <div
+                                  className="text-2xs px-1.5 py-0.5 rounded-full"
+                                  style={{
+                                    background: `${relType.color}20`,
+                                    color: relType.color,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {relType.strength}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono" style={{ color: rel.strength >= 80 ? '#ef4444' : rel.strength >= 60 ? '#f59e0b' : '#00ff88' }}>
+                              {rel.strength}%
+                            </div>
+                            <div className="w-16 h-1 rounded-full mt-1" style={{ background: 'rgba(30,58,95,0.5)' }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${rel.strength}%`,
+                                  background: rel.strength >= 80 ? '#ef4444' : rel.strength >= 60 ? '#f59e0b' : '#00ff88',
+                                  opacity: 0.7,
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-xs font-mono" style={{ color: rel.strength >= 80 ? '#ef4444' : rel.strength >= 60 ? '#f59e0b' : '#00ff88' }}>
-                            {rel.strength}%
+                        
+                        {/* Edge Properties */}
+                        <div className="grid grid-cols-3 gap-2 text-2xs mt-2 pt-2 border-t border-rgba(30,58,95,0.3)">
+                          <div>
+                            <div style={{ color: '#94a3b8' }}>Strength</div>
+                            <div className="font-mono" style={{ color: '#f59e0b' }}>{rel.strength}%</div>
                           </div>
-                          <div className="w-16 h-1 rounded-full mt-1" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${rel.strength}%`,
-                                background: rel.strength >= 80 ? '#ef4444' : rel.strength >= 60 ? '#f59e0b' : '#00ff88',
-                                opacity: 0.7,
-                              }}
-                            />
+                          <div>
+                            <div style={{ color: '#94a3b8' }}>Type</div>
+                            <div className="font-mono" style={{ color: '#06b6d4' }}>
+                              {rel.relation}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: '#94a3b8' }}>Status</div>
+                            <div className="font-mono" style={{ color: '#ec4899' }}>
+                              Active
+                            </div>
                           </div>
                         </div>
                       </div>
-                      
-                      {/* Edge Properties */}
-                      <div className="grid grid-cols-3 gap-2 text-2xs mt-2 pt-2 border-t border-rgba(30,58,95,0.3)">
-                        <div>
-                          <div style={{ color: '#94a3b8' }}>Strength</div>
-                          <div className="font-mono" style={{ color: '#f59e0b' }}>{rel.strength}%</div>
-                        </div>
-                        <div>
-                          <div style={{ color: '#94a3b8' }}>Date</div>
-                          <div className="font-mono" style={{ color: '#06b6d4' }}>
-                            {rel.date || '2026-03-22'}
+                    );
+                  })
+                ) : (
+                  <div className="text-xs" style={{ color: '#64748b' }}>No relationships found for this node.</div>
+                );
+              })()}
+            </div>
+
+            {/* Risk Edges - show only if there are any */}
+            {nodeDetails?.risk?.risk_edges && nodeDetails.risk.risk_edges.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-rgba(30,58,95,0.3)">
+                <h4 className="font-semibold text-xs mb-3" style={{ color: '#ef4444' }}>[HIGH-RISK] High-Risk Edges Involving This Node</h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {nodeDetails.risk.risk_edges.map((edge: any, idx: number) => (
+                    <div key={idx} className="p-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-xs" style={{ color: '#e2e8f0' }}>
+                            {edge.source} <span style={{ color: '#64748b' }}>→</span> {edge.target}
                           </div>
+                          <div className="text-2xs mt-1" style={{ color: '#f59e0b' }}>{edge.predicate}</div>
                         </div>
-                        <div>
-                          <div style={{ color: '#94a3b8' }}>Impact</div>
-                          <div className="font-mono" style={{ color: '#ec4899' }}>
-                            {rel.impact || 'High'}
-                          </div>
+                        <div className="text-right">
+                          <div className="text-xs font-bold" style={{ color: '#ef4444' }}>Risk: {edge.risk}%</div>
                         </div>
                       </div>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="text-xs" style={{ color: '#64748b' }}>No relationships found for this node.</div>
-              )}
-            </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
