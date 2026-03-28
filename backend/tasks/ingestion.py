@@ -2,13 +2,7 @@
 
 import asyncio
 import logging
-from core.celery_app import celery_app
-from ingestors.mea_scraper import run_mea_scraper
-from ingestors.worldbank_fetcher import run_worldbank_fetcher
-from ingestors.gdelt_fetcher import run_gdelt_fetcher
-
-logger = logging.getLogger(__name__)
-
+import os
 import random
 import math
 import time
@@ -16,6 +10,13 @@ import re
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func
+
+from core.celery_app import celery_app
+from ingestors.mea_scraper import run_mea_scraper
+from ingestors.worldbank_fetcher import run_worldbank_fetcher
+from ingestors.gdelt_fetcher import run_gdelt_fetcher
+from ingestors.folder_ingestor import run_folder_ingestion
+
 from db.postgres import AsyncSessionLocal
 from db.schemas import Country, CountryRelation, Document, EconomicIndicator, Entity, Relationship, SystemMetric
 from services.entity_extractor import EntityExtractionService
@@ -191,10 +192,18 @@ async def _run_full_ingestion_async() -> dict:
     wb_results = await run_worldbank_fetcher()
     gdelt_results = await run_gdelt_fetcher()
 
+    # Process local folders - use project root paths
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    mea_dir = os.path.join(base_dir, "data", "MEA")
+    indiapi_dir = os.path.join(base_dir, "data", "IndiAPIs")
+    folder_results = await run_folder_ingestion(mea_dir, indiapi_dir)
+
+
     stats = {
         "mea_count": len(mea_results),
         "wb_count": len(wb_results),
         "gdelt_count": len(gdelt_results),
+        "folder_count": len(folder_results),
         "documents_persisted": 0,
         "documents_ontology_processed": 0,
         "countries_updated": 0,
@@ -211,8 +220,12 @@ async def _run_full_ingestion_async() -> dict:
         entity_seen: set[str] = set()
         entity_cache: dict[str, Entity] = {}
 
+        # Combine all result sources for processing - PRIORITIZE folder_results (MEA/IndiAPIs)
+        all_news_items = folder_results + gdelt_results
+
         # 1) Persist news documents and derive entities/relationships used by app dashboards.
-        for art in gdelt_results:
+
+        for art in all_news_items:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             metadata = art.get("metadata") or {}
             metadata["ingested_at"] = now.isoformat()
@@ -324,6 +337,7 @@ async def _run_full_ingestion_async() -> dict:
     stats["status"] = "success"
     return stats
 
+
 @celery_app.task(name="tasks.ingestion.run_full_ingestion")
 def run_full_ingestion():
     """Run all ingestion sources and persist data required across all dashboards."""
@@ -333,6 +347,7 @@ def run_full_ingestion():
     except Exception as e:
         logger.error(f"Ingestion task failed: {str(e)}")
         return {"status": "error", "message": str(e)}
+
 
 @celery_app.task(name="tasks.ingestion.generate_simulated_metrics")
 def generate_simulated_metrics():
@@ -430,11 +445,13 @@ def generate_simulated_metrics():
     asyncio.get_event_loop().run_until_complete(_update())
     return "success"
 
+
 @celery_app.task(name="tasks.ingestion.scheduled_mea_sync")
 def scheduled_mea_sync():
     """Specific task for MEA sync."""
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(run_mea_scraper())
+
 
 @celery_app.task(name="tasks.ingestion.scheduled_gdelt_sync")
 def scheduled_gdelt_sync():

@@ -1,4 +1,5 @@
 import { LucideIcon, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface StatCardProps {
   label: string;
@@ -25,7 +26,53 @@ export default function StatCard({
   textColor = 'var(--text-primary)',
   loading = false,
 }: StatCardProps) {
+  const [displayValue, setDisplayValue] = useState('0');
+
+  // Simple number counter effect
+  useEffect(() => {
+    if (loading) return;
+
+    // Extract numbers from string (e.g., "1,234" -> 1234, "89.2%" -> 89.2)
+    const numMatch = value.match(/[\d.]+/);
+    if (!numMatch) {
+      setDisplayValue(value);
+      return;
+    }
+
+    const target = parseFloat(numMatch[0]);
+    const prefix = value.split(numMatch[0])[0];
+    const suffix = value.split(numMatch[0])[1];
+    
+    let current = 0;
+    const duration = 1000; // 1s
+    const startTime = performance.now();
+
+    const animate = (time: number) => {
+      const elapsed = time - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Power ease-out
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      current = target * easedProgress;
+
+      const formatted = target % 1 === 0 
+        ? Math.floor(current).toLocaleString() 
+        : current.toFixed(1);
+      
+      setDisplayValue(`${prefix}${formatted}${suffix}`);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setDisplayValue(value); // Ensure final value is exact
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, loading]);
+
   const isPositive = change !== undefined && change > 0;
+
   const isNegative = change !== undefined && change < 0;
   const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus;
 
@@ -73,8 +120,9 @@ export default function StatCard({
         className={`font-black count-up tracking-tight ${loading ? 'skeleton-box h-8 w-1/2' : ''}`}
         style={{ color: textColor, lineHeight: 1, fontSize: '2.5rem', letterSpacing: '-0.05em' }}
       >
-        {!loading && value}
+        {!loading && displayValue}
       </div>
+
       {subValue && (
         <div className={loading ? 'skeleton-box h-3 w-3/4 mt-2' : ''} style={{ color: textColor, opacity: 0.8, fontSize: '0.62rem', fontWeight: 900, marginTop: '8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           {!loading && subValue}

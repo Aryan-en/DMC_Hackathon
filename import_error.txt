@@ -1,0 +1,190 @@
+Traceback (most recent call last):
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 578, in _executemany
+    return await self._connection.executemany(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        operation, seq_of_parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\asyncpg\connection.py", line 401, in executemany
+    return await self._executemany(command, args, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\asyncpg\connection.py", line 1997, in _executemany
+    result, _ = await self._do_execute(
+                ^^^^^^^^^^^^^^^^^^^^^^^
+        query, executor, timeout, record_class=record_class
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\asyncpg\connection.py", line 2033, in _do_execute
+    result = await executor(stmt, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 266, in bind_execute_many
+asyncpg.exceptions.ForeignKeyViolationError: insert or update on table "relationships" violates foreign key constraint "relationships_source_document_id_fkey"
+DETAIL:  Key (source_document_id)=(353beca5-1bbf-43a6-aca6-8c2a40377c27) is not present in table "documents".
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1936, in _exec_single_context
+    self.dialect.do_executemany(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 949, in do_executemany
+    cursor.executemany(statement, parameters)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 590, in executemany
+    return self._adapt_connection.await_(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self._executemany(operation, seq_of_parameters)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 582, in _executemany
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "relationships" violates foreign key constraint "relationships_source_document_id_fkey"
+DETAIL:  Key (source_document_id)=(353beca5-1bbf-43a6-aca6-8c2a40377c27) is not present in table "documents".
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\backend\scripts\import_real_data.py", line 214, in main
+    e_count, r_count, d_count = await import_to_db(df, truncate=first_run)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\backend\scripts\import_real_data.py", line 195, in import_to_db
+    await session.flush()
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 787, in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        insert,
+        ^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1048, in _emit_insert_statements
+    result = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1936, in _exec_single_context
+    self.dialect.do_executemany(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 949, in do_executemany
+    cursor.executemany(statement, parameters)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 590, in executemany
+    return self._adapt_connection.await_(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self._executemany(operation, seq_of_parameters)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 582, in _executemany
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\dubey\OneDrive\Desktop\ontora\DMC_Hackathon\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "relationships" violates foreign key constraint "relationships_source_document_id_fkey"
+DETAIL:  Key (source_document_id)=(353beca5-1bbf-43a6-aca6-8c2a40377c27) is not present in table "documents".
+[SQL: INSERT INTO relationships (id, subject_entity_id, predicate, object_entity_id, confidence_score, source_document_id, url, created_at) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::UUID, $5::FLOAT, $6::UUID, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE)]
+[parameters: [(UUID('be816fcc-5df6-4449-b272-df44f2128630'), UUID('3f8ae997-8e42-5c81-8a1a-198fb04ebdfc'), 'INTERACTS_WITH', UUID('ed865c86-e1cf-59bd-8732-fbfa36fe5db5'), 0.85, UUID('d9a52aa8-581f-43ef-a697-b1ca9d2a082c'), 'https://kfilradio.com/ixp/669/p/body-pulled-from-river-st-paul/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626384)), (UUID('da914035-f742-4d0b-a834-9facb5493960'), UUID('60f95ac1-53a3-5e4b-8e37-9def12eb97bd'), 'DISAPPROVE', UUID('70cf7480-7b9c-580d-ac9d-95fe8a88b9a0'), 0.4, None, 'https://www.niagarafallsreview.ca/thestar/opinion/contributors/today-at-toronto-city-council-bad-landlords-billy-bishop-and-ttc-safety/article_60c81356-7661-51f0-a774-fe6bed223881.html', datetime.datetime(2026, 3, 26, 18, 38, 34, 626391)), (UUID('6dcd3455-e21f-4652-b93f-8f4c96c0b599'), UUID('e955ef58-a94d-5e9a-b871-e8a864716251'), 'INTERACTS_WITH', UUID('70cf7480-7b9c-580d-ac9d-95fe8a88b9a0'), 0.82, UUID('bda39fd3-0225-4886-89af-6b4bfe784ca2'), 'https://www.thejournal.ie/what-happens-if-the-us-launches-a-ground-invasion-of-irans-kharg-island-6995572-Mar2026/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626394)), (UUID('746aed4b-a344-43a2-a283-59f73921e2bf'), UUID('e955ef58-a94d-5e9a-b871-e8a864716251'), 'INTERACTS_WITH', UUID('70cf7480-7b9c-580d-ac9d-95fe8a88b9a0'), 0.82, UUID('897ac22e-4b40-4787-9f6f-1fcaeb26343d'), 'https://www.thejournal.ie/what-happens-if-the-us-launches-a-ground-invasion-of-irans-kharg-island-6995572-Mar2026/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626397)), (UUID('ef0f1355-683c-4ab9-9ee9-281a16b84cea'), UUID('2b84ac89-4023-5eb7-b90e-926f996f551a'), 'DISAPPROVE', UUID('521a5456-f4ea-5333-86d1-e763ef9128a8'), 0.4, None, 'https://thefederalist.com/2026/03/26/finlands-supreme-court-convicts-christians-of-hate-speech-for-saying-men-and-women-are-different/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626399)), (UUID('9af997a3-fc0f-4eff-b1e6-d9d5f890b325'), UUID('2b84ac89-4023-5eb7-b90e-926f996f551a'), 'DISAPPROVE', UUID('521a5456-f4ea-5333-86d1-e763ef9128a8'), 0.4, None, 'https://thefederalist.com/2026/03/26/finlands-supreme-court-convicts-christians-of-hate-speech-for-saying-men-and-women-are-different/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626402)), (UUID('c6b3da27-490b-43fb-8503-3e31201a1a79'), UUID('2b84ac89-4023-5eb7-b90e-926f996f551a'), 'COERCE', UUID('b796874f-89a5-587f-a7f8-cd86fb7d5318'), 0.25, None, 'https://thefederalist.com/2026/03/26/finlands-supreme-court-convicts-christians-of-hate-speech-for-saying-men-and-women-are-different/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626404)), (UUID('672cf692-07c0-424a-aed6-a1bba6ea8649'), UUID('2b84ac89-4023-5eb7-b90e-926f996f551a'), 'COERCE', UUID('b796874f-89a5-587f-a7f8-cd86fb7d5318'), 0.25, None, 'https://thefederalist.com/2026/03/26/finlands-supreme-court-convicts-christians-of-hate-speech-for-saying-men-and-women-are-different/', datetime.datetime(2026, 3, 26, 18, 38, 34, 626407))  ... displaying 10 of 1000 total bound parameter sets ...  (UUID('73e3d3f9-c863-45be-9e49-adaeaaef22d2'), UUID('ed865c86-e1cf-59bd-8732-fbfa36fe5db5'), 'THREATEN', UUID('d20086e7-2788-50aa-bb9d-cf1dfeabce9c'), 0.52, None, 'https://www.wpr.org/news/wisconsin-senator-daughter-campaign-funds-stolen-jesse-james-elizabeth-johnson', datetime.datetime(2026, 3, 26, 18, 38, 34, 630426)), (UUID('e811db9a-454c-4681-a1e4-2f68dfc9fcd3'), UUID('22bb6b5e-9abd-5331-ba5d-3ef70d5c67b4'), 'EXHIBIT_FORCE_POSTURE', UUID('2c8a1fc5-76ce-5f2d-b14d-1e60b6c0b83c'), 0.5, None, 'https://www.clickondetroit.com/news/local/2026/03/26/michigan-physician-heads-to-prison-for-having-thousands-of-child-porn-images/', datetime.datetime(2026, 3, 26, 18, 38, 34, 630430))]]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

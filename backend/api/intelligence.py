@@ -147,13 +147,14 @@ async def get_sentiment_radar(db: AsyncSession = Depends(get_db_session)):
         type_totals = {str(entity_type or "").upper(): int(total or 0) for entity_type, total in rows}
 
         buckets = {
-            "Geopolitical": ["GPE", "LOC", "GEOPOL"],
-            "Economic": ["ECON", "FIN", "MONEY", "TRADE"],
-            "Climate": ["CLIMATE", "ENV", "WEATHER"],
-            "Social": ["PERSON", "SOCIAL", "COMMUNITY"],
-            "Cyber": ["TECH", "CYBER", "SOFTWARE"],
-            "Military": ["MIL", "MILITARY", "DEFENSE"],
+            "Geopolitical": ["GPE", "LOCATION", "GEOPOLITICAL", "ACTOR"],
+            "Economic": ["ECONOMIC", "FINNE", "MONEY", "TRADE"],
+            "Climate": ["CLIMATE", "ENVIRONMENT", "WEATHER"],
+            "Social": ["SOCIAL", "PERSON", "HUMANITARIAN", "COMMUNITY"],
+            "Cyber": ["CYBER", "TECH", "DIGITAL", "SOFTWARE"],
+            "Military": ["MILITARY", "DEFENSE", "WAR", "SECURITY"],
         }
+
 
         # Build document-based dimension coverage from recent source metadata.
         since = datetime.utcnow() - timedelta(hours=72)

@@ -1,0 +1,5 @@
+--- Document Source Counts ---
+GDELT: 21441
+
+--- Tactical Entity Categories ---
+ACTOR: 2534

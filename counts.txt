@@ -1,0 +1,3 @@
+Entities: 2534
+Relationships: 83065
+Documents: 21441

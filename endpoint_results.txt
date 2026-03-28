@@ -1,0 +1,58 @@
+[
+  {
+    "endpoint": "/api/knowledge-graph/nodes",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 714
+  },
+  {
+    "endpoint": "/api/knowledge-graph/relationships?limit=60&min_strength=0",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 223
+  },
+  {
+    "endpoint": "/api/knowledge-graph/paths/Russia/EU?depth=5&max_paths=3",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 222
+  },
+  {
+    "endpoint": "/api/knowledge-graph/shacl-validation-summary",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 898
+  },
+  {
+    "endpoint": "/api/knowledge-graph/conflict-detection",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 256
+  },
+  {
+    "endpoint": "/api/knowledge-graph/centrality-stats",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 263
+  },
+  {
+    "endpoint": "/api/intelligence/alerts",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 183
+  },
+  {
+    "endpoint": "/api/intelligence/live-alerts",
+    "status": 200,
+    "success": true,
+    "error": null,
+    "data_size": 1159
+  }
+]
